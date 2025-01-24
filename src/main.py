@@ -4,11 +4,11 @@ from dotenv import load_dotenv
 from langchain.schema import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import tools_condition
 from langgraph.prebuilt import ToolNode
 
+from routes.routes import should_convert_to_intent_model
 from state import State
-from nodes.extract_intent import get_intent_extractor_node
+from nodes.extract_intent import get_intent_extractor_node, convert_to_intent_model_node
 from tools.extract_intent import extract_intent_tools
 
 load_dotenv()
@@ -50,11 +50,15 @@ def main() -> None:
     workflow
     workflow.add_node("intent_extractor", get_intent_extractor_node())
     workflow.add_node("intent_extractor_tools", ToolNode(extract_intent_tools))
+    workflow.add_node("convert_to_intent_model", convert_to_intent_model_node)
 
     # Add edges
     workflow.add_edge(START, "intent_extractor")
-    workflow.add_conditional_edges("intent_extractor", tools_condition, {"tools": "intent_extractor_tools", END: END})
+    workflow.add_conditional_edges(
+        "intent_extractor", should_convert_to_intent_model, {"convert": "convert_to_intent_model", "extract": "intent_extractor_tools"}
+    )
     workflow.add_edge("intent_extractor_tools", "intent_extractor")
+    workflow.add_edge("convert_to_intent_model", END)
 
     # Initialize memory and graph
     memory = MemorySaver()

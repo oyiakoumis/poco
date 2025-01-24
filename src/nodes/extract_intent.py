@@ -2,8 +2,11 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.schema import SystemMessage, HumanMessage
 from langchain_core.prompts.chat import MessagesPlaceholder
+from langchain_core.messages import ToolMessage
 
+from models.extract_intent import IntentModel
 from nodes.utils import Assistant
+from state import State
 from tools.extract_intent import extract_intent_tools
 
 
@@ -118,7 +121,17 @@ def get_intent_extractor_node():
     prompt = ChatPromptTemplate.from_messages([SystemMessage(EXTRACT_SYSTEM_MESSAGE), MessagesPlaceholder("messages")])
 
     # Create a runnable pipeline: prompt → bind tools → execute
-    runnable = prompt | llm.bind_tools(tools=extract_intent_tools)
+    runnable = prompt | llm.bind_tools(tools=extract_intent_tools + [IntentModel], tool_choice="any", parallel_tool_calls=False)
 
     # Return an Assistant node configured with the runnable
     return Assistant(runnable)
+
+
+def convert_to_intent_model_node(state: State):
+    # Construct the final answer from the arguments of the last tool call
+    tool_call = state.messages[-1].tool_calls[0]
+    current_intent = IntentModel(**tool_call["args"])
+
+    tool_message = ToolMessage(content="Succesfully converted to IntentModel", tool_call_id=tool_call["id"])
+    # We return the final answer
+    return {"current_intent": current_intent, "messages": [tool_message]}

@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional, Union
+from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,7 @@ class ConditionModel(BaseModel):
 
 # Separate models for each intent
 class CreateTableModel(BaseModel):
+    intent: Literal["create"]
     target_table: str = Field(description="The name of the table to create.")
     table_schema: List[TableSchemaField] = Field(
         description=(
@@ -64,6 +65,7 @@ class CreateTableModel(BaseModel):
 
 
 class AddRecordsModel(BaseModel):
+    intent: Literal["add"]
     target_table: str = Field(description="The name of the table to add records to.")
     records: List[List[RecordModel]] = Field(
         description=(
@@ -91,6 +93,7 @@ class AddRecordsModel(BaseModel):
 
 
 class UpdateRecordsModel(BaseModel):
+    intent: Literal["update"]
     target_table: str = Field(description="The name of the table to update records in.")
     records: List[RecordModel] = Field(
         description="A list of field-value pairs representing the new values for the record(s). " "For example: [{'field': 'quantity', 'value': 18}]."
@@ -113,6 +116,7 @@ class UpdateRecordsModel(BaseModel):
 
 
 class DeleteRecordsModel(BaseModel):
+    intent: Literal["delete"]
     target_table: str = Field(description="The name of the table to delete records from.")
     conditions: List[ConditionModel] = Field(
         description=(
@@ -131,6 +135,7 @@ class DeleteRecordsModel(BaseModel):
 
 
 class QueryRecordsModel(BaseModel):
+    intent: Literal["find"]
     target_table: str = Field(description="The name of the table to query records from.")
     conditions: Optional[List[ConditionModel]] = Field(
         default=None,
@@ -160,3 +165,11 @@ class QueryRecordsModel(BaseModel):
                 "order_by": [{"field": "quantity", "direction": "DESC"}],
             }
         }
+
+
+class IntentModel(BaseModel):
+    intent: Literal["create", "add", "update", "delete", "find"]
+    details: Annotated[
+        Union[CreateTableModel, AddRecordsModel, UpdateRecordsModel, DeleteRecordsModel, QueryRecordsModel],
+        Field(discriminator="intent"),
+    ]
