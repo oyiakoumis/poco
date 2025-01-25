@@ -106,12 +106,3 @@ def extract_find_intent(user_input: str) -> QueryRecordsModel:
     messages = [SystemMessage(content=FIND_SYSTEM_MESSAGE), HumanMessage(content=user_input)]
     structured_llm = llm.with_structured_output(QueryRecordsModel)
     return structured_llm.invoke(messages)
-
-
-extract_intent_tools = [
-    extract_add_intent,
-    extract_create_intent,
-    extract_update_intent,
-    extract_delete_intent,
-    extract_find_intent,
-]

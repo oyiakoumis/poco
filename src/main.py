@@ -7,12 +7,13 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
 from models.extract_intent import IntentModel
-from nodes.assistant import get_assistant_node
+from nodes.assistant import get_assistant_node, assistant_primary_tools
 from nodes.utils import create_convert_to_model_node
-from routes.extract_intent import should_convert_to_intent_model, should_enter_extract_intent
+from routes.assistant_route import route_assistant
+from routes.extract_intent_route import route_intent_extractor
 from state import State
 from nodes.extract_intent import entering_extract_intent_node, get_intent_extractor_node
-from tools.extract_intent import extract_intent_tools
+from nodes.extract_intent import extract_intent_tools
 
 load_dotenv()
 
@@ -48,6 +49,7 @@ def main() -> None:
 
     # Add nodes
     workflow.add_node("assistant", get_assistant_node())
+    workflow.add_node("assistant_primary_tools", ToolNode(assistant_primary_tools))
     workflow.add_node("entering_extract_intent", entering_extract_intent_node)
     workflow.add_node("intent_extractor", get_intent_extractor_node())
     workflow.add_node("intent_extractor_tools", ToolNode(extract_intent_tools))
@@ -55,10 +57,15 @@ def main() -> None:
 
     # Add edges
     workflow.set_entry_point("assistant")
-    workflow.add_conditional_edges("assistant", should_enter_extract_intent, {"enter_extract_intent": "entering_extract_intent", "terminate": END})
+    workflow.add_conditional_edges(
+        "assistant",
+        route_assistant,
+        {"assistant_primary_tools": "assistant_primary_tools", "enter_extract_intent": "entering_extract_intent", "terminate": END},
+    )
+    workflow.add_edge("assistant_primary_tools", "assistant")
     workflow.add_edge("entering_extract_intent", "intent_extractor")
     workflow.add_conditional_edges(
-        "intent_extractor", should_convert_to_intent_model, {"convert_intent": "convert_to_intent_model", "extract_intent": "intent_extractor_tools"}
+        "intent_extractor", route_intent_extractor, {"convert_intent": "convert_to_intent_model", "extract_intent": "intent_extractor_tools"}
     )
     workflow.add_edge("intent_extractor_tools", "intent_extractor")
     workflow.add_edge("convert_to_intent_model", END)

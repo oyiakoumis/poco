@@ -69,7 +69,23 @@ def check_offset_keys(offsets: dict) -> None:
             raise ValueError(f"Invalid offset keys: {invalid_keys}")
 
 
-@tool
+from pydantic import BaseModel, Field
+from typing import Optional, Dict
+from datetime import datetime
+
+
+class CalculateDateRangeArgs(BaseModel):
+    start_offsets: Optional[Dict[str, int]] = Field(None, description="Offsets for adjusting the start datetime. Example: {'months': -1}")
+    end_offsets: Optional[Dict[str, int]] = Field(None, description="Offsets for adjusting the end datetime. Example: {'weeks': 1}")
+    reference_offsets: Optional[Dict[str, int]] = Field(None, description="Offsets for adjusting the reference datetime. Example: {'years': -1}")
+    start_boundary: Optional[str] = Field(None, description="Boundary type for the start datetime. Example: 'start_of_month'")
+    end_boundary: Optional[str] = Field(None, description="Boundary type for the end datetime. Example: 'end_of_week'")
+    reference_datetime: Optional[datetime] = Field(None, description="The base datetime for calculations. Defaults to now if not provided.")
+    timezone_str: Optional[str] = Field("UTC", description="Timezone for localization. Defaults to 'UTC'.")
+    first_day_of_week: Optional[int] = Field(0, description="The starting day of the week (0 = Monday, 6 = Sunday). Defaults to 0.")
+
+
+@tool(args_schema=CalculateDateRangeArgs)
 def calculate_date_range(
     start_offsets: dict = None,
     end_offsets: dict = None,
@@ -83,15 +99,40 @@ def calculate_date_range(
     """
     Calculate a start and end datetime range based on offsets, boundaries, and a reference datetime.
 
+    This function is designed to resolve temporal references like "last month" or "this week"
+    by calculating precise date ranges using the provided offsets, boundaries, and reference datetime.
+
     Parameters:
-      - start_offsets, end_offsets, reference_offsets: dicts with 'years', 'months', 'weeks', etc.
-      - start_boundary, end_boundary: boundary types like 'start_of_month', 'end_of_year', etc.
-      - reference_datetime: the datetime to offset from. Defaults to now().
-      - timezone_str: Timezone string for localization (default is "UTC").
-      - first_day_of_week: Starting day of the week (0 = Monday, 6 = Sunday).
+      - start_offsets (dict, optional): A dictionary specifying offsets (e.g., {'months': -1}) to adjust the 
+        starting datetime. Keys can include 'years', 'months', 'weeks', 'days', 'hours', 'minutes', or 'seconds'.
+      - end_offsets (dict, optional): A dictionary specifying offsets to adjust the ending datetime.
+      - reference_offsets (dict, optional): A dictionary specifying offsets to adjust the reference datetime 
+        before applying start and end offsets.
+      - start_boundary (str, optional): A boundary type to adjust the starting datetime. Supported values are:
+        'start_of_day', 'end_of_day', 'start_of_week', 'end_of_week', 'start_of_month', 'end_of_month', 
+        'start_of_year', 'end_of_year'.
+      - end_boundary (str, optional): A boundary type to adjust the ending datetime (same options as start_boundary).
+      - reference_datetime (datetime, optional): The base datetime from which offsets are applied. If not provided, 
+        the current datetime is used.
+      - timezone_str (str, optional): The timezone for localization. Defaults to "UTC". If the reference_datetime 
+        is naive, it will be localized to this timezone. If already timezone-aware, it will be converted.
+      - first_day_of_week (int, optional): Specifies the first day of the week (0 = Monday, 6 = Sunday) for week-based 
+        boundaries. Defaults to 0 (Monday).
 
     Returns:
-      - Tuple (start_datetime, end_datetime)
+      tuple(datetime, datetime): A tuple containing the calculated start_datetime and end_datetime in the specified timezone.
+
+    Example Usage:
+      >>> calculate_date_range(
+      >>>     start_offsets={'months': -1},
+      >>>     end_offsets={'months': -1},
+      >>>     start_boundary='start_of_month',
+      >>>     end_boundary='end_of_month'
+      >>> )
+      (datetime(2023, 8, 1, 0, 0, tzinfo=<UTC>), datetime(2023, 8, 31, 23, 59, 59, 999999, tzinfo=<UTC>))
+
+    Raises:
+      - ValueError: If invalid boundary types or offsets are provided.
     """
     # Validate offsets
     check_offset_keys(start_offsets)

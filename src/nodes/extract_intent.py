@@ -7,7 +7,7 @@ from langchain_core.messages import ToolMessage
 from models.extract_intent import IntentModel
 from nodes.utils import BaseAssistant
 from state import State
-from tools.extract_intent import extract_intent_tools
+from tools.extract_intent import extract_add_intent, extract_create_intent, extract_delete_intent, extract_find_intent, extract_update_intent
 
 
 def entering_extract_intent_node(state: State) -> dict:
@@ -120,7 +120,6 @@ Your task is to analyze the user's input and convert it into one of the followin
     }
 """
 
-
 def get_intent_extractor_node():
     """
     Creates an Assistant node that can dynamically invoke the correct tool
@@ -136,3 +135,11 @@ def get_intent_extractor_node():
     runnable = prompt | llm.bind_tools(tools=extract_intent_tools + [IntentModel], tool_choice="any", parallel_tool_calls=False)
 
     return BaseAssistant(runnable)
+
+extract_intent_tools = [
+    extract_add_intent,
+    extract_create_intent,
+    extract_update_intent,
+    extract_delete_intent,
+    extract_find_intent,
+]
