@@ -81,7 +81,7 @@ def main() -> None:
     printed_ids: Set[str] = set()
 
     # Stream events from the graph
-    initial_message = HumanMessage(content="Mark all my tasks in my todo list for today as completed")
+    initial_message = HumanMessage(content="Remove all items in my grocery list that are dairy.")
     events = graph.stream({"messages": [initial_message]}, config, stream_mode="values")
 
     # Process and print each event

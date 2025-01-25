@@ -96,13 +96,14 @@ class UpdateRecordsModel(BaseModel):
     intent: Literal["update"]
     target_table: str = Field(description="The name of the table to update records in.")
     records: List[RecordModel] = Field(
-        description="A list of field-value pairs representing the new values for the record(s). " "For example: [{'field': 'quantity', 'value': 18}]."
+        description="A list of field-value pairs representing the new values for the record(s). " "For example: [{'field': 'quantity', 'value': 18}].",
     )
     conditions: List[ConditionModel] = Field(
+        default_factory=list,
         description=(
-            "A list of conditions to identify the records to update. Each condition specifies a field, operator, and value. "
+            "A list of conditions to identify the records to update. Each condition specifies a field, operator, and value. If empty, all records will be updated. "
             "For example: [{'field': 'item', 'operator': '=', 'value': 'milk'}]."
-        )
+        ),
     )
 
     class Config:
@@ -119,10 +120,11 @@ class DeleteRecordsModel(BaseModel):
     intent: Literal["delete"]
     target_table: str = Field(description="The name of the table to delete records from.")
     conditions: List[ConditionModel] = Field(
+        default_factory=list,
         description=(
-            "A list of conditions to identify the records to delete. Each condition specifies a field, operator, and value. "
+            "A list of conditions to identify the records to delete. Each condition specifies a field, operator, and value. If empty, all records will be deleted. "
             "For example: [{'field': 'item', 'operator': '=', 'value': 'milk'}]."
-        )
+        ),
     )
 
     class Config:
@@ -137,10 +139,10 @@ class DeleteRecordsModel(BaseModel):
 class QueryRecordsModel(BaseModel):
     intent: Literal["find"]
     target_table: str = Field(description="The name of the table to query records from.")
-    conditions: Optional[List[ConditionModel]] = Field(
-        default=None,
+    conditions: List[ConditionModel] = Field(
+        default=list,
         description=(
-            "A list of conditions to filter the records. Each condition specifies a field, operator, and value. "
+            "A list of conditions to filter the records. Each condition specifies a field, operator, and value. If empty, all records will be queried. "
             "For example: [{'field': 'quantity', 'operator': '>', 'value': 5}]."
         ),
     )
