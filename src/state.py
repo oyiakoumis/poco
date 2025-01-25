@@ -8,8 +8,7 @@ from models.extract_intent import AddRecordsModel, CreateTableModel, DeleteRecor
 
 class State(BaseModel):
     messages: Annotated[list[AnyMessage], add_messages]
-    current_user_query: Optional[str] = None
-    current_intent: Optional[Union[CreateTableModel, AddRecordsModel, UpdateRecordsModel, DeleteRecordsModel, QueryRecordsModel]] = Field(
+    intent: Optional[Union[CreateTableModel, AddRecordsModel, UpdateRecordsModel, DeleteRecordsModel, QueryRecordsModel]] = Field(
         default=None,
         description=(
             "The structured intent extracted from the user's query. "

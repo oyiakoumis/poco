@@ -1,10 +1,11 @@
-from langchain_core.messages import AnyMessage
+from langchain_core.messages import AnyMessage, ToolMessage
 from langchain_core.runnables import Runnable
+from pydantic import BaseModel
 
 from state import State
 
 
-class Assistant:
+class BaseAssistant:
     def __init__(self, runnable: Runnable, max_retries: int = 5):
         self.runnable = runnable
         self.max_retries = max_retries
@@ -42,3 +43,16 @@ class Assistant:
             return not any(item.get("text") for item in content[:1] if isinstance(item, dict))  # Check first item only
 
         return False
+
+
+def create_convert_to_model_node(Model: BaseModel):
+    def convert_to_model_node(state: State):
+        # Construct the final answer from the arguments of the last tool call
+        tool_call = state.messages[-1].tool_calls[0]
+        intent = Model(**tool_call["args"])
+
+        tool_message = ToolMessage(content=f"Succesfully converted to {Model.__name__}", tool_call_id=tool_call["id"])
+        # We return the final answer
+        return {"intent": intent, "messages": [tool_message]}
+
+    return convert_to_model_node

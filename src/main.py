@@ -3,12 +3,15 @@ from typing import Any, Dict, Set
 from dotenv import load_dotenv
 from langchain.schema import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
-from routes.routes import should_convert_to_intent_model
+from models.extract_intent import IntentModel
+from nodes.assistant import get_assistant_node
+from nodes.utils import create_convert_to_model_node
+from routes.extract_intent import should_convert_to_intent_model, should_enter_extract_intent
 from state import State
-from nodes.extract_intent import get_intent_extractor_node, convert_to_intent_model_node
+from nodes.extract_intent import entering_extract_intent_node, get_intent_extractor_node
 from tools.extract_intent import extract_intent_tools
 
 load_dotenv()
@@ -40,22 +43,22 @@ def _print_event(event: Dict[str, Any], printed_ids: Set[str], max_length: int =
 
 
 def main() -> None:
-    """
-    Main function to set up and run the state graph with a human message.
-    """
     # Initialize workflow
     workflow = StateGraph(State)
 
     # Add nodes
-    workflow
+    workflow.add_node("assistant", get_assistant_node())
+    workflow.add_node("entering_extract_intent", entering_extract_intent_node)
     workflow.add_node("intent_extractor", get_intent_extractor_node())
     workflow.add_node("intent_extractor_tools", ToolNode(extract_intent_tools))
-    workflow.add_node("convert_to_intent_model", convert_to_intent_model_node)
+    workflow.add_node("convert_to_intent_model", create_convert_to_model_node(IntentModel))
 
     # Add edges
-    workflow.add_edge(START, "intent_extractor")
+    workflow.set_entry_point("assistant")
+    workflow.add_conditional_edges("assistant", should_enter_extract_intent, {"enter_extract_intent": "entering_extract_intent", "terminate": END})
+    workflow.add_edge("entering_extract_intent", "intent_extractor")
     workflow.add_conditional_edges(
-        "intent_extractor", should_convert_to_intent_model, {"convert": "convert_to_intent_model", "extract": "intent_extractor_tools"}
+        "intent_extractor", should_convert_to_intent_model, {"convert_intent": "convert_to_intent_model", "extract_intent": "intent_extractor_tools"}
     )
     workflow.add_edge("intent_extractor_tools", "intent_extractor")
     workflow.add_edge("convert_to_intent_model", END)
@@ -71,7 +74,7 @@ def main() -> None:
     printed_ids: Set[str] = set()
 
     # Stream events from the graph
-    initial_message = HumanMessage(content="Add 'buy milk' to my list of groceries.")
+    initial_message = HumanMessage(content="Mark all my tasks in my todo list for today as completed")
     events = graph.stream({"messages": [initial_message]}, config, stream_mode="values")
 
     # Process and print each event

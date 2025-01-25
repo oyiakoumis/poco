@@ -1,6 +1,7 @@
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 
 from models.extract_intent import (
     AddRecordsModel,
@@ -9,6 +10,11 @@ from models.extract_intent import (
     QueryRecordsModel,
     UpdateRecordsModel,
 )
+
+
+class ToExtractIntent(BaseModel):
+    user_request: str = Field(description="The fully clarified and refined query provided by the user, intended for database-related processing.")
+
 
 # Define system messages for each intent
 CREATE_SYSTEM_MESSAGE = """
