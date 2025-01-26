@@ -140,7 +140,7 @@ class QueryRecordsModel(BaseModel):
     intent: Literal["find"]
     target_table: str = Field(description="The name of the table to query records from.")
     conditions: List[ConditionModel] = Field(
-        default=list,
+        default_factory=list,
         description=(
             "A list of conditions to filter the records. Each condition specifies a field, operator, and value. If empty, all records will be queried. "
             "For example: [{'field': 'quantity', 'operator': '>', 'value': 5}]."

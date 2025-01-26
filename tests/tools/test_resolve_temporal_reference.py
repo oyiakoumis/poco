@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime
-from tools.calculate_date_range import adjust_datetime_boundary, check_offset_keys, calculate_date_range
+from tools.resolve_temporal_reference import adjust_datetime_boundary, check_offset_keys, resolve_temporal_reference
 from pytz import timezone
 
 
@@ -36,8 +36,8 @@ def test_check_offset_keys():
         check_offset_keys(invalid_offsets)
 
 
-# Test calculate_date_range
-def test_calculate_date_range():
+# Test resolve_temporal_reference
+def test_resolve_temporal_reference():
     # Reference datetime and timezone setup
     tz = timezone("UTC")
     ref_datetime = tz.localize(datetime(2023, 1, 15, 12, 0))
@@ -51,7 +51,7 @@ def test_calculate_date_range():
         "reference_datetime": ref_datetime.isoformat(),
         "timezone_str": "UTC",
     }
-    start, end = calculate_date_range.invoke(params)
+    start, end = resolve_temporal_reference.invoke(params)
     assert start.isoformat() == "2022-12-01T00:00:00+00:00"
     assert end.isoformat() == "2022-12-31T23:59:59.999999+00:00"
 
@@ -64,7 +64,7 @@ def test_calculate_date_range():
         "reference_datetime": ref_datetime.isoformat(),
         "timezone_str": "UTC",
     }
-    start, end = calculate_date_range.invoke(params)
+    start, end = resolve_temporal_reference.invoke(params)
     assert start.isoformat() == "2023-01-16T00:00:00+00:00"
     assert end.isoformat() == "2023-01-22T23:59:59.999999+00:00"
 
@@ -74,7 +74,7 @@ def test_calculate_date_range():
         "reference_datetime": ref_datetime.isoformat(),
         "timezone_str": "UTC",
     }
-    start, end = calculate_date_range.invoke(params)
+    start, end = resolve_temporal_reference.invoke(params)
     assert start.isoformat() == "2023-01-01T00:00:00+00:00"
     assert end.isoformat() == ref_datetime.isoformat()
 
@@ -88,9 +88,51 @@ def test_calculate_date_range():
         "timezone_str": "US/Eastern",
         "first_day_of_week": 6,  # Sunday as the first day of the week
     }
-    start, end = calculate_date_range.invoke(params)
+    start, end = resolve_temporal_reference.invoke(params)
     eastern = timezone("US/Eastern")
     start_expected = eastern.localize(datetime(2023, 1, 15, 0, 0))  # Week starts on Saturday midnight
     end_expected = eastern.localize(datetime(2023, 1, 21, 23, 59, 59, 999999))  # Week ends Friday midnight
     assert start.isoformat() == start_expected.isoformat()
     assert end.isoformat() == end_expected.isoformat()
+
+    # Test 5: Single day mode - "Today"
+    params = {
+        "start_offsets": {"days": 0},
+        "end_offsets": {"days": 0},
+        "start_boundary": "start_of_day",
+        "end_boundary": "end_of_day",
+        "reference_datetime": ref_datetime.isoformat(),
+        "timezone_str": "UTC",
+        "single_day_mode": True,
+    }
+    single_date, end = resolve_temporal_reference.invoke(params)
+    assert single_date == "2023-01-15"
+    assert end is None
+
+    # Test 6: Single day mode - "Tomorrow"
+    params = {
+        "start_offsets": {"days": 1},
+        "end_offsets": {"days": 1},
+        "start_boundary": "start_of_day",
+        "end_boundary": "end_of_day",
+        "reference_datetime": ref_datetime.isoformat(),
+        "timezone_str": "UTC",
+        "single_day_mode": True,
+    }
+    single_date, end = resolve_temporal_reference.invoke(params)
+    assert single_date == "2023-01-16"
+    assert end is None
+
+    # Test 7: Single day mode - "The day before yesterday"
+    params = {
+        "start_offsets": {"days": -2},
+        "end_offsets": {"days": -2},
+        "start_boundary": "start_of_day",
+        "end_boundary": "end_of_day",
+        "reference_datetime": ref_datetime.isoformat(),
+        "timezone_str": "UTC",
+        "single_day_mode": True,
+    }
+    single_date, end = resolve_temporal_reference.invoke(params)
+    assert single_date == "2023-01-13"
+    assert end is None

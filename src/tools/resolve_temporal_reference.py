@@ -83,10 +83,11 @@ class CalculateDateRangeArgs(BaseModel):
     reference_datetime: Optional[datetime] = Field(None, description="The base datetime for calculations. Defaults to now if not provided.")
     timezone_str: Optional[str] = Field("UTC", description="Timezone for localization. Defaults to 'UTC'.")
     first_day_of_week: Optional[int] = Field(0, description="The starting day of the week (0 = Monday, 6 = Sunday). Defaults to 0.")
+    single_day_mode: bool = Field(False, description="If true, return only a single date (YYYY-MM-DD, None).")
 
 
 @tool(args_schema=CalculateDateRangeArgs)
-def calculate_date_range(
+def resolve_temporal_reference(
     start_offsets: dict = None,
     end_offsets: dict = None,
     reference_offsets: dict = None,
@@ -95,40 +96,50 @@ def calculate_date_range(
     reference_datetime: datetime = None,
     timezone_str: str = "UTC",
     first_day_of_week: int = 0,
+    single_day_mode: bool = False,
 ):
     """
-    Calculate a start and end datetime range based on offsets, boundaries, and a reference datetime.
-
-    This function is designed to resolve temporal references like "last month" or "this week"
-    by calculating precise date ranges using the provided offsets, boundaries, and reference datetime.
+    Calculate a start and end datetime range based on offsets, boundaries,
+    and a reference datetime. Optionally return a single date if single_day_mode=True.
     """
-    # Validate offsets
+    # 1) Validate offsets
     check_offset_keys(start_offsets)
     check_offset_keys(end_offsets)
     check_offset_keys(reference_offsets)
 
-    # Get the timezone
+    # 2) Timezone logic
     tz = timezone(timezone_str)
-
-    # Convert reference_datetime to the target timezone
     if reference_datetime is not None:
-        if reference_datetime.tzinfo is None:  # Localize naive datetime
+        if reference_datetime.tzinfo is None:
             now = tz.localize(reference_datetime)
-        else:  # Convert timezone-aware datetime to the target timezone
+        else:
             now = reference_datetime.astimezone(tz)
     else:
         now = datetime.now(tz)
 
-    # Step 1: Apply reference offsets to now
+    # 3) Apply reference offsets
     reference_delta = relativedelta(**(reference_offsets or {}))
-    reference_datetime = now + reference_delta
+    ref_dt = now + reference_delta
 
-    # Step 2: Derive start_datetime from reference_datetime
+    # 4) Derive start_datetime / end_datetime
     start_delta = relativedelta(**(start_offsets or {}))
-    start_datetime = adjust_datetime_boundary(reference_datetime + start_delta, start_boundary, first_day_of_week=first_day_of_week)
+    raw_start = ref_dt + start_delta
+    start_datetime = adjust_datetime_boundary(raw_start, start_boundary, first_day_of_week=first_day_of_week)
 
-    # Step 3: Derive end_datetime from reference_datetime
     end_delta = relativedelta(**(end_offsets or {}))
-    end_datetime = adjust_datetime_boundary(reference_datetime + end_delta, end_boundary, first_day_of_week=first_day_of_week)
+    raw_end = ref_dt + end_delta
+    end_datetime = adjust_datetime_boundary(raw_end, end_boundary, first_day_of_week=first_day_of_week)
 
-    return start_datetime, end_datetime
+    # 5) Single-day mode?
+    if single_day_mode:
+        # Optionally verify that start and end are the same calendar date
+        if start_datetime.year == end_datetime.year and start_datetime.month == end_datetime.month and start_datetime.day == end_datetime.day:
+            # Return a single date like "2025-01-26"
+            single_date_str = start_datetime.strftime("%Y-%m-%d")
+            return (single_date_str, None)
+        else:
+            # If you want to force them to the same day, or raise an error:
+            raise ValueError(f"single_day_mode=True, but start/end are different days: " f"{start_datetime} vs {end_datetime}")
+
+    # Otherwise, normal range
+    return (start_datetime, end_datetime)

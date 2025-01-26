@@ -20,13 +20,13 @@ def test_extract_create_intent():
 
     assert isinstance(result, CreateTableModel)
     assert result.target_table == "grocery_list"
-    assert len(result.schema) == 2
-    assert result.schema[0].name == "item"
-    assert result.schema[0].type == "string"
-    assert result.schema[0].nullable is False
-    assert result.schema[1].name == "quantity"
-    assert result.schema[1].type == "integer"
-    assert result.schema[1].nullable is True
+    assert len(result.table_schema) == 2
+    assert result.table_schema[0].name == "item"
+    assert result.table_schema[0].type == "string"
+    assert result.table_schema[0].nullable is False
+    assert result.table_schema[1].name == "quantity"
+    assert result.table_schema[1].type == "integer"
+    assert result.table_schema[1].nullable is True
 
 
 def test_extract_add_intent():
@@ -83,7 +83,7 @@ def test_extract_find_intent():
     assert result.conditions[0].field == "quantity"
     assert result.conditions[0].operator == ">"
     assert result.conditions[0].value == 5
-    assert result.query_fields == ["product", "quantity"]
+    assert result.query_fields == ["item", "quantity"]
     assert result.limit == 10
     assert len(result.order_by) == 1
     assert result.order_by[0].field == "quantity"

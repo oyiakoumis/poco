@@ -5,12 +5,13 @@ from langchain.schema import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from langchain_core.runnables import RunnableConfig
 
 from models.extract_intent import IntentModel
 from nodes.assistant import get_assistant_node, assistant_primary_tools
 from nodes.utils import create_convert_to_model_node
-from routes.assistant_route import route_assistant
-from routes.extract_intent_route import route_intent_extractor
+from routes.route_assistant import route_assistant
+from routes.route_intent_extractor import route_intent_extractor
 from state import State
 from nodes.extract_intent import entering_extract_intent_node, get_intent_extractor_node
 from nodes.extract_intent import extract_intent_tools
@@ -75,13 +76,13 @@ def main() -> None:
     graph = workflow.compile(checkpointer=memory)
 
     # Configuration for the graph
-    config = {"configurable": {"thread_id": "1"}}
+    config = RunnableConfig(configurable={"thread_id": "1"}, recursion_limit=10)
 
     # Track already printed message IDs
     printed_ids: Set[str] = set()
 
     # Stream events from the graph
-    initial_message = HumanMessage(content="Remove all items in my grocery list that are dairy.")
+    initial_message = HumanMessage(content="Show me all my todos for today")
     events = graph.stream({"messages": [initial_message]}, config, stream_mode="values")
 
     # Process and print each event
