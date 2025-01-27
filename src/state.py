@@ -6,8 +6,15 @@ from pydantic import BaseModel, Field
 from models.extract_intent import AddRecordsModel, CreateTableModel, DeleteRecordsModel, QueryRecordsModel, UpdateRecordsModel
 
 
-class State(BaseModel):
+class MessagesState(BaseModel):
     messages: Annotated[list[AnyMessage], add_messages]
+
+
+class QueryProcessorState(MessagesState):
+    user_query: Optional[str] = Field(
+        default=None,
+        description="The user query after resolving all implicit references (e.g., 'it,' 'they') and relative temporal references (e.g., 'today,' 'last week') into explicit ones. This refined query is prepared for downstream database-related processing without verifying or clarifying vague entities.",
+    )
     intent: Optional[Union[CreateTableModel, AddRecordsModel, UpdateRecordsModel, DeleteRecordsModel, QueryRecordsModel]] = Field(
         default=None,
         description=(

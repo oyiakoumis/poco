@@ -1,25 +1,13 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.schema import SystemMessage
+from langchain.schema import SystemMessage, HumanMessage
 from langchain_core.prompts.chat import MessagesPlaceholder
 from langchain_core.messages import ToolMessage
 
 from models.extract_intent import IntentModel
 from nodes.utils import BaseAssistant
-from state import State
+from state import QueryProcessorState
 from tools.extract_intent import extract_add_intent, extract_create_intent, extract_delete_intent, extract_find_intent, extract_update_intent
-
-
-def entering_extract_intent_node(state: State) -> dict:
-    tool_call_id = state.messages[-1].tool_calls[0]["id"]
-    return {
-        "messages": [
-            ToolMessage(
-                content=f"Entering to the Extract Intent node.",
-                tool_call_id=tool_call_id,
-            )
-        ],
-    }
 
 
 EXTRACT_SYSTEM_MESSAGE = """
@@ -35,7 +23,7 @@ Your ONLY job is to:
 
 2. Mandatory: Call the selected extraction tool with the user's query EXACTLY as received.
 
-3. Mandatory: Immediately after the extraction tool, call the IntentModel tool with the EXACT parameters returned by the extraction tool.
+3. Mandatory: Immediately after the FIRST successful response from the selected extraction tool, call the IntentModel tool with the EXACT parameters returned by the extraction tool. Do NOT call the extraction tool again for the same query once it has succeeded.
 
 You MUST NOT under ANY circumstances:
 - Perform ANY database operations
@@ -52,6 +40,7 @@ Your role is STRICTLY to:
 - Select the correct tool
 - Pass the query to that tool EXACTLY
 - Pass the tool's result to IntentModel EXACTLY
+- Avoid redundant calls to the same extraction tool for the same query once it has succeeded
 
 Downstream systems will handle ALL subsequent processing and implementation.
 """

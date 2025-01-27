@@ -173,5 +173,5 @@ class IntentModel(BaseModel):
     intent: Literal["create", "add", "update", "delete", "find"]
     details: Annotated[
         Union[CreateTableModel, AddRecordsModel, UpdateRecordsModel, DeleteRecordsModel, QueryRecordsModel],
-        Field(discriminator="intent"),
+        Field(discriminator="intent", description="structured intent model for database operations"),
     ]

@@ -3,3 +3,5 @@ langchain
 langchain-openai
 langsmith
 python-dotenv
+python-dateutil
+pytz

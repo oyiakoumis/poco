@@ -2,7 +2,7 @@ from langchain_core.messages import AnyMessage, ToolMessage
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
-from state import State
+from state import MessagesState, QueryProcessorState
 
 
 class BaseAssistant:
@@ -10,7 +10,7 @@ class BaseAssistant:
         self.runnable = runnable
         self.max_retries = max_retries
 
-    def __call__(self, state: State) -> State:
+    def __call__(self, state: MessagesState) -> MessagesState:
         retries = 0
 
         while retries < self.max_retries:
@@ -21,7 +21,7 @@ class BaseAssistant:
 
             if self._is_empty_response(result):
                 # Append corrective message and update state
-                state["messages"] = [*state.get("messages", []), {"role": "user", "content": "Respond with a real output."}]
+                state.messages = [*state.get("messages", []), {"role": "user", "content": "Respond with a real output."}]
                 retries += 1
             else:
                 break
@@ -46,7 +46,7 @@ class BaseAssistant:
 
 
 def create_convert_to_model_node(Model: BaseModel):
-    def convert_to_model_node(state: State):
+    def convert_to_model_node(state: QueryProcessorState):
         # Construct the final answer from the arguments of the last tool call
         tool_call = state.messages[-1].tool_calls[0]
         intent = Model(**tool_call["args"])
