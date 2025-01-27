@@ -1,4 +1,4 @@
-from models.extract_intent import (
+from models.intent_model import (
     AddRecordsModel,
     CreateTableModel,
     DeleteRecordsModel,

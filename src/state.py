@@ -3,7 +3,7 @@ from typing import Annotated, Optional, Union
 from langgraph.graph.message import AnyMessage, add_messages
 from pydantic import BaseModel, Field
 
-from models.extract_intent import AddRecordsModel, CreateTableModel, DeleteRecordsModel, QueryRecordsModel, UpdateRecordsModel
+from models.intent_model import AddRecordsModel, CreateTableModel, DeleteRecordsModel, QueryRecordsModel, UpdateRecordsModel
 
 
 class MessagesState(BaseModel):

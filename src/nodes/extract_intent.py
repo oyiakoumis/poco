@@ -4,7 +4,7 @@ from langchain.schema import SystemMessage, HumanMessage
 from langchain_core.prompts.chat import MessagesPlaceholder
 from langchain_core.messages import ToolMessage
 
-from models.extract_intent import IntentModel
+from models.intent_model import IntentModel
 from nodes.utils import BaseAssistant
 from state import QueryProcessorState
 from tools.extract_intent import extract_add_intent, extract_create_intent, extract_delete_intent, extract_find_intent, extract_update_intent

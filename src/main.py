@@ -5,17 +5,19 @@ from langchain.schema import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.runnables import RunnableConfig
 
-from graph import get_graph
-from utils import print_event
+from database_connector import DatabaseConnector
+from graph import get_graph, get_query_processor_graph
+from print_event import print_event
 
 load_dotenv()
 
 
 def main() -> None:
+    database_connector = DatabaseConnector("mongodb://localhost:27017", "test_database")
 
-    # Initialize memory and graph
+    query_processor_graph = get_query_processor_graph(database_connector)
+    graph = get_graph(query_processor_graph)
     memory = MemorySaver()
-    graph = get_graph()
     graph = graph.compile(checkpointer=memory)
 
     # Configuration for the graph

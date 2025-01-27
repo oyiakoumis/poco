@@ -3,7 +3,7 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from models.extract_intent import (
+from models.intent_model import (
     AddRecordsModel,
     CreateTableModel,
     DeleteRecordsModel,

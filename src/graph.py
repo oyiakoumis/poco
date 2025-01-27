@@ -2,7 +2,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
-from models.extract_intent import IntentModel
+from database_connector import DatabaseConnector
+from models.intent_model import IntentModel
 from nodes.assistant import get_assistant_node, assistant_primary_tools
 from nodes.utils import create_convert_to_model_node
 from routes.route_assistant import route_assistant
@@ -12,11 +13,8 @@ from nodes.process_query import get_process_query_node
 from nodes.extract_intent import get_intent_extractor_node, extract_intent_tools
 
 
-def get_graph() -> StateGraph:
+def get_graph(query_processor_graph: CompiledStateGraph) -> StateGraph:
     graph = StateGraph(MessagesState)
-
-    query_processor_graph = get_query_processor_graph()
-
     # Add nodes
     graph.add_node("assistant", get_assistant_node())
     graph.add_node("assistant_primary_tools", ToolNode(assistant_primary_tools))
@@ -31,7 +29,7 @@ def get_graph() -> StateGraph:
     return graph
 
 
-def get_query_processor_graph() -> CompiledStateGraph:
+def get_query_processor_graph(database_connector: DatabaseConnector) -> CompiledStateGraph:
     graph = StateGraph(QueryProcessorState)
     graph.add_node("intent_extractor", get_intent_extractor_node())
     graph.add_node("intent_extractor_tools", ToolNode(extract_intent_tools))

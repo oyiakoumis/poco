@@ -1,4 +1,4 @@
-from models.extract_intent import IntentModel
+from models.intent_model import IntentModel
 from state import QueryProcessorState
 
 

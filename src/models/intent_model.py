@@ -26,6 +26,17 @@ class TableSchemaField(BaseModel):
     )
 
 
+class IndexDefinition(BaseModel):
+    fields: List[Union[str, tuple]] = Field(
+        description=(
+            "The fields to include in the index. "
+            "Use a string for default ascending order, or a tuple of (field_name, order) for specific order: "
+            "1 for ascending, -1 for descending, or 'text' for text indexes."
+        )
+    )
+    unique: Optional[bool] = Field(default=False, description="Whether the index should enforce unique values.")
+
+
 class RecordModel(BaseModel):
     field: str = Field(description="The name of the field to set or update.")
     value: Union[str, int, float, bool] = Field(description="The value to assign to the field.")
@@ -45,20 +56,28 @@ class CreateTableModel(BaseModel):
     target_table: str = Field(description="The name of the table to create.")
     table_schema: List[TableSchemaField] = Field(
         description=(
-            "The schema of the table to create, represented as a list of fields with their names, types, nullable status, and whether they are required. "
-            "For example: [{'name': 'item', 'type': 'string', 'nullable': False, 'required': True}, "
-            "{'name': 'tags', 'type': 'multi-select', 'nullable': True, 'required': False, 'options': ['Organic', 'Local']}]."
+            "The schema of the table to create, represented as a list of fields with their names, types, nullable status, and whether they are required."
         )
+    )
+    indexes: Optional[List[IndexDefinition]] = Field(
+        default=None,
+        description=("A list of indexes to create for the table. Each index specifies the fields to include, their sort order, and whether it is unique."),
     )
 
     class Config:
         json_schema_extra = {
             "example": {
                 "target_table": "grocery_list",
-                "schema": [
+                "table_schema": [
                     {"name": "item", "type": "string", "nullable": False, "required": True},
                     {"name": "quantity", "type": "integer", "nullable": True, "required": False},
                     {"name": "tags", "type": "multi-select", "nullable": True, "required": False, "options": ["Organic", "Local"]},
+                ],
+                "indexes": [
+                    {"fields": ["item"], "unique": True},
+                    {"fields": [("tags", 1)], "unique": False},
+                    {"fields": [("quantity", -1)], "unique": False},
+                    {"fields": [("item", "text")], "unique": False},
                 ],
             }
         }

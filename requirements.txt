@@ -5,3 +5,4 @@ langsmith
 python-dotenv
 python-dateutil
 pytz
+pymongo
