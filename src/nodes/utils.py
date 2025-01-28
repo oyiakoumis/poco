@@ -1,4 +1,5 @@
 from langchain_core.messages import AnyMessage, ToolMessage
+from langchain.schema import HumanMessage
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
@@ -11,38 +12,41 @@ class BaseAssistant:
         self.max_retries = max_retries
 
     def __call__(self, state: MessagesState) -> MessagesState:
-        retries = 0
-
-        while retries < self.max_retries:
-            try:
-                result = self.runnable.invoke(state.messages)
-            except Exception as e:
-                raise RuntimeError(f"Failed to invoke runnable: {e}") from e
-
-            if self._is_empty_response(result):
-                # Append corrective message and update state
-                state.messages = [*state.get("messages", []), {"role": "user", "content": "Respond with a real output."}]
-                retries += 1
-            else:
-                break
-        else:
-            raise RuntimeError(f"Maximum retries ({self.max_retries}) reached without valid response")
-
+        result = with_forced_response(self.runnable, state.messages, self.max_retries)
         return {"messages": result}
 
-    def _is_empty_response(self, result: AnyMessage) -> bool:
-        """Check if the response should be considered empty."""
-        if result.tool_calls:
-            return False
 
-        content = result.content
-        if not content:
-            return True
+def with_forced_response(runnable: Runnable, messages: list[AnyMessage], max_retries: int = 5):
+    retries = 0
+    while retries < max_retries:
+        try:
+            result = runnable.invoke(messages)
+        except Exception as e:
+            raise RuntimeError(f"Failed to invoke runnable: {e}") from e
 
-        if isinstance(content, list):
-            return not any(item.get("text") for item in content[:1] if isinstance(item, dict))  # Check first item only
+        if _is_empty_response(result):
+            # Append corrective message and update state
+            messages = messages + [HumanMessage(content="Respond with a real output.")]
+            retries += 1
+        else:
+            return result
+    else:
+        raise RuntimeError(f"Maximum retries ({max_retries}) reached without valid response")
 
+
+def _is_empty_response(result: AnyMessage) -> bool:
+    """Check if the response should be considered empty."""
+    if result.tool_calls:
         return False
+
+    content = result.content
+    if not content:
+        return True
+
+    if isinstance(content, list):
+        return not any(item.get("text") for item in content[:1] if isinstance(item, dict))  # Check first item only
+
+    return False
 
 
 def create_convert_to_model_node(Model: BaseModel):

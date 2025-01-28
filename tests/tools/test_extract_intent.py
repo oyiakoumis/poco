@@ -7,7 +7,7 @@ from models.intent_model import (
 )
 from tools.extract_intent import (
     extract_add_intent,
-    extract_create_intent,
+    extract_create_table_intent,
     extract_delete_intent,
     extract_find_intent,
     extract_update_intent,
@@ -16,7 +16,7 @@ from tools.extract_intent import (
 
 def test_extract_create_intent():
     user_input = "Create a table named 'grocery_list' with fields 'item' (string, required) and 'quantity' (integer, optional)."
-    result = extract_create_intent(user_input)
+    result = extract_create_table_intent(user_input)
 
     assert isinstance(result, CreateTableModel)
     assert result.target_table == "grocery_list"

@@ -1,13 +1,11 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.schema import SystemMessage, HumanMessage
+from langchain.schema import SystemMessage
 from langchain_core.prompts.chat import MessagesPlaceholder
-from langchain_core.messages import ToolMessage
 
 from models.intent_model import IntentModel
 from nodes.utils import BaseAssistant
-from state import QueryProcessorState
-from tools.extract_intent import extract_add_intent, extract_create_intent, extract_delete_intent, extract_find_intent, extract_update_intent
+from tools.extract_intent import extract_add_intent, extract_create_table_intent, extract_delete_intent, extract_find_intent, extract_update_intent
 
 
 EXTRACT_SYSTEM_MESSAGE = """
@@ -64,8 +62,8 @@ def get_intent_extractor_node():
 
 
 extract_intent_tools = [
+    extract_create_table_intent,
     extract_add_intent,
-    extract_create_intent,
     extract_update_intent,
     extract_delete_intent,
     extract_find_intent,

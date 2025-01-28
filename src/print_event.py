@@ -1,6 +1,6 @@
-from typing import Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any
 from rich.console import Console
-from rich.text import Text
+from langgraph.graph.message import AnyMessage
 from rich.panel import Panel
 
 
@@ -13,14 +13,19 @@ def format_namespace(namespace):
 
 def print_event(namespace: Tuple[str], event: Dict[str, Any], max_length: int = 1500) -> None:
     node_name = list(event.keys())[0]
-    namespace_str = format_namespace(namespace)
 
-    message: Any = event[node_name]["messages"]
+    message: AnyMessage = event[node_name]["messages"]
 
     # Handle ToolMessage or list of messages
     if isinstance(message, list):
         message = message[-1]
 
+    namespace_str = format_namespace(namespace)
+
+    print_message(message, node_name, namespace_str, max_length)
+
+
+def print_message(message: AnyMessage, origin: str, namespace: Optional[str] = None, max_length: int = 1500):
     msg_repr = message.pretty_repr(html=True)
     if len(msg_repr) > max_length:
         truncated_indicator = f" ... (truncated {len(msg_repr) - max_length} characters)"
@@ -28,7 +33,7 @@ def print_event(namespace: Tuple[str], event: Dict[str, Any], max_length: int = 
 
     panel = Panel(
         msg_repr,
-        title=f"Message from [magenta]{node_name}[/magenta] in [blue]{namespace_str}[/blue]",
+        title=f"Message from [magenta]{origin}[/magenta]" + (f" in [blue]{namespace}[/blue]" if namespace else ""),
         style="white on black",
     )
     console.print(panel)

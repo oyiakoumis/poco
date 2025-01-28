@@ -56,7 +56,7 @@ class ExtractIntentArgs(BaseModel):
 
 
 @tool(args_schema=ExtractIntentArgs)
-def extract_create_intent(user_query: str) -> CreateTableModel:
+def extract_create_table_intent(user_query: str) -> CreateTableModel:
     """Extracts a structured intent model for creating tables."""
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     messages = [SystemMessage(content=CREATE_SYSTEM_MESSAGE), HumanMessage(content=user_query)]

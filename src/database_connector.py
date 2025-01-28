@@ -1,7 +1,9 @@
-from typing import List, Union, Dict, Any
+from typing import List, Tuple, Union, Dict, Any
 from pymongo import MongoClient, ASCENDING
 from pymongo.collection import Collection
 from bson import ObjectId
+
+from utils import try_convert_to_int
 
 
 class DatabaseConnector:
@@ -15,10 +17,11 @@ class DatabaseConnector:
     def list_collections(self) -> List[str]:
         return self.db.list_collection_names()
 
-    def create_index(self, collection_name: str, keys: List[Union[str, tuple]], unique: bool = False) -> str:
+    def create_index(self, collection_name: str, keys: List[Union[str, Tuple[str, str]]], unique: bool = False) -> str:
         collection = self.db[collection_name]
-        index_keys = [(key, ASCENDING) if isinstance(key, str) else key for key in keys]
-        return collection.create_index(index_keys, unique=unique)
+        # TODO: remove that if not useful
+        # index_keys = [(key[0], try_convert_to_int(key[1])) for key in keys]
+        return collection.create_index(keys, unique=unique)
 
     def list_indexes(self, collection_name: str) -> List[Dict]:
         collection = self.db[collection_name]

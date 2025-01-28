@@ -5,8 +5,10 @@ from langgraph.prebuilt import ToolNode
 from database_connector import DatabaseConnector
 from models.intent_model import IntentModel
 from nodes.assistant import get_assistant_node, assistant_primary_tools
+from nodes.database_operator import DatabaseOperatorNode
 from nodes.utils import create_convert_to_model_node
 from routes.route_assistant import route_assistant
+from routes.route_convert_intent_model import route_convert_intent_model
 from routes.route_intent_extractor import route_intent_extractor
 from state import MessagesState, QueryProcessorState
 from nodes.process_query import get_process_query_node
@@ -29,16 +31,18 @@ def get_graph(query_processor_graph: CompiledStateGraph) -> StateGraph:
     return graph
 
 
-def get_query_processor_graph(database_connector: DatabaseConnector) -> CompiledStateGraph:
+def get_query_processor_graph(db_connector: DatabaseConnector) -> CompiledStateGraph:
     graph = StateGraph(QueryProcessorState)
     graph.add_node("intent_extractor", get_intent_extractor_node())
     graph.add_node("intent_extractor_tools", ToolNode(extract_intent_tools))
     graph.add_node("convert_to_intent_model", create_convert_to_model_node(IntentModel))
+    graph.add_node("database_operator", DatabaseOperatorNode(db_connector))
 
     # Add edges
     graph.set_entry_point("intent_extractor")
     graph.add_conditional_edges("intent_extractor", route_intent_extractor)
     graph.add_edge("intent_extractor_tools", "intent_extractor")
-    graph.add_edge("convert_to_intent_model", END)
+    graph.add_conditional_edges("convert_to_intent_model", route_convert_intent_model)
+    graph.add_edge("database_operator", END)
 
     return graph.compile()
