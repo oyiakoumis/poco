@@ -1,19 +1,15 @@
-from typing import Set
-
-from dotenv import load_dotenv
 from langchain.schema import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.runnables import RunnableConfig
 
+from constants import DATABASE_CONNECTION_STRING
 from database_connector import DatabaseConnector
 from graph import get_graph, get_query_processor_graph
 from print_event import print_event
 
-load_dotenv()
-
 
 def main() -> None:
-    database_connector = DatabaseConnector("mongodb://localhost:27017", "test_database")
+    database_connector = DatabaseConnector(DATABASE_CONNECTION_STRING, "mydatabase")
 
     query_processor_graph = get_query_processor_graph(database_connector)
     graph = get_graph(query_processor_graph)

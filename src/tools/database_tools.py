@@ -77,7 +77,7 @@ class CreateTableOperator(BaseTool):
 
         except Exception as e:
             # Cleanup on failure
-            self.db.delete_one(self.METADATA_COLLECTION, {"collection_name": name})
+            self.db.delete_document(self.METADATA_COLLECTION, {"collection_name": name})
             raise Exception(f"Failed to create collection: {str(e)}")
 
 
