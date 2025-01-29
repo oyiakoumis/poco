@@ -9,95 +9,146 @@ from database_connector import DatabaseConnector
 from models.intent_model import IndexDefinition, TableSchemaField
 from utils import get_utc_now
 
+from typing import ClassVar, Dict, List, Optional
+from pydantic import BaseModel, Field
+from datetime import datetime
+from langchain.embeddings import Embeddings, OpenAIEmbeddings
 
-class CreateTableArgs(BaseModel):
-    table_name: str = Field(description="The name of the table to create.")
-    description: str = Field(description=("A detailed description of the table's purpose, content, and the type of data it is intended to store."))
-    table_schema: List[TableSchemaField] = Field(
-        description=(
-            "The schema of the table to create, represented as a list of fields with their names, types, nullable status, and whether they are required."
-        )
-    )
-    indexes: Optional[List[IndexDefinition]] = Field(
-        default=None,
-        description=("A list of indexes to create for the table. Each index specifies the fields to include, their sort order, and whether it is unique."),
-    )
+# Constants
+METADATA_COLLECTION = "table_metadata"
+DEFAULT_TOP_K = 5
+EMBEDDING_MODEL = "text-embedding-3-small"
 
 
-class CreateTableOperator(BaseTool):
-    name: str = "create_table_operator"
-    description: str = "Create a new table in the database."
-    args_schema: ClassVar[BaseModel] = CreateTableArgs
-    METADATA_COLLECTION: ClassVar[str] = "table_metadata"
+# Common Models
+class TableSchemaField(BaseModel):
+    name: str
+    type: str
+    nullable: bool = True
+    required: bool = False
+
+
+class IndexDefinition(BaseModel):
+    fields: List[tuple[str, str]]  # (field_name, sort_order)
+    unique: bool = False
+
+
+class BaseTableArgs(BaseModel):
+    table_name: str = Field(description="The name of the table.")
+    description: str = Field(description="A detailed description of the table's purpose and content.")
+
+
+class CreateTableArgs(BaseTableArgs):
+    table_schema: List[TableSchemaField] = Field(description="The schema of the table to create.")
+    indexes: Optional[List[IndexDefinition]] = Field(default=None, description="A list of indexes to create for the table.")
+
+
+class FindTableArgs(BaseTableArgs):
+    table_name: Optional[str] = None
+    table_schema: Optional[List[Dict[str, str]]] = Field(default=None, description="The expected schema of the table.")
+
+
+# Base Table Operator
+class BaseTableOperator(BaseTool):
     db: DatabaseConnector
     embeddings: Embeddings
 
     def __init__(self, db_connector: DatabaseConnector):
-        super(CreateTableOperator, self).__init__(db=db_connector, embeddings=OpenAIEmbeddings(model="text-embedding-3-small"))
-
+        self.embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+        super().__init__(db=db_connector)
         self._ensure_metadata_collection_exists()
 
     def _ensure_metadata_collection_exists(self) -> None:
         """Ensure the metadata collection exists with proper indexes."""
-        if self.METADATA_COLLECTION not in self.db.list_collections():
-            self.db.create_collection(self.METADATA_COLLECTION)
-            self.db.create_index(self.METADATA_COLLECTION, [("table_name", "text")], unique=True)
+        if METADATA_COLLECTION not in self.db.list_collections():
+            self.db.create_collection(METADATA_COLLECTION)
+            self.db.create_index(METADATA_COLLECTION, [("table_name", "text")], unique=True)
 
-    def _generate_embedding(self, table_name: str, description: str, table_schema: List[TableSchemaField]) -> List[float]:
-        """Generate embeddings for the table metadata."""
-        full_text = f"{table_name} {description} {str(table_schema)}"
+    def _generate_embedding(self, *text_parts: str) -> List[float]:
+        """Generate embeddings for the concatenated text parts."""
+        full_text = " ".join(filter(None, text_parts))
         return self.embeddings.embed_query(full_text)
 
-    def _create_metadata_document(self, table_name: str, description: str, table_schema: List[TableSchemaField]) -> Dict:
+
+class CreateTableOperator(BaseTableOperator):
+    name: str = "create_table_operator"
+    description: str = "Create a new table in the database."
+    args_schema: ClassVar[BaseModel] = CreateTableArgs
+
+    def _create_metadata_document(self, args: CreateTableArgs) -> Dict:
         """Create a metadata document with embeddings."""
-        timestamp = get_utc_now()
+        timestamp = datetime.utcnow()
         return {
-            "table_name": table_name,
-            "description": description,
-            "table_schema": [schema_field.model_dump() for schema_field in table_schema],
+            "table_name": args.table_name,
+            "description": args.description,
+            "table_schema": [schema_field.model_dump() for schema_field in args.table_schema],
             "created_at": timestamp,
             "updated_at": timestamp,
-            "embedding": self._generate_embedding(table_name, description, table_schema),
+            "embedding": self._generate_embedding(args.table_name, args.description, str(args.table_schema)),
         }
 
-    def _create_table_indexes(self, table: str, indexes: Optional[List[IndexDefinition]] = None) -> None:
-        """Create indexes for the table based on the schema."""
+    def _create_table_indexes(self, table_name: str, indexes: Optional[List[IndexDefinition]]) -> None:
+        """Create indexes for the table."""
         if indexes:
             for index in indexes:
-                self.db.create_index(table, index["fields"], unique=index.get("unique", False))
+                self.db.create_index(table_name, index.fields, unique=index.unique)
 
-    def _cleanup_on_failure(self, metadata_document_id: str, table_id: str = None) -> None:
+    def _cleanup_on_failure(self, table_name: str, metadata_id: str = None, table_id: str = None) -> None:
         """Clean up resources if table creation fails."""
-        # Remove metadata document if it exists
-        self.db.delete_document(self.METADATA_COLLECTION, metadata_document_id)
+        if metadata_id:
+            self.db.delete_document(METADATA_COLLECTION, metadata_id)
+        if table_id:
+            self.db.delete_document(table_name)
 
-        # Remove the table if it was created
-        if table_id is not None:
-            self.db.delete_document(table_id)
-
-    def _run(self, table_name: str, description: str, table_schema: List[TableSchemaField], indexes: Optional[List[IndexDefinition]] = None) -> Dict:
+    def _run(self, **kwargs) -> Dict:
         """Create a new table and store its metadata."""
+        args = CreateTableArgs(**kwargs)
         metadata_result = None
         table_result = None
-        try:
-            # Create and add the metadata document
-            metadata_doc = self._create_metadata_document(table_name, description, table_schema)
-            metadata_result = self.db.add_document(self.METADATA_COLLECTION, metadata_doc)
 
-            # Create the table
-            table_result = self.db.create_collection(table_name)
-            self._create_table_indexes(table_name, indexes)
+        try:
+            # Create metadata document
+            metadata_doc = self._create_metadata_document(args)
+            metadata_result = self.db.add_document(METADATA_COLLECTION, metadata_doc)
+
+            # Create table and indexes
+            table_result = self.db.create_collection(args.table_name)
+            self._create_table_indexes(args.table_name, args.indexes)
 
             return {
                 "status": "success",
-                "message": f"Table {table_name} created successfully with metadata.",
+                "message": f"Table {args.table_name} created successfully with metadata.",
                 "result": table_result,
             }
 
         except Exception as e:
-            if metadata_result is not None:
-                self._cleanup_on_failure(table_name, metadata_result["_id"], table_id=table_result["_id"] if table_result else None)
+            if metadata_result:
+                self._cleanup_on_failure(args.table_name, metadata_id=metadata_result.get("_id"), table_id=table_result.get("_id") if table_result else None)
             raise RuntimeError(f"Failed to create table: {str(e)}")
+
+
+class FindTableOperator(BaseTableOperator):
+    name: str = "find_table_operator"
+    description: str = "Find a table in the metadata collection based on search criteria."
+    args_schema: ClassVar[BaseModel] = FindTableArgs
+
+    def _find_matching_tables(self, query_embedding: List[float], top_k: int = DEFAULT_TOP_K) -> List[Dict]:
+        """Find the most relevant tables based on vector similarity."""
+        return list(self.db.find_similar(METADATA_COLLECTION, "embedding", query_embedding, num_results=top_k))
+
+    def _run(self, **kwargs) -> Dict:
+        """Find similar tables based on input criteria."""
+        args = FindTableArgs(**kwargs)
+
+        query_embedding = self._generate_embedding(args.table_name, args.description, str(args.table_schema))
+
+        matches = self._find_matching_tables(query_embedding)
+
+        return {
+            "status": "success",
+            "message": "Matching tables found.",
+            "results": matches,
+        }
 
 
 class AddRecordsArgs(BaseModel):

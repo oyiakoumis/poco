@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union, Dict, Any
 from pymongo import MongoClient, ASCENDING
 from pymongo.collection import Collection
+from pymongo.operations import SearchIndexModel
 from bson import ObjectId
 
 from utils import try_convert_to_int
@@ -22,6 +23,34 @@ class DatabaseConnector:
         # TODO: remove that if not useful
         # index_keys = [(key[0], try_convert_to_int(key[1])) for key in keys]
         return collection.create_index(keys, unique=unique)
+
+    def create_vector_index(self, collection_name: str, vector_field: str, dimension: int = 1536):
+        """Create a vector search index on the specified field."""
+        search_index_model = SearchIndexModel(
+            definition={"mappings": {"fields": [{"type": "vector", "numDimensions": dimension, "path": vector_field, "similarity": "cosine"}]}},
+            name=f"{vector_field}_vector_index",
+            type="vectorSearch",
+        )
+        self.db[collection_name].create_search_index(search_index_model)
+
+    def find_similar(self, collection_name: str, vector_field: str, query_vector: list, num_results: int = 5, min_score: float = 0.0) -> list:
+        pipeline = [
+            {
+                "$vectorSearch": {
+                    "index": f"{vector_field}_vector_index",
+                    "path": vector_field,
+                    "queryVector": query_vector,
+                    "numCandidates": num_results * 10,  # Adjust as needed
+                    "limit": num_results,
+                    "minScore": min_score,
+                    "exact": False,  # Set to True for exact nearest neighbor search
+                }
+            },
+            {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+        ]
+
+        results = list(self.db[collection_name].aggregate(pipeline))
+        return results
 
     def list_indexes(self, collection_name: str) -> List[Dict]:
         collection = self.db[collection_name]
