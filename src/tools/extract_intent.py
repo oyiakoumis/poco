@@ -11,13 +11,6 @@ from models.intent_model import (
     UpdateRecordsModel,
 )
 
-
-class ToExtractIntent(BaseModel):
-    user_query: str = Field(
-        description="The user query after resolving all implicit references (e.g., 'it,' 'they') and relative temporal references (e.g., 'today,' 'last week') into explicit ones. This refined query is prepared for downstream database-related processing without verifying or clarifying vague entities."
-    )
-
-
 # Define system messages for each intent
 CREATE_SYSTEM_MESSAGE = """
 You are a helpful assistant designed to transform user queries into structured models for database operations. Your task is to parse the user's query and map it to the parameters of the CreateTableModel. 
@@ -52,7 +45,7 @@ Your job is limited to populating the model parameters accurately based on the u
 
 # Define individual tools for each intent
 class ExtractIntentArgs(BaseModel):
-    user_query: str = Field(None, description="The user query to be converted into structured database intent")
+    user_query: str = Field(None, description="The fully resolved query to be converted into structured database intent")
 
 
 @tool(args_schema=ExtractIntentArgs)

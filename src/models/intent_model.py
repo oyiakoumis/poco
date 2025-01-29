@@ -33,7 +33,7 @@ class IndexField(BaseModel):
 
 class IndexDefinition(BaseModel):
     fields: List[IndexField] = Field(description=("The fields to include in the index."))
-    unique: Optional[bool] = Field(default=False, description="Whether the index should enforce unique values.")
+    unique: bool = Field(description="Whether the index should enforce unique values.")
 
 
 class RecordModel(BaseModel):
@@ -58,8 +58,7 @@ class CreateTableModel(BaseModel):
             "The schema of the table to create, represented as a list of fields with their names, types, nullable status, and whether they are required."
         )
     )
-    indexes: Optional[List[IndexDefinition]] = Field(
-        default=None,
+    indexes: List[IndexDefinition] = Field(
         description=("A list of indexes to create for the table. Each index specifies the fields to include, their sort order, and whether it is unique."),
     )
 
@@ -202,11 +201,3 @@ class QueryRecordsModel(BaseModel):
                 "order_by": [{"field": "quantity", "direction": "DESC"}],
             }
         }
-
-
-class IntentModel(BaseModel):
-    intent: Literal["create_table", "add", "update", "delete", "query"]
-    details: Annotated[
-        Union[CreateTableModel, AddRecordsModel, UpdateRecordsModel, DeleteRecordsModel, QueryRecordsModel],
-        Field(discriminator="intent", description="structured intent model for database operations"),
-    ]

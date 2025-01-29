@@ -3,17 +3,7 @@ from langchain.schema import HumanMessage
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
-from state import MessagesState, QueryProcessorState
-
-
-class BaseAssistant:
-    def __init__(self, runnable: Runnable, max_retries: int = 5):
-        self.runnable = runnable
-        self.max_retries = max_retries
-
-    def __call__(self, state: MessagesState) -> MessagesState:
-        result = with_forced_response(self.runnable, state.messages, self.max_retries)
-        return {"messages": result}
+from state import QueryProcessorState
 
 
 def with_forced_response(runnable: Runnable, messages: list[AnyMessage], max_retries: int = 5):

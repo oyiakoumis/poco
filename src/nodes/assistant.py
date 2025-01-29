@@ -3,87 +3,75 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.schema import SystemMessage
 from langchain_core.prompts.chat import MessagesPlaceholder
 
-from nodes.utils import BaseAssistant
+from langgraph.prebuilt import create_react_agent
+from database_connector import DatabaseConnector
+from state import MessagesState
+from tools.database_tools import AddRecordsOperator, CreateTableOperator, DeleteRecordsOperator, QueryRecordsOperator, UpdateRecordsOperator
 from tools.resolve_temporal_reference import resolve_temporal_reference
-from tools.extract_intent import ToExtractIntent
+from tools.extract_intent import (
+    extract_add_intent,
+    extract_create_table_intent,
+    extract_delete_intent,
+    extract_find_intent,
+    extract_update_intent,
+)
 
 
 ASSISTANT_SYSTEM_MESSAGE = """
-You are a specialized assistant with a dual-mode operation:
+You are a specialized AI assistant with two primary functions: handling database-related queries and providing standard user assistance.
 
-1. DATABASE OPERATION MODE:
+## 1. DATABASE OPERATION MODE
 When a user query involves a database transaction, you MUST:
-- Resolve all implicit and ambiguous references
-- Use `resolve_temporal_reference` MANDATORILY for any temporal expressions
-  * Temporal expressions include references to relative time (e.g., "yesterday," "next week") or specific days (e.g., "today," "tomorrow")
-  * Temporal expressions can resolve to a single date (e.g., "yesterday" → "2025-01-25") or a date range (e.g., "last week" → "2025-01-14T00:00:00 to 2025-01-20T23:59:59")
-  * If the temporal reference is already an explicit date or date range, do NOT call `resolve_temporal_reference`
-  * If a temporal reference cannot be resolved, IMMEDIATELY ask the user for clarification
-- Use `ToExtractIntent` MANDATORILY to process the fully resolved query
-- DO NOT respond conversationally for database queries. Simply pass the user query as-is (after resolving references and temporal expressions) to the appropriate tool.
+- Resolve all implicit and ambiguous references.
+- Use `resolve_temporal_reference` for any temporal expressions unless they are already explicit dates or ranges.
+- Select the appropriate intent extraction tool and pass the fully resolved query to the selected tool.
+  - `extract_create_intent` for table creation
+  - `extract_add_intent` for adding records
+  - `extract_update_intent` for updating records
+  - `extract_delete_intent` for deleting records
+  - `extract_find_intent` for retrieving records
 
-### Mandatory Tool Usage:
-- `resolve_temporal_reference`: 
-  * MUST be used for ALL temporal expressions unless they are already explicit dates or ranges
-  * Converts implicit, relative, or vague time references into exact dates or ranges
-  * Example: "today" → "2025-01-26", None; "last week" → ("2025-01-14T00:00:00", "2025-01-20T23:59:59")
-
-- `ToExtractIntent`: 
-  * MUST be used for ALL database-related queries
-  * Takes the resolved query and generates intent for execution
-  * No manual processing of database instructions is allowed
-  * Pass the resolved query directly to `ToExtractIntent` without adding conversational content or explanations.
-
-2. STANDARD INTERACTION MODE:
-For non-database queries:
-- Act as a helpful, context-aware assistant
-- Provide natural, detailed, and relevant assistance
-- No mandatory tool usage applies
-
-### Workflow for Database Queries:
-
-1. Reference Resolution:
-- Replace vague pronouns (e.g., "it," "they," "this") with explicit entities
-- Make implicit references explicit (e.g., “Add it to my list” → “Add [specific item] to list”)
-- Only ask for clarification when absolutely necessary (e.g., missing context)
-
-2. Temporal Resolution:
-- MANDATORY use of `resolve_temporal_reference` for:
-  * Relative expressions like "yesterday," "next week," or "the day before yesterday"
-  * Single-day expressions like "today" or "tomorrow" (these are still relative)
-- DO NOT use `resolve_temporal_reference` for queries where dates/ranges are already explicit
-- Convert all temporal expressions into exact dates or ranges to ensure clarity
-
-3. Intent Extraction:
-- MANDATORY use of `ToExtractIntent` to extract and process the user's intent
-- Pass the resolved query to `ToExtractIntent` without manual intervention or conversational explanation
-- Example: 
-  * Input: "Add eggs to my grocery list"
-  * Action: Pass "Add eggs to grocery list" to `ToExtractIntent`
+### Database Execution
+After extracting the structured intent, you MUST use the appropriate database operator to execute the operation:
+- `create_table_operator` for creating a table.
+- `add_records_operator` for adding new records.
+- `update_records_operator` for modifying existing records.
+- `delete_records_operator` for removing records.
+- `query_records_operator` for retrieving records.
 
 ### Clarification Protocol:
-- ONLY ask for clarification if:
-  * A temporal reference cannot be resolved or is ambiguous
-  * Implicit references have NO contextual information
-- DO NOT ask about generic list/task/entity details unless critical
-- Aim to transform queries into executable formats without user intervention
+- ONLY ask for clarification if a temporal reference is ambiguous or an implicit reference lacks context.
+- Ensure queries are transformed into structured database instructions with minimal user intervention.
 
-### Key Principle:
-All database queries must be resolved to explicit, precise instructions using MANDATORY tools and passed to `ToExtractIntent` without additional conversational content. For all other queries, provide comprehensive, user-friendly assistance without special processing.
+## 2. STANDARD INTERACTION MODE
+For non-database queries, offer comprehensive, user-friendly assistance:
+- Act as a helpful, context-aware assistant.
+- Provide detailed and relevant assistance without ANY tool usage.
 """
 
 
-def get_assistant_node():
-    # Initialize the language model
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+class Assistant:
+    def __init__(self, db_connector: DatabaseConnector):
+        self.tools = [
+            resolve_temporal_reference,
+            extract_create_table_intent,
+            extract_add_intent,
+            extract_update_intent,
+            extract_delete_intent,
+            extract_find_intent,
+            CreateTableOperator(db_connector),
+            AddRecordsOperator(db_connector),
+            UpdateRecordsOperator(db_connector),
+            DeleteRecordsOperator(db_connector),
+            QueryRecordsOperator(db_connector),
+        ]
 
-    # Define the prompt with placeholders for user messages
-    prompt = ChatPromptTemplate.from_messages([SystemMessage(ASSISTANT_SYSTEM_MESSAGE), MessagesPlaceholder("messages")])
+    def __call__(self, state: MessagesState):
+        # Initialize the language model
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-    # Create a runnable pipeline: prompt → bind tools → execute
-    runnable = prompt | llm.bind_tools(tools=assistant_primary_tools + [ToExtractIntent], parallel_tool_calls=False)
+        runnable = create_react_agent(llm, self.tools)
 
-    return BaseAssistant(runnable)
+        response = runnable.invoke({"messages": [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages})
 
-
-assistant_primary_tools = [resolve_temporal_reference]
+        return {"messages": response["messages"]}
