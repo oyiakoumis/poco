@@ -1,18 +1,14 @@
-from typing import ClassVar, Dict, List, Optional, Union
+from datetime import datetime
+from typing import ClassVar, Dict, List, Optional
 
-from pydantic import BaseModel, Field
-from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain_core.tools import BaseTool
 from langchain_core.embeddings import Embeddings
+from langchain_core.tools import BaseTool
+from langchain_openai.embeddings import OpenAIEmbeddings
+from pydantic import BaseModel, Field
 
 from database_connector import DatabaseConnector
-from models.intent_model import IndexDefinition, TableSchemaField
+from models.intent_model import IndexDefinition, IndexField, TableSchemaField
 from utils import get_utc_now
-
-from typing import ClassVar, Dict, List, Optional
-from pydantic import BaseModel, Field
-from datetime import datetime
-from langchain.embeddings import Embeddings, OpenAIEmbeddings
 
 # Constants
 METADATA_COLLECTION = "table_metadata"
@@ -29,7 +25,7 @@ class TableSchemaField(BaseModel):
 
 
 class IndexDefinition(BaseModel):
-    fields: List[tuple[str, str]]  # (field_name, sort_order)
+    fields: List[IndexField]
     unique: bool = False
 
 
@@ -45,7 +41,7 @@ class CreateTableArgs(BaseTableArgs):
 
 class FindTableArgs(BaseTableArgs):
     table_name: Optional[str] = None
-    table_schema: Optional[List[Dict[str, str]]] = Field(default=None, description="The expected schema of the table.")
+    table_schema: List[TableSchemaField] = Field(default=None, description="The expected schema of the table.")
 
 
 # Base Table Operator
@@ -54,8 +50,7 @@ class BaseTableOperator(BaseTool):
     embeddings: Embeddings
 
     def __init__(self, db_connector: DatabaseConnector):
-        self.embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
-        super().__init__(db=db_connector)
+        super().__init__(db=db_connector, embeddings=OpenAIEmbeddings(model=EMBEDDING_MODEL))
         self._ensure_metadata_collection_exists()
 
     def _ensure_metadata_collection_exists(self) -> None:
@@ -63,6 +58,7 @@ class BaseTableOperator(BaseTool):
         if METADATA_COLLECTION not in self.db.list_collections():
             self.db.create_collection(METADATA_COLLECTION)
             self.db.create_index(METADATA_COLLECTION, [("table_name", "text")], unique=True)
+            self.db.create_search_index(METADATA_COLLECTION, "embedding")
 
     def _generate_embedding(self, *text_parts: str) -> List[float]:
         """Generate embeddings for the concatenated text parts."""
@@ -77,7 +73,7 @@ class CreateTableOperator(BaseTableOperator):
 
     def _create_metadata_document(self, args: CreateTableArgs) -> Dict:
         """Create a metadata document with embeddings."""
-        timestamp = datetime.utcnow()
+        timestamp = get_utc_now()
         return {
             "table_name": args.table_name,
             "description": args.description,

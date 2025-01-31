@@ -1,6 +1,7 @@
 langgraph
 langchain
 langchain-openai
+langchain-community
 langsmith
 python-dotenv
 python-dateutil

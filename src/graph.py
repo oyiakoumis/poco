@@ -1,5 +1,6 @@
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
+
 from database_connector import DatabaseConnector
 from nodes.assistant import Assistant
 from state import MessagesState

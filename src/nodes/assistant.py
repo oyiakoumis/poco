@@ -1,13 +1,12 @@
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
 from langchain.schema import SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.prompts.chat import MessagesPlaceholder
-
+from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
+
 from database_connector import DatabaseConnector
 from state import MessagesState
-from tools.database_tools import AddRecordsOperator, CreateTableOperator, DeleteRecordsOperator, QueryRecordsOperator, UpdateRecordsOperator
-from tools.resolve_temporal_reference import resolve_temporal_reference
+from tools.database_tools import AddRecordsOperator, CreateTableOperator, DeleteRecordsOperator, FindTableOperator, QueryRecordsOperator, UpdateRecordsOperator
 from tools.extract_intent import (
     extract_add_intent,
     extract_create_table_intent,
@@ -15,16 +14,20 @@ from tools.extract_intent import (
     extract_find_intent,
     extract_update_intent,
 )
-
+from tools.resolve_temporal_reference import resolve_temporal_reference
 
 ASSISTANT_SYSTEM_MESSAGE = """
 You are a specialized AI assistant with two primary functions: handling database-related queries and providing standard user assistance.
 
 ## 1. DATABASE OPERATION MODE
-When a user query involves a database transaction, you MUST:
-- Resolve all implicit and ambiguous references.
+When a user query involves a database transaction, you MUST as the first step perform the following actions:
+- Resolve all implicit and ambiguous references using the conversation's context.
 - Use `resolve_temporal_reference` for any temporal expressions unless they are already explicit dates or ranges.
-- Select the appropriate intent extraction tool and pass the fully resolved query to the selected tool.
+- **For operations that require an existing table (add, update, delete, query):**
+  - Always use `find_table_operator` to validate the actual table name and schema **before extracting intent**.
+
+### Intent Extraction
+After fully resolving the user query and for ANY database operation, select the appropriate intent extraction tool and pass the fully resolved query to the selected tool:
   - `extract_create_intent` for table creation
   - `extract_add_intent` for adding records
   - `extract_update_intent` for updating records
@@ -32,12 +35,14 @@ When a user query involves a database transaction, you MUST:
   - `extract_find_intent` for retrieving records
 
 ### Database Execution
-After extracting the structured intent, you MUST use the appropriate database operator to execute the operation:
-- `create_table_operator` for creating a table.
-- `add_records_operator` for adding new records.
-- `update_records_operator` for modifying existing records.
-- `delete_records_operator` for removing records.
-- `query_records_operator` for retrieving records.
+Once the structured intent is extracted:
+- **Ensure all field names and types match the table schema.**
+- Use the appropriate database operator:
+  - `create_table_operator` for creating a table.
+  - `add_records_operator` for adding new records.
+  - `update_records_operator` for modifying existing records.
+  - `delete_records_operator` for removing records.
+  - `query_records_operator` for retrieving records.
 
 ### Clarification Protocol:
 - ONLY ask for clarification if a temporal reference is ambiguous or an implicit reference lacks context.
@@ -60,6 +65,7 @@ class Assistant:
             extract_delete_intent,
             extract_find_intent,
             CreateTableOperator(db_connector),
+            FindTableOperator(db_connector),
             AddRecordsOperator(db_connector),
             UpdateRecordsOperator(db_connector),
             DeleteRecordsOperator(db_connector),

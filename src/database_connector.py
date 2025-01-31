@@ -1,16 +1,26 @@
-from typing import List, Tuple, Union, Dict, Any
-from pymongo import MongoClient, ASCENDING
+from typing import Any, Dict, List, Tuple, Union
+
+from bson import ObjectId
+from pymongo import ASCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.operations import SearchIndexModel
-from bson import ObjectId
-
-from utils import try_convert_to_int
 
 
 class DatabaseConnector:
     def __init__(self, connection_string: str, database_name: str):
         self.client = MongoClient(connection_string)
         self.db = self.client[database_name]
+
+    def drop_database(self):
+        """Drop the entire database."""
+        self.client.drop_database(self.db.name)
+
+    def drop_all_search_indexes(self, collection_name: str):
+        """Drop all search indexes from a collection."""
+        collection = self.db[collection_name]
+        indexes = list(collection.list_search_indexes())
+        for index in indexes:
+            collection.drop_search_index(index["name"])
 
     def create_collection(self, collection_name: str) -> Collection:
         return self.db.create_collection(collection_name)
@@ -24,14 +34,13 @@ class DatabaseConnector:
         # index_keys = [(key[0], try_convert_to_int(key[1])) for key in keys]
         return collection.create_index(keys, unique=unique)
 
-    def create_vector_index(self, collection_name: str, vector_field: str, dimension: int = 1536):
+    def create_search_index(self, collection_name: str, vector_field: str, dimension: int = 1536):
         """Create a vector search index on the specified field."""
-        search_index_model = SearchIndexModel(
-            definition={"mappings": {"fields": [{"type": "vector", "numDimensions": dimension, "path": vector_field, "similarity": "cosine"}]}},
-            name=f"{vector_field}_vector_index",
-            type="vectorSearch",
-        )
-        self.db[collection_name].create_search_index(search_index_model)
+        search_index_definition = {
+            "mappings": {"dynamic": True, "fields": {vector_field: {"type": "knnVector", "dimensions": dimension, "similarity": "cosine"}}}
+        }
+        search_index_model = SearchIndexModel(definition=search_index_definition, name=f"{vector_field}_vector_index")
+        return self.db[collection_name].create_search_index(search_index_model)
 
     def find_similar(self, collection_name: str, vector_field: str, query_vector: list, num_results: int = 5, min_score: float = 0.0) -> list:
         pipeline = [
@@ -47,10 +56,15 @@ class DatabaseConnector:
                 }
             },
             {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+            {"$project": {vector_field: 0}},  # Excludes the vector field from the output
         ]
 
         results = list(self.db[collection_name].aggregate(pipeline))
         return results
+
+    def list_search_indexes(self, collection_name: str) -> List[Dict]:
+        collection = self.db[collection_name]
+        return list(collection.list_search_indexes())
 
     def list_indexes(self, collection_name: str) -> List[Dict]:
         collection = self.db[collection_name]

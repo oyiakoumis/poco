@@ -1,8 +1,8 @@
-from typing import Optional, Tuple, Dict, Any
-from rich.console import Console
-from langgraph.graph.message import AnyMessage
-from rich.panel import Panel
+from typing import Any, Dict, Optional, Tuple
 
+from langgraph.graph.message import AnyMessage
+from rich.console import Console
+from rich.panel import Panel
 
 console = Console()
 
