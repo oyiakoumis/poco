@@ -1,9 +1,10 @@
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-
-from typing import TYPE_CHECKING
-
 from __future__ import annotations
+
+from datetime import datetime
+import json
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+from bson import ObjectId
 
 if TYPE_CHECKING:
     from database_manager.collection import Collection
@@ -12,24 +13,46 @@ if TYPE_CHECKING:
 class Document:
     EMBEDDING_FIELD_NAME = "_embedding"
 
-    def __init__(self, data: Dict[str, Any], collection: "Collection"):
-        self.data = data
+    def __init__(self, content: Dict[str, Any], collection: "Collection"):
+        self.content = content
         self.collection = collection
-        self.id = data.get("_id")
-        self.created_at = data.get("created_at", datetime.now())
-        self.updated_at = data.get("updated_at", datetime.now())
-        self.embedding: Optional[List[float]] = None
+        self.id: ObjectId = ObjectId()
+        self.created_at = datetime.now()
+        self.updated_at = datetime.now()
 
-    def update(self, new_data: Dict[str, Any]) -> bool:
+    @property
+    def embedding(self) -> List[float]:
+        return self.generate_embedding()
+
+    def to_dict(self) -> str:
+        return {
+            "content": self.content,
+            "_created_at": self.created_at,
+            "_updated_at": self.updated_at,
+            "_id": self.id,
+            self.EMBEDDING_FIELD_NAME: self.embedding,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict, collection: "Collection") -> "Document":
+        document: Document = cls(content=data["content"], collection=collection)
+        document.id = data["_id"]
+        document.created_at = data["_created_at"]
+        document.updated_at = data["_updated_at"]
+        document.embedding = data[cls.EMBEDDING_FIELD_NAME]
+
+        return document
+
+    def update(self) -> bool:
         # Validate before updating
-        self.collection.validate_document(new_data)
-        new_data["updated_at"] = datetime.now()
+        self.collection.validate_document(self.content)
+        new_data = self.to_dict()
+        new_data["_updated_at"] = datetime.now()
 
         result = self.collection._mongo_collection.update_one({"_id": self.id}, {"$set": new_data})
 
         if result.modified_count > 0:
-            self.data.update(new_data)
-            self.updated_at = new_data["updated_at"]
+            self.updated_at = new_data["_updated_at"]
             return True
         return False
 
@@ -37,5 +60,9 @@ class Document:
         result = self.collection._mongo_collection.delete_one({"_id": self.id})
         return result.deleted_count > 0
 
+    def get_content_for_embedding(self) -> str:
+        return json.dumps(self.content)
+
     def generate_embedding(self) -> None:
-        self.embedding = self.collection.embeddings.embed_query(self.data)
+        content = self.get_content_for_embedding()
+        return self.collection.embeddings.embed_query(content)

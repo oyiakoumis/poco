@@ -1,5 +1,6 @@
-from typing import Any, Dict, List, TYPE_CHECKING
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from database_manager.collection import Collection

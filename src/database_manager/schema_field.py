@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Any, Dict
 from enum import Enum
+from typing import Any, Dict
 
 from database_manager.exceptions import ValidationError
 
