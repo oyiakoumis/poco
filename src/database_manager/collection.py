@@ -21,6 +21,8 @@ class Collection:
     EMBEDDING_DIMENSION = 1536
     EMBEDDING_INDEX_NAME = "embedding_index"
 
+    embeddings: Embeddings
+
     def __init__(self, name: str, database: "Database", embeddings: Embeddings, schema: Dict[str, SchemaField]):
         self.name = name
         self.database = database

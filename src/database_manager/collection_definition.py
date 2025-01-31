@@ -66,5 +66,4 @@ class CollectionDefinition:
         definition = cls(data["name"], collection_registry, data["description"], schema)
         definition.created_at = data["_created_at"]
         definition.updated_at = data["_updated_at"]
-        definition.embedding = data[cls.EMBEDDING_FIELD_NAME]
         return definition

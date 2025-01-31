@@ -39,7 +39,6 @@ class Document:
         document.id = data["_id"]
         document.created_at = data["_created_at"]
         document.updated_at = data["_updated_at"]
-        document.embedding = data[cls.EMBEDDING_FIELD_NAME]
 
         return document
 
