@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 
 
 class Collection:
-    def __init__(self, name: str, database: "Database", schema: Dict[str, SchemaField] = None):
+    def __init__(self, name: str, database: "Database", schema: Dict[str, SchemaField]):
         self.name = name
         self.database = database
-        self.schema = schema or {}
+        self.schema = schema
         self._mongo_collection: MongoCollection = database._mongo_db[name]
 
     def insert_one(self, document: Dict[str, Any]) -> Document:
