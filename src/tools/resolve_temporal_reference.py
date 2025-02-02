@@ -4,170 +4,237 @@ from typing import Dict, Optional, Tuple, Union
 
 import pytz
 from dateutil.relativedelta import relativedelta
-from pydantic import BaseModel, Field
 from pytz import timezone
 
-from langchain_core.tools import tool
 
-
-def adjust_datetime_boundary(dt: datetime, boundary_type: Optional[str], first_day_of_week: int = 0) -> datetime:
+def adjust_datetime_boundary(dt: datetime, boundary: Optional[str], first_day_of_week: int = 0) -> datetime:
     """
-    Adjust a datetime object to a specific boundary.
+    Adjust a datetime to a specified boundary.
 
-    Supported boundary types:
+    Supported boundaries:
       - "start_of_year", "end_of_year"
       - "start_of_month", "end_of_month"
       - "start_of_day", "end_of_day"
       - "start_of_week", "end_of_week"
 
-    Parameters:
-        dt: The datetime object to adjust.
-        boundary_type: The boundary type to adjust to. If None or empty, returns the original datetime.
-        first_day_of_week: The starting day of the week (0 = Monday, 6 = Sunday).
-
-    Returns:
-        The datetime object adjusted to the specified boundary.
-
-    Raises:
-        ValueError: If the boundary_type is not recognized.
+    If boundary is None, returns dt unchanged.
     """
-    if not boundary_type:
+    if not boundary:
         return dt
 
-    boundary_type = boundary_type.lower()
-
-    if boundary_type == "start_of_year":
+    b = boundary.lower()
+    if b == "start_of_year":
         return dt.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif boundary_type == "end_of_year":
+    if b == "end_of_year":
         return dt.replace(month=12, day=31, hour=23, minute=59, second=59, microsecond=999999)
-    elif boundary_type == "start_of_month":
+    if b == "start_of_month":
         return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif boundary_type == "end_of_month":
+    if b == "end_of_month":
         last_day = calendar.monthrange(dt.year, dt.month)[1]
         return dt.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
-    elif boundary_type == "start_of_day":
+    if b == "start_of_day":
         return dt.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif boundary_type == "end_of_day":
+    if b == "end_of_day":
         return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-    elif boundary_type == "start_of_week":
-        # Calculate the number of days to subtract to reach the first day of the week.
+    if b == "start_of_week":
         days_to_subtract = (dt.weekday() - first_day_of_week) % 7
-        adjusted_date = dt - relativedelta(days=days_to_subtract)
-        return adjusted_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif boundary_type == "end_of_week":
-        # Calculate the number of days to add to reach the last day of the week.
+        return (dt - relativedelta(days=days_to_subtract)).replace(hour=0, minute=0, second=0, microsecond=0)
+    if b == "end_of_week":
         days_to_add = 6 - (dt.weekday() - first_day_of_week) % 7
-        adjusted_date = dt + relativedelta(days=days_to_add)
-        return adjusted_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-    else:
-        raise ValueError(f"Unrecognized boundary_type: {boundary_type}")
+        return (dt + relativedelta(days=days_to_add)).replace(hour=23, minute=59, second=59, microsecond=999999)
+    raise ValueError(f"Unknown boundary: {boundary}")
 
 
-def check_offset_keys(offsets: Optional[Dict[str, int]]) -> None:
+def adjust_to_weekday(dt: datetime, target: int, modifier: str = "this") -> datetime:
     """
-    Validate the keys in an offsets dictionary.
+    Snap dt to a target weekday.
 
-    Parameters:
-        offsets: A dictionary containing offset keys such as 'years', 'months', etc.
-                 If None, no validation is performed.
-
-    Raises:
-        ValueError: If any offset key is invalid.
+    modifier:
+      - "last": move to the most recent target weekday strictly before dt.
+      - "next": move to the first target weekday strictly after dt.
+      - "this": adjust within the current week.
     """
-    valid_keys = {"years", "months", "weeks", "days", "hours", "minutes", "seconds"}
-    if offsets:
-        invalid_keys = set(offsets.keys()) - valid_keys
-        if invalid_keys:
-            raise ValueError(f"Invalid offset keys: {invalid_keys}")
+    current = dt.weekday()
+    if modifier == "last":
+        diff = current - target
+        if diff <= 0:
+            diff += 7
+        return dt - relativedelta(days=diff)
+    if modifier == "next":
+        diff = target - current
+        if diff <= 0:
+            diff += 7
+        return dt + relativedelta(days=diff)
+    if modifier == "this":
+        diff = target - current
+        return dt + relativedelta(days=diff)
+    raise ValueError("Modifier must be 'last', 'this', or 'next'")
 
 
-class CalculateDateRangeArgs(BaseModel):
-    start_offsets: Optional[Dict[str, int]] = Field(None, description="Offsets for adjusting the start datetime. Example: {'months': -1}")
-    end_offsets: Optional[Dict[str, int]] = Field(None, description="Offsets for adjusting the end datetime. Example: {'weeks': 1}")
-    reference_offsets: Optional[Dict[str, int]] = Field(None, description="Offsets for adjusting the reference datetime. Example: {'years': -1}")
-    start_boundary: Optional[str] = Field(None, description="Boundary type for the start datetime. Example: 'start_of_month'")
-    end_boundary: Optional[str] = Field(None, description="Boundary type for the end datetime. Example: 'end_of_week'")
-    reference_datetime: Optional[datetime] = Field(None, description="The base datetime for calculations. Defaults to the current datetime if not provided.")
-    timezone_str: Optional[str] = Field("UTC", description="Timezone for localization. Defaults to 'UTC'.")
-    first_day_of_week: Optional[int] = Field(0, description="The starting day of the week (0 = Monday, 6 = Sunday). Defaults to 0.")
-    single_day_mode: bool = Field(False, description="If true, return only a single date (YYYY-MM-DD) and None for the end date.")
+def adjust_to_month(dt: datetime, target: int, modifier: str = "this") -> datetime:
+    """
+    Snap dt to a target month.
+
+    modifier:
+      - "next": if dt.month is target, move to target in the next year.
+      - "last": if dt.month is target, move to target in the previous year.
+      - "this": use the same year.
+    """
+    year = dt.year
+    if modifier == "next" and dt.month >= target:
+        year += 1
+    if modifier == "last" and dt.month <= target:
+        year -= 1
+
+    last_day = calendar.monthrange(year, target)[1]
+    day = min(dt.day, last_day)
+    return dt.replace(year=year, month=target, day=day)
 
 
-@tool(args_schema=CalculateDateRangeArgs)
 def resolve_temporal_reference(
-    start_offsets: Optional[Dict[str, int]] = None,
-    end_offsets: Optional[Dict[str, int]] = None,
-    reference_offsets: Optional[Dict[str, int]] = None,
-    start_boundary: Optional[str] = None,
-    end_boundary: Optional[str] = None,
-    reference_datetime: Optional[datetime] = None,
-    timezone_str: str = "UTC",
-    first_day_of_week: int = 0,
+    reference: Optional[datetime] = None,
+    start: Optional[Dict] = None,
+    end: Optional[Dict] = None,
     single_day_mode: bool = False,
+    tz: str = "UTC",
+    first_day_of_week: int = 0,
 ) -> Tuple[Union[datetime, str], Optional[datetime]]:
     """
-    Calculate a date range based on provided offsets, boundaries, and a reference datetime.
+    Compute a date (or date range) based on a reference datetime and separate configuration
+    dictionaries for the start and end.
 
-    The function applies offsets to a reference datetime (which defaults to the current datetime in the
-    specified timezone), adjusts the result to the specified boundaries, and returns a tuple of
-    (start_datetime, end_datetime). If single_day_mode is True, it ensures that both datetimes fall on the
-    same calendar day and returns the date string (YYYY-MM-DD) along with None for the end date.
+    Each configuration dictionary may include:
+      - "offset": a dict of offsets (passed to relativedelta)
+      - "boundary": a string like "start_of_month", "end_of_day", etc.
+      - "snap": a dict for snapping the date. For example:
+          {"type": "weekday", "target": 1, "modifier": "last"}
+          {"type": "month", "target": 2, "modifier": "next"}
 
-    Parameters:
-        start_offsets: Offsets for adjusting the start datetime. Example: {'months': -1}
-        end_offsets: Offsets for adjusting the end datetime. Example: {'weeks': 1}
-        reference_offsets: Offsets for adjusting the reference datetime. Example: {'years': -1}
-        start_boundary: Boundary type for the start datetime. Example: 'start_of_month'
-        end_boundary: Boundary type for the end datetime. Example: 'end_of_week'
-        reference_datetime: The base datetime for calculations. If not provided, defaults to the current datetime.
-        timezone_str: Timezone identifier for localizing the datetime. Defaults to 'UTC'.
-        first_day_of_week: The starting day of the week (0 = Monday, 6 = Sunday). Defaults to 0.
-        single_day_mode: If True, verifies that the start and end datetimes are on the same day and returns a single date.
-
-    Returns:
-        A tuple where:
-          - In normal mode: (start_datetime, end_datetime)
-          - In single_day_mode: (date_string, None) if both datetimes fall on the same day.
-
-    Raises:
-        ValueError: If single_day_mode is True but the start and end datetimes are on different days,
-                    or if invalid offset keys are provided.
+    If no configuration is provided, the value defaults to the reference datetime.
+    If single_day_mode is True, verifies that start and end fall on the same calendar day and
+    returns a tuple of (date_str, None).
     """
-    # 1) Validate offsets.
-    check_offset_keys(start_offsets)
-    check_offset_keys(end_offsets)
-    check_offset_keys(reference_offsets)
-
-    # 2) Determine timezone and reference datetime.
-    tz = timezone(timezone_str)
-    if reference_datetime is not None:
-        # If the provided datetime is naive, localize it; otherwise, convert it.
-        if reference_datetime.tzinfo is None:
-            localized_ref_dt = tz.localize(reference_datetime)
-        else:
-            localized_ref_dt = reference_datetime.astimezone(tz)
+    tz_obj = timezone(tz)
+    # Localize the reference datetime (or use now)
+    if reference:
+        ref = reference if reference.tzinfo else tz_obj.localize(reference)
+        ref = ref.astimezone(tz_obj)
     else:
-        localized_ref_dt = datetime.now(tz)
+        ref = datetime.now(tz_obj)
 
-    # 3) Apply reference offsets.
-    ref_delta = relativedelta(**(reference_offsets or {}))
-    adjusted_ref_dt = localized_ref_dt + ref_delta
+    # Default configurations to empty dictionaries.
+    start_cfg = start or {}
+    end_cfg = end or {}
 
-    # 4) Calculate start datetime using offsets and boundaries.
-    start_delta = relativedelta(**(start_offsets or {}))
-    raw_start = adjusted_ref_dt + start_delta
-    start_datetime = adjust_datetime_boundary(raw_start, start_boundary, first_day_of_week)
+    # Compute the raw dates with offsets.
+    start_dt = ref + relativedelta(**start_cfg.get("offset", {}))
+    end_dt = ref + relativedelta(**end_cfg.get("offset", {}))
 
-    # 5) Calculate end datetime using offsets and boundaries.
-    end_delta = relativedelta(**(end_offsets or {}))
-    raw_end = adjusted_ref_dt + end_delta
-    end_datetime = adjust_datetime_boundary(raw_end, end_boundary, first_day_of_week)
+    # Apply boundary adjustments.
+    if "boundary" in start_cfg:
+        start_dt = adjust_datetime_boundary(start_dt, start_cfg["boundary"], first_day_of_week)
+    if "boundary" in end_cfg:
+        end_dt = adjust_datetime_boundary(end_dt, end_cfg["boundary"], first_day_of_week)
 
-    # 6) Handle single-day mode.
-    if single_day_mode:
-        if start_datetime.date() == end_datetime.date():
-            return (start_datetime.strftime("%Y-%m-%d"), None)
+    # Apply "snap" adjustments if provided.
+    if "snap" in start_cfg:
+        snap = start_cfg["snap"]
+        modifier = snap.get("modifier", "this")
+        if snap["type"] == "weekday":
+            start_dt = adjust_to_weekday(start_dt, snap["target"], modifier)
+        elif snap["type"] == "month":
+            start_dt = adjust_to_month(start_dt, snap["target"], modifier)
         else:
-            raise ValueError(f"single_day_mode=True, but start and end fall on different days: {start_datetime} vs {end_datetime}")
+            raise ValueError("Unknown snap type. Use 'weekday' or 'month'.")
+    if "snap" in end_cfg:
+        snap = end_cfg["snap"]
+        modifier = snap.get("modifier", "this")
+        if snap["type"] == "weekday":
+            end_dt = adjust_to_weekday(end_dt, snap["target"], modifier)
+        elif snap["type"] == "month":
+            end_dt = adjust_to_month(end_dt, snap["target"], modifier)
+        else:
+            raise ValueError("Unknown snap type. Use 'weekday' or 'month'.")
 
-    return (start_datetime, end_datetime)
+    if single_day_mode:
+        if start_dt.date() != end_dt.date():
+            raise ValueError("single_day_mode is True, but start and end dates differ.")
+        return (start_dt.strftime("%Y-%m-%d"), None)
+
+    return (start_dt, end_dt)
+
+
+# ---------------------------
+# Examples of Additional Temporal Expressions
+# ---------------------------
+if __name__ == "__main__":
+    # We'll use a fixed reference datetime for testing:
+    ref = datetime(2025, 2, 2, 15, 30, 0)  # This is a Wednesday.
+    tz = "UTC"
+
+    # 1. Tomorrow (single-day mode)
+    params_tomorrow = {
+        "start": {"offset": {"days": 1}, "boundary": "start_of_day"},
+        "end": {"offset": {"days": 1}, "boundary": "end_of_day"},
+    }
+    tomorrow = resolve_temporal_reference(reference=ref, **params_tomorrow, tz=tz, single_day_mode=True)
+    print("Tomorrow:", tomorrow)
+
+    # 2. Next Week Range
+    params_next_week = {
+        "start": {"offset": {"weeks": 1}, "boundary": "start_of_week"},
+        "end": {"offset": {"weeks": 1}, "boundary": "end_of_week"},
+    }
+    next_week_start, next_week_end = resolve_temporal_reference(reference=ref, **params_next_week, tz=tz)
+    print("\nNext Week Range:")
+    print("  Start:", next_week_start)
+    print("  End:  ", next_week_end)
+
+    # 3. Last Week Range
+    params_last_week = {
+        "start": {"offset": {"weeks": -1}, "boundary": "start_of_week"},
+        "end": {"offset": {"weeks": -1}, "boundary": "end_of_week"},
+    }
+    last_week_start, last_week_end = resolve_temporal_reference(reference=ref, **params_last_week, tz=tz)
+    print("\nLast Week Range:")
+    print("  Start:", last_week_start)
+    print("  End:  ", last_week_end)
+
+    # 4. Next Year Range
+    params_next_year = {
+        "start": {"offset": {"years": 1}, "boundary": "start_of_year"},
+        "end": {"offset": {"years": 1}, "boundary": "end_of_year"},
+    }
+    next_year_start, next_year_end = resolve_temporal_reference(reference=ref, **params_next_year, tz=tz)
+    print("\nNext Year Range:")
+    print("  Start:", next_year_start)
+    print("  End:  ", next_year_end)
+
+    # 5. Last Year Range
+    params_last_year = {
+        "start": {"offset": {"years": -1}, "boundary": "start_of_year"},
+        "end": {"offset": {"years": -1}, "boundary": "end_of_year"},
+    }
+    last_year_start, last_year_end = resolve_temporal_reference(reference=ref, **params_last_year, tz=tz)
+    print("\nLast Year Range:")
+    print("  Start:", last_year_start)
+    print("  End:  ", last_year_end)
+
+    # 6. In 3 Days (single-day mode)
+    params_in3days = {
+        "start": {"offset": {"days": 3}, "boundary": "start_of_day"},
+        "end": {"offset": {"days": 3}, "boundary": "end_of_day"},
+    }
+    in3days = resolve_temporal_reference(reference=ref, **params_in3days, tz=tz, single_day_mode=True)
+    print("\nIn 3 Days:", in3days)
+
+    # 7. This Weekend
+    # Assuming a week starting on Monday, snap to Saturday (target 5) and Sunday (target 6)
+    params_this_weekend = {
+        "start": {"boundary": "start_of_day", "snap": {"type": "weekday", "target": 5, "modifier": "this"}},
+        "end": {"boundary": "end_of_day", "snap": {"type": "weekday", "target": 6, "modifier": "this"}},
+    }
+    weekend_start, weekend_end = resolve_temporal_reference(reference=ref, **params_this_weekend, tz=tz)
+    print("\nThis Weekend:")
+    print("  Start:", weekend_start)
+    print("  End:  ", weekend_end)
