@@ -14,11 +14,11 @@ class DatabaseOperation(ABC):
         self.database = database
 
     @abstractmethod
-    def execute(self) -> Any:
+    async def execute(self) -> Any:
         """Execute the operation."""
         pass
 
     @abstractmethod
-    def undo(self) -> None:
+    async def undo(self) -> None:
         """Undo the operation."""
         pass

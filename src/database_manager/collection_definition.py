@@ -26,9 +26,9 @@ class CollectionDefinition(Embeddable):
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
-    def embedding(self) -> List[float]:
+    async def embedding(self) -> List[float]:
         """Get the embedding for this collection definition"""
-        return self.collection_registry.embeddings.embed(self)
+        return await self.collection_registry.embeddings.embed(self)
 
     def get_content_for_embedding(self) -> str:
         """Prepare content used for generating an embedding"""
@@ -41,7 +41,7 @@ class CollectionDefinition(Embeddable):
         }
         return json.dumps(content)
 
-    def to_dict(self) -> Dict[str, any]:
+    async def to_dict(self) -> Dict[str, any]:
         """Convert the collection definition to a dictionary representation"""
         return {
             "name": self.name,
@@ -49,7 +49,7 @@ class CollectionDefinition(Embeddable):
             "schema": {name: field.to_dict() for name, field in self.schema.items()},
             "_created_at": self.created_at,
             "_updated_at": self.updated_at,
-            self.collection_registry.embeddings.config.field_name: self.embedding,
+            self.collection_registry.embeddings.config.field_name: await self.embedding,
         }
 
     @classmethod

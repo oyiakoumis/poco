@@ -94,7 +94,7 @@ class EmbeddingWrapper:
         pipeline.append({"$project": {"score": 0}})
         return pipeline
 
-    def embed(self, obj: Embeddable) -> List[float]:
+    async def embed(self, obj: Embeddable) -> List[float]:
         """
         Generate embeddings for an object implementing the Embeddable protocol.
 
@@ -105,30 +105,4 @@ class EmbeddingWrapper:
             List of floats representing the embedding vector
         """
         content = obj.get_content_for_embedding()
-        return self.embeddings.embed_query(content)
-
-    def embed_batch(self, objects: List[Embeddable]) -> List[List[float]]:
-        """
-        Generate embeddings for multiple objects in batch.
-
-        Args:
-            objects: List of objects that provide content for embedding
-
-        Returns:
-            List of embedding vectors
-        """
-        contents = [obj.get_content_for_embedding() for obj in objects]
-        return self.embeddings.embed_documents(contents)
-
-    def embed_json(self, data: Dict[str, Any]) -> List[float]:
-        """
-        Generate embeddings for a JSON-serializable dictionary.
-
-        Args:
-            data: Dictionary to embed
-
-        Returns:
-            List of floats representing the embedding vector
-        """
-        content = json.dumps(data)
-        return self.embeddings.embed_query(content)
+        return await self.embeddings.aembed_query(content)

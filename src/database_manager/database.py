@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from pymongo.database import Database as MongoDatabase
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from database_manager.collection import Collection
 from database_manager.collection_definition import CollectionDefinition
@@ -40,31 +40,32 @@ class Database:
         self.name = name
         self.connection = connection
         self.embeddings = embeddings
-        self._mongo_db: Optional[MongoDatabase] = None
+        self._mongo_db: Optional[AsyncIOMotorDatabase] = None
         self.registry: Optional[CollectionRegistry] = None
         self.operation_history = OperationHistory()
 
-    def connect(self, refresh: bool = False) -> None:
+    async def connect(self, refresh: bool = False) -> None:
         """
         Connect to the database. If restart is True, drop existing collections and registry.
         """
-        self.connection.connect()
+        await self.connection.connect()
 
         if refresh:
             db = self.connection.client[self.name]
-            for collection_name in db.list_collection_names():
+            collection_names = await db.list_collection_names()
+            for collection_name in collection_names:
                 collection = db[collection_name]
                 try:
-                    collection.drop_search_index("*")
+                    await collection.drop_search_index("*")
                 except Exception as e:
                     logger.warning("Failed to drop search index on collection '%s': %s", collection_name, e)
-            self.connection.client.drop_database(self.name)
+            await self.connection.client.drop_database(self.name)
             logger.info("Dropped existing database '%s'", self.name)
 
         self._mongo_db = self.connection.client[self.name]
 
         self.registry = CollectionRegistry(self, self.embeddings)
-        self.registry.init_registry()
+        await self.registry.init_registry()
         logger.info("Connected to database '%s'", self.name)
 
     def get_collection(self, collection_definition: CollectionDefinition) -> Optional[Collection]:
@@ -72,88 +73,56 @@ class Database:
         Find a collection by its definition.
         """
         collection = Collection(collection_definition.name, self, self.embeddings, collection_definition.schema)
-
         return collection
 
-    def create_collection(self, name: str, schema: Dict[str, SchemaField], description: str) -> Collection:
+    async def create_collection(self, name: str, schema: Dict[str, SchemaField], description: str) -> Collection:
         """
         Create a new collection with undo support.
         """
         operation = CreateCollectionOperation(self, name, schema, description)
-        collection = operation.execute()
+        collection = await operation.execute()
         self.operation_history.push(operation)
         return collection
 
-    def drop_collection(self, name: str) -> None:
+    async def drop_collection(self, name: str) -> None:
         """
         Drop a collection with undo support.
         """
         operation = DropCollectionOperation(self, name)
-        operation.execute()
+        await operation.execute()
         self.operation_history.push(operation)
 
-    def insert_document(self, collection: Collection, content: Dict[str, Any]) -> Document:
+    async def insert_document(self, collection: Collection, content: Dict[str, Any]) -> Document:
         """
         Insert a document with undo support.
         """
         operation = DocumentInsertOperation(self, collection, content)
-        document = operation.execute()
+        document = await operation.execute()
         self.operation_history.push(operation)
         return document
 
-    def insert_many_documents(self, collection: Collection, contents: List[Dict[str, Any]]) -> List[Document]:
+    async def insert_many_documents(self, collection: Collection, contents: List[Dict[str, Any]]) -> List[Document]:
         """
         Insert multiple documents with undo support.
-
-        Args:
-            collection: Collection to insert into
-            contents: List of document contents that match the collection's schema
-
-        Returns:
-            List[Document]: The newly created documents
-
-        Raises:
-            ValidationError: If any document doesn't match the schema
         """
         operation = BulkInsertOperation(self, collection, contents)
-        documents = operation.execute()
+        documents = await operation.execute()
         self.operation_history.push(operation)
         return documents
 
-    def update_document(self, document: Document, new_content: Dict[str, Any]) -> bool:
+    async def update_document(self, document: Document, new_content: Dict[str, Any]) -> bool:
         """
         Update a document with undo support.
-
-        Args:
-            document: The document to update
-            new_content: New content that matches the collection's schema
-
-        Returns:
-            bool: True if update was successful
-
-        Raises:
-            ValidationError: If the new content doesn't match the schema
         """
         operation = DocumentUpdateOperation(self, document, new_content)
-        success = operation.execute()
+        success = await operation.execute()
         if success:
             self.operation_history.push(operation)
         return success
 
-    def update_many_documents(self, collection: Collection, documents: List[Document], update_dict: Dict[str, Any]) -> int:
+    async def update_many_documents(self, collection: Collection, documents: List[Document], update_dict: Dict[str, Any]) -> int:
         """
         Update multiple documents with undo support.
-
-        Args:
-            collection: Collection containing the documents
-            documents: List of documents to update
-            update_dict: Update operations to apply
-
-        Returns:
-            int: Number of documents updated
-
-        Raises:
-            ValidationError: If the updates don't match the schema
         """
         if not documents:
             return 0
@@ -164,7 +133,7 @@ class Database:
         try:
             # Create and execute bulk operation
             operation = BulkUpdateOperation(self, collection, original_states, update_dict)
-            operation.execute()
+            await operation.execute()
             self.operation_history.push(operation)
             return len(documents)
 
@@ -172,35 +141,23 @@ class Database:
             # Rollback changes if something goes wrong
             for doc, original_content in original_states:
                 doc.content = original_content
-                collection._mongo_collection.replace_one({"_id": doc.id}, {**doc.to_dict(), "content": original_content})
+                dict_data = await doc.to_dict()
+                await collection._mongo_collection.replace_one({"_id": doc.id}, {**dict_data, "content": original_content})
             raise e
 
-    def delete_document(self, document: Document) -> bool:
+    async def delete_document(self, document: Document) -> bool:
         """
         Delete a document with undo support.
-
-        Args:
-            document: The document to delete
-
-        Returns:
-            bool: True if deletion was successful
         """
         operation = DocumentDeleteOperation(self, document)
-        success = operation.execute()
+        success = await operation.execute()
         if success:
             self.operation_history.push(operation)
         return success
 
-    def delete_many_documents(self, collection: Collection, documents: List[Document]) -> int:
+    async def delete_many_documents(self, collection: Collection, documents: List[Document]) -> int:
         """
         Delete multiple documents with undo support.
-
-        Args:
-            collection: Collection containing the documents
-            documents: List of documents to delete
-
-        Returns:
-            int: Number of documents deleted
         """
         if not documents:
             return 0
@@ -211,52 +168,45 @@ class Database:
         try:
             # Create and execute bulk operation
             operation = BulkDeleteOperation(self, collection, deleted_docs)
-            operation.execute()
+            await operation.execute()
             self.operation_history.push(operation)
             return len(documents)
 
         except Exception as e:
             # Rollback changes if something goes wrong
             for doc, content in deleted_docs:
-                collection._mongo_collection.insert_one({**doc.to_dict(), "content": content})
+                dict_data = await doc.to_dict()
+                await collection._mongo_collection.insert_one({**dict_data, "content": content})
             raise e
 
-    def rename_collection(self, old_name: str, new_name: str) -> None:
+    async def rename_collection(self, old_name: str, new_name: str) -> None:
         """
         Rename a collection with undo support.
         """
         operation = RenameCollectionOperation(self, old_name, new_name)
-        operation.execute()
+        await operation.execute()
         self.operation_history.push(operation)
         logger.info("Renamed collection '%s' to '%s'", old_name, new_name)
 
-    def add_fields(self, collection_name: str, new_fields: Dict[str, SchemaField]) -> None:
+    async def add_fields(self, collection_name: str, new_fields: Dict[str, SchemaField]) -> None:
         """
         Add new fields to a collection's schema with undo support.
-
-        Args:
-            collection_name: Name of the collection to modify
-            new_fields: Dictionary of field names to SchemaField objects
         """
         operation = AddFieldsOperation(self, collection_name, new_fields)
-        operation.execute()
+        await operation.execute()
         self.operation_history.push(operation)
         logger.info("Added fields %s to collection '%s'", list(new_fields.keys()), collection_name)
 
-    def delete_fields(self, collection_name: str, field_names: List[str]) -> None:
+    async def delete_fields(self, collection_name: str, field_names: List[str]) -> None:
         """
         Delete fields from a collection's schema with undo support.
-
-        Args:
-            collection_name: Name of the collection to modify
-            field_names: List of field names to delete
         """
         operation = DeleteFieldsOperation(self, collection_name, field_names)
-        operation.execute()
+        await operation.execute()
         self.operation_history.push(operation)
         logger.info("Deleted fields %s from collection '%s'", field_names, collection_name)
 
-    def undo(self) -> bool:
+    async def undo(self) -> bool:
         """
         Undo the last operation.
         Returns True if the operation was successfully undone.
@@ -269,14 +219,14 @@ class Database:
             return False
 
         try:
-            operation.undo()
+            await operation.undo()
             return True
         except Exception as e:
             logger.error(f"Failed to undo operation: {str(e)}")
             self.operation_history.current_index += 1  # Restore history state
             return False
 
-    def redo(self) -> bool:
+    async def redo(self) -> bool:
         """
         Redo the last undone operation.
         Returns True if the operation was successfully redone.
@@ -289,7 +239,7 @@ class Database:
             return False
 
         try:
-            operation.execute()
+            await operation.execute()
             return True
         except Exception as e:
             logger.error(f"Failed to redo operation: {str(e)}")

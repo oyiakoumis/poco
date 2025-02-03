@@ -29,18 +29,18 @@ class Document(Embeddable):
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
-    def embedding(self) -> List[float]:
+    async def embedding(self) -> List[float]:
         """Get the embedding for the document's content"""
-        return self.collection.embeddings.embed(self)
+        return await self.collection.embeddings.embed(self)
 
-    def to_dict(self) -> Dict[str, Any]:
+    async def to_dict(self) -> Dict[str, Any]:
         """Convert the document to a dictionary representation"""
         return {
             "content": self.content,
             "_created_at": self.created_at,
             "_updated_at": self.updated_at,
             "_id": self.id,
-            self.collection.embeddings.config.field_name: self.embedding,
+            self.collection.embeddings.config.field_name: await self.embedding,
         }
 
     def get_content_for_embedding(self) -> str:

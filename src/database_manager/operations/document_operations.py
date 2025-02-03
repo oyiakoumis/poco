@@ -17,20 +17,20 @@ class DocumentInsertOperation(DatabaseOperation):
         self.content = content
         self.inserted_id: Optional[str] = None
 
-    def execute(self) -> Document:
+    async def execute(self) -> Document:
         self.collection.validate_document(self.content)
         # Create document dict with metadata
         doc = Document(content=self.content, collection=self.collection)
-        mongo_doc = {**doc.to_dict(), "content": self.content}
+        mongo_doc = {**(await doc.to_dict()), "content": self.content}
 
-        # Insert directly using PyMongo
-        result = self.collection._mongo_collection.insert_one(mongo_doc)
+        # Insert directly using Motor
+        result = await self.collection._mongo_collection.insert_one(mongo_doc)
         self.inserted_id = result.inserted_id
         return doc
 
-    def undo(self) -> None:
+    async def undo(self) -> None:
         if self.inserted_id:
-            self.collection._mongo_collection.delete_one({"_id": self.inserted_id})
+            await self.collection._mongo_collection.delete_one({"_id": self.inserted_id})
 
 
 class DocumentUpdateOperation(DatabaseOperation):
@@ -40,16 +40,16 @@ class DocumentUpdateOperation(DatabaseOperation):
         self.old_content = document.content.copy()
         self.new_content = new_content
 
-    def execute(self) -> bool:
+    async def execute(self) -> bool:
         self.document.collection.validate_document(self.new_content)
-        result = self.document.collection._mongo_collection.update_one({"_id": self.document.id}, {"$set": {"content": self.new_content}})
+        result = await self.document.collection._mongo_collection.update_one({"_id": self.document.id}, {"$set": {"content": self.new_content}})
         if result.modified_count > 0:
             self.document.content = self.new_content
             return True
         return False
 
-    def undo(self) -> None:
-        self.document.collection._mongo_collection.update_one({"_id": self.document.id}, {"$set": {"content": self.old_content}})
+    async def undo(self) -> None:
+        await self.document.collection._mongo_collection.update_one({"_id": self.document.id}, {"$set": {"content": self.old_content}})
         self.document.content = self.old_content
 
 
@@ -59,13 +59,13 @@ class DocumentDeleteOperation(DatabaseOperation):
         self.document = document
         self.deleted_content = document.content.copy()
 
-    def execute(self) -> bool:
-        result = self.document.collection._mongo_collection.delete_one({"_id": self.document.id})
+    async def execute(self) -> bool:
+        result = await self.document.collection._mongo_collection.delete_one({"_id": self.document.id})
         return result.deleted_count > 0
 
-    def undo(self) -> None:
-        doc = {**self.document.to_dict(), "content": self.deleted_content}
-        self.document.collection._mongo_collection.insert_one(doc)
+    async def undo(self) -> None:
+        doc = {**(await self.document.to_dict()), "content": self.deleted_content}
+        await self.document.collection._mongo_collection.insert_one(doc)
 
 
 class BulkUpdateOperation(DatabaseOperation):
@@ -77,19 +77,19 @@ class BulkUpdateOperation(DatabaseOperation):
         self.original_states = original_states
         self.update_dict = update_dict
 
-    def execute(self) -> None:
+    async def execute(self) -> None:
         # Validate updates
         for doc, _ in self.original_states:
             self.collection.validate_document({**doc.content, **self.update_dict})
 
         # Apply updates
         doc_ids = [doc.id for doc, _ in self.original_states]
-        self.collection._mongo_collection.update_many({"_id": {"$in": doc_ids}}, {"$set": {"content": self.update_dict}})
+        await self.collection._mongo_collection.update_many({"_id": {"$in": doc_ids}}, {"$set": {"content": self.update_dict}})
 
-    def undo(self) -> None:
+    async def undo(self) -> None:
         # Restore original states one by one to ensure proper content structure
         for doc, original_content in self.original_states:
-            self.collection._mongo_collection.update_one({"_id": doc.id}, {"$set": {"content": original_content}})
+            await self.collection._mongo_collection.update_one({"_id": doc.id}, {"$set": {"content": original_content}})
 
 
 class BulkInsertOperation(DatabaseOperation):
@@ -101,7 +101,7 @@ class BulkInsertOperation(DatabaseOperation):
         self.contents = contents
         self.inserted_ids: List[str] = []
 
-    def execute(self) -> List[Document]:
+    async def execute(self) -> List[Document]:
         # Validate all documents before insertion
         for content in self.contents:
             self.collection.validate_document(content)
@@ -111,18 +111,18 @@ class BulkInsertOperation(DatabaseOperation):
         mongo_docs = []
         for content in self.contents:
             doc = Document(content=content, collection=self.collection)
-            mongo_doc = {**doc.to_dict(), "content": content}
+            mongo_doc = {**(await doc.to_dict()), "content": content}
             docs.append(doc)
             mongo_docs.append(mongo_doc)
 
         # Perform bulk insert
-        result = self.collection._mongo_collection.insert_many(mongo_docs)
+        result = await self.collection._mongo_collection.insert_many(mongo_docs)
         self.inserted_ids = result.inserted_ids
         return docs
 
-    def undo(self) -> None:
+    async def undo(self) -> None:
         if self.inserted_ids:
-            self.collection._mongo_collection.delete_many({"_id": {"$in": self.inserted_ids}})
+            await self.collection._mongo_collection.delete_many({"_id": {"$in": self.inserted_ids}})
 
 
 class BulkDeleteOperation(DatabaseOperation):
@@ -133,10 +133,13 @@ class BulkDeleteOperation(DatabaseOperation):
         self.collection = collection
         self.deleted_docs = deleted_docs
 
-    def execute(self) -> None:
+    async def execute(self) -> None:
         doc_ids = [doc.id for doc, _ in self.deleted_docs]
-        self.collection._mongo_collection.delete_many({"_id": {"$in": doc_ids}})
+        await self.collection._mongo_collection.delete_many({"_id": {"$in": doc_ids}})
 
-    def undo(self) -> None:
-        mongo_docs = [{**doc.to_dict(), "content": content} for doc, content in self.deleted_docs]
-        self.collection._mongo_collection.insert_many(mongo_docs)
+    async def undo(self) -> None:
+        mongo_docs = []
+        for doc, content in self.deleted_docs:
+            doc_dict = await doc.to_dict()
+            mongo_docs.append({**doc_dict, "content": content})
+        await self.collection._mongo_collection.insert_many(mongo_docs)

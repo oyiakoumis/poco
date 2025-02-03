@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 class Connection:
@@ -10,17 +10,17 @@ class Connection:
 
     def __init__(self, connection_string: str) -> None:
         self.connection_string = connection_string
-        self.client: Optional[MongoClient] = None
+        self.client: Optional[AsyncIOMotorClient] = None
 
-    def connect(self) -> None:
+    async def connect(self) -> None:
         """
         Establish a connection to MongoDB.
         """
-        self.client = MongoClient(self.connection_string)
+        self.client = AsyncIOMotorClient(self.connection_string)
         # Test connection
-        self.client.server_info()
+        await self.client.server_info()
 
-    def disconnect(self) -> None:
+    async def disconnect(self) -> None:
         """
         Disconnect from MongoDB.
         """

@@ -7,4 +7,5 @@ python-dotenv
 python-dateutil
 pytz
 pymongo
+motor
 rich

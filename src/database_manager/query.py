@@ -91,13 +91,14 @@ class Query:
 
         return pipeline
 
-    def execute(self) -> List[Dict[str, Any]] | List[Document]:
+    async def execute(self) -> List[Dict[str, Any]] | List[Document]:
         """Execute the query and return results."""
         if not self.group_fields and not self.aggregations:
-            return self._execute_find()
-        return list(self.collection._mongo_collection.aggregate(self._build_aggregation_pipeline()))
+            return await self._execute_find()
+        cursor = self.collection._mongo_collection.aggregate(self._build_aggregation_pipeline())
+        return await cursor.to_list(length=None)
 
-    def _execute_find(self) -> List[Document]:
+    async def _execute_find(self) -> List[Document]:
         """Execute a regular find query."""
         cursor = self.collection._mongo_collection.find(self.filters)
 
@@ -106,4 +107,5 @@ class Query:
         if self.limit_val:
             cursor = cursor.limit(self.limit_val)
 
-        return [Document.from_dict(doc, self.collection) for doc in cursor]
+        documents = await cursor.to_list(length=None)
+        return [Document.from_dict(doc, self.collection) for doc in documents]
