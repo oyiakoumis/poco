@@ -92,12 +92,5 @@ class Collection:
                 raise ValidationError(f"Required field {field_name} is missing")
 
     def _execute_query(self, query: Query) -> List[Document]:
-        cursor = self._mongo_collection.find(query.filters)
-
-        if query.sort_fields:
-            cursor = cursor.sort(query.sort_fields)
-
-        if query.limit_val:
-            cursor = cursor.limit(query.limit_val)
-
-        return [Document.from_dict(doc, self) for doc in cursor]
+        """Execute a regular query without aggregation."""
+        return query._execute_find()

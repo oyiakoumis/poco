@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import json
 import logging
 from datetime import datetime, timezone
@@ -13,22 +14,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class Document:
     """
     Represents a document stored in a collection.
     """
 
-    EMBEDDING_FIELD_NAME = "_embedding"
+    content: Dict[str, Any]
+    collection: "Collection"
+    id: ObjectId = field(default_factory=ObjectId)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
-    def __init__(self, content: Dict[str, Any], collection: "Collection") -> None:
-        """
-        Initialize a new Document.
-        """
-        self.content = content
-        self.collection = collection
-        self.id: ObjectId = ObjectId()
-        self.created_at: datetime = datetime.now(timezone.utc)
-        self.updated_at: datetime = datetime.now(timezone.utc)
+    EMBEDDING_FIELD_NAME: str = "_embedding"
 
     @property
     def embedding(self) -> List[float]:

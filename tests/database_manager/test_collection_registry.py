@@ -8,7 +8,7 @@ from pymongo.operations import SearchIndexModel
 from database_manager.collection_definition import CollectionDefinition
 from database_manager.database import Database
 from database_manager.collection_registry import CollectionRegistry
-from database_manager.schema_field import DataType, SchemaField
+from database_manager.schema_field import FieldType, SchemaField
 
 
 @pytest.fixture
@@ -54,7 +54,12 @@ def collection_registry(mock_database, mock_embeddings):
 
 @pytest.fixture
 def sample_collection_definition(collection_registry):
-    return CollectionDefinition(name="test_collection", description="Test collection", schema={"type": SchemaField("type", "desc", DataType.STRING)}, collection_registry=collection_registry)
+    return CollectionDefinition(
+        name="test_collection",
+        description="Test collection",
+        schema={"type": SchemaField("type", "desc", FieldType.STRING)},
+        collection_registry=collection_registry,
+    )
 
 
 def test_init_registry_creates_indexes(collection_registry, mock_mongo_collection):

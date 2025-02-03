@@ -9,7 +9,7 @@ from database_manager.collection import Collection
 from database_manager.document import Document
 from database_manager.exceptions import ValidationError
 from database_manager.query import Query
-from database_manager.schema_field import DataType, SchemaField
+from database_manager.schema_field import FieldType, SchemaField
 
 
 @pytest.fixture
@@ -34,8 +34,8 @@ def mock_embeddings():
 @pytest.fixture
 def sample_schema():
     return {
-        "name": SchemaField("name", "Name field", DataType.STRING, required=True),
-        "age": SchemaField("age", "Age field", DataType.INTEGER, required=False),
+        "name": SchemaField("name", "Name field", FieldType.STRING, required=True),
+        "age": SchemaField("age", "Age field", FieldType.INTEGER, required=False),
     }
 
 

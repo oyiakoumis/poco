@@ -5,7 +5,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from constants import DATABASE_CONNECTION_STRING
 from database_manager.collection_definition import CollectionDefinition
-from database_manager.schema_field import DataType, SchemaField
+from database_manager.schema_field import FieldType, SchemaField
 from print_event import print_event, print_message
 
 
@@ -20,8 +20,8 @@ def main() -> None:
     database.connect(restart=True)
 
     schema = {
-        "title": SchemaField("title", "the title of the task", DataType.STRING, required=True),
-        "description": SchemaField("description", "the description of the task", DataType.STRING, required=False),
+        "title": SchemaField("title", "the title of the task", FieldType.STRING, required=True),
+        "description": SchemaField("description", "the description of the task", FieldType.STRING, required=False),
     }
     collection = database.create_collection("tasks", schema, description="A collection of tasks")
     definition = CollectionDefinition("tasks", database.registry, "A collection of tasks", schema)

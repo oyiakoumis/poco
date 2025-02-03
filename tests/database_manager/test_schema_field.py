@@ -1,31 +1,31 @@
 import pytest
 from datetime import datetime
 from database_manager.exceptions import ValidationError
-from src.database_manager.schema_field import SchemaField, DataType
+from src.database_manager.schema_field import SchemaField, FieldType
 
 
 def test_schema_field_initialization():
     field = SchemaField(
         name="test_field",
         description="A test field",
-        field_type=DataType.STRING,
+        field_type=FieldType.STRING,
         required=True,
         default="default_value",
     )
 
     assert field.name == "test_field"
     assert field.description == "A test field"
-    assert field.field_type == DataType.STRING
+    assert field.field_type == FieldType.STRING
     assert field.required is True
     assert field.default == "default_value"
 
 
 def test_schema_field_validation():
-    string_field = SchemaField("name", "desc", DataType.STRING, required=True)
-    integer_field = SchemaField("age", "desc", DataType.INTEGER, required=True)
-    float_field = SchemaField("price", "desc", DataType.FLOAT, required=True)
-    boolean_field = SchemaField("active", "desc", DataType.BOOLEAN, required=True)
-    datetime_field = SchemaField("timestamp", "desc", DataType.DATETIME, required=True)
+    string_field = SchemaField("name", "desc", FieldType.STRING, required=True)
+    integer_field = SchemaField("age", "desc", FieldType.INTEGER, required=True)
+    float_field = SchemaField("price", "desc", FieldType.FLOAT, required=True)
+    boolean_field = SchemaField("active", "desc", FieldType.BOOLEAN, required=True)
+    datetime_field = SchemaField("timestamp", "desc", FieldType.DATETIME, required=True)
 
     assert string_field.validate("hello")
     assert integer_field.validate(10)
@@ -55,12 +55,12 @@ def test_schema_field_validation():
 
 
 def test_schema_field_optional_validation():
-    optional_field = SchemaField("optional", "desc", DataType.STRING, required=False)
+    optional_field = SchemaField("optional", "desc", FieldType.STRING, required=False)
     assert optional_field.validate(None)  # Should not raise an error
 
 
 def test_schema_field_to_dict():
-    field = SchemaField("name", "desc", DataType.STRING, required=True, default="default")
+    field = SchemaField("name", "desc", FieldType.STRING, required=True, default="default")
     expected_dict = {
         "name": "name",
         "description": "desc",
@@ -82,6 +82,6 @@ def test_schema_field_from_dict():
     field = SchemaField.from_dict(data)
     assert field.name == "name"
     assert field.description == "desc"
-    assert field.field_type == DataType.STRING
+    assert field.field_type == FieldType.STRING
     assert field.required is True
     assert field.default == "default"

@@ -2,7 +2,7 @@ import json
 import pytest
 from datetime import datetime
 from unittest.mock import Mock, patch
-from database_manager.schema_field import DataType, SchemaField
+from database_manager.schema_field import FieldType, SchemaField
 from database_manager.collection_definition import CollectionDefinition
 
 
@@ -17,8 +17,8 @@ def mock_collection_registry():
 @pytest.fixture
 def sample_schema():
     return {
-        "field1": SchemaField(name="field1", description="Test field 1", field_type=DataType.STRING, required=True, default=None),
-        "field2": SchemaField(name="field2", description="Test field 2", field_type=DataType.INTEGER, required=False, default=0),
+        "field1": SchemaField(name="field1", description="Test field 1", field_type=FieldType.STRING, required=True, default=None),
+        "field2": SchemaField(name="field2", description="Test field 2", field_type=FieldType.INTEGER, required=False, default=0),
     }
 
 
@@ -50,8 +50,8 @@ def test_get_content_for_embedding(collection_definition):
     assert content_dict["description"] == "Test collection"
     assert "schema" in content_dict
     assert len(content_dict["schema"]) == 2
-    assert content_dict["schema"]["field1"]["field_type"] == DataType.STRING.value
-    assert content_dict["schema"]["field2"]["field_type"] == DataType.INTEGER.value
+    assert content_dict["schema"]["field1"]["field_type"] == FieldType.STRING.value
+    assert content_dict["schema"]["field2"]["field_type"] == FieldType.INTEGER.value
 
 
 def test_generate_embedding(collection_definition, mock_collection_registry):
@@ -88,7 +88,7 @@ def test_from_dict(mock_collection_registry):
     assert collection.description == test_data["description"]
     assert len(collection.schema) == 1
     assert isinstance(collection.schema["field1"], SchemaField)
-    assert collection.schema["field1"].field_type == DataType.STRING
+    assert collection.schema["field1"].field_type == FieldType.STRING
     assert collection.created_at == test_data["_created_at"]
     assert collection.updated_at == test_data["_updated_at"]
 
@@ -107,10 +107,10 @@ def test_from_dict_with_invalid_data(mock_collection_registry):
 @pytest.mark.parametrize(
     "field_type,expected",
     [
-        (DataType.STRING, "string"),
-        (DataType.INTEGER, "integer"),
-        (DataType.FLOAT, "float"),
-        (DataType.BOOLEAN, "boolean"),
+        (FieldType.STRING, "string"),
+        (FieldType.INTEGER, "integer"),
+        (FieldType.FLOAT, "float"),
+        (FieldType.BOOLEAN, "boolean"),
     ],
 )
 def test_schema_field_types(mock_collection_registry, field_type, expected):

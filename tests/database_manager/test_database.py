@@ -7,7 +7,7 @@ from langchain_core.embeddings import Embeddings
 from database_manager.collection import Collection
 from database_manager.collection_registry import CollectionDefinition, CollectionRegistry
 from database_manager.connection import Connection
-from database_manager.schema_field import DataType, SchemaField
+from database_manager.schema_field import FieldType, SchemaField
 from database_manager.database import Database
 
 
@@ -36,8 +36,8 @@ def mock_registry():
 @pytest.fixture
 def sample_schema():
     return {
-        "title": SchemaField("title", "desc", field_type=DataType.STRING, required=True),
-        "content": SchemaField("content", "desc", field_type=DataType.STRING, required=True),
+        "title": SchemaField("title", "desc", field_type=FieldType.STRING, required=True),
+        "content": SchemaField("content", "desc", field_type=FieldType.STRING, required=True),
     }
 
 

@@ -1,29 +1,30 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import json
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-from database_manager.schema_field import DataType, SchemaField
+from database_manager.schema_field import FieldType, SchemaField
 
 if TYPE_CHECKING:
     from database_manager.collection_registry import CollectionRegistry
 
 
+@dataclass
 class CollectionDefinition:
     """
     Represents the definition of a collection including its schema and metadata.
     """
 
-    EMBEDDING_FIELD_NAME = "_embedding"
+    name: str
+    collection_registry: "CollectionRegistry"
+    description: str
+    schema: Dict[str, "SchemaField"]
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
-    def __init__(self, name: str, collection_registry: "CollectionRegistry", description: str, schema: Dict[str, SchemaField]) -> None:
-        self.name = name
-        self.collection_registry = collection_registry
-        self.description = description
-        self.schema = schema
-        self.created_at: datetime = datetime.now(timezone.utc)
-        self.updated_at: datetime = datetime.now(timezone.utc)
+    EMBEDDING_FIELD_NAME: str = "_embedding"
 
     @property
     def embedding(self) -> List[float]:
@@ -74,7 +75,7 @@ class CollectionDefinition:
             name: SchemaField(
                 name=field_info["name"],
                 description=field_info["description"],
-                field_type=DataType(field_info["field_type"]),
+                field_type=FieldType(field_info["field_type"]),
                 required=field_info["required"],
                 default=field_info["default"],
             )
