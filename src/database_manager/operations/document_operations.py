@@ -18,6 +18,7 @@ class DocumentInsertOperation(DatabaseOperation):
         self.inserted_document: Optional[Document] = None
 
     def execute(self) -> Document:
+        self.collection.validate_document(self.content)
         self.inserted_document = self.collection.insert_one(self.content)
         return self.inserted_document
 
@@ -42,6 +43,7 @@ class DocumentUpdateOperation(DatabaseOperation):
         self.new_content = new_content
 
     def execute(self) -> bool:
+        self.document.collection.validate_document(self.content)
         self.document.content = self.new_content
         return self.document.update()
 
@@ -90,6 +92,10 @@ class BulkUpdateOperation(DatabaseOperation):
         self.update_dict = update_dict
 
     def execute(self) -> None:
+        # Validate updates
+        for doc, _ in self.original_states:
+            self.collection.validate_document({**doc.content, **self.update_dict})
+
         # Apply updates
         doc_ids = [doc.id for doc, _ in self.original_states]
         self.collection._mongo_collection.update_many({"_id": {"$in": doc_ids}}, {"$set": self.update_dict})

@@ -58,7 +58,6 @@ class Collection:
         Raises:
             ValidationError: If the document doesn't match the schema
         """
-        self.validate_document(content)
         return self.database.insert_document(self, content)
 
     def insert_many(self, contents: List[Dict[str, Any]]) -> List[Document]:
@@ -74,8 +73,6 @@ class Collection:
         Raises:
             ValidationError: If any document doesn't match the schema
         """
-        for content in contents:
-            self.validate_document(content)
         return self.database.insert_many_documents(self, contents)
 
     def update_one(self, document: Document, new_content: Dict[str, Any]) -> bool:
@@ -92,7 +89,6 @@ class Collection:
         Raises:
             ValidationError: If the new content doesn't match the schema
         """
-        self.validate_document(new_content)
         return self.database.update_document(document, new_content)
 
     def update_many(self, filter_dict: Dict[str, Any], update_dict: Dict[str, Any]) -> int:
@@ -109,15 +105,8 @@ class Collection:
         Raises:
             ValidationError: If the updates don't match the schema
         """
-        # Validate update_dict against schema
-        for field_name in update_dict:
-            if field_name in self.schema:
-                self.schema[field_name].validate(update_dict[field_name])
-
         # Get affected documents
         documents = self.find(filter_dict).execute()
-        if not documents:
-            return 0
 
         # Let database handle the operation
         return self.database.update_many_documents(self, documents, update_dict)
