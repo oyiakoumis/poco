@@ -3,7 +3,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from database_manager.query import AggregateFn
-from models.base import BaseTableOperation
+from models.base import BaseCollectionOperation
 from models.fields import ConditionModel, OrderByModel
 
 
@@ -50,8 +50,8 @@ class GroupByModel(BaseModel):
         return self
 
 
-class QueryRecordsModel(BaseTableOperation):
-    """Model for querying records operation."""
+class QueryDocumentsModel(BaseCollectionOperation):
+    """Model for querying documents operation."""
 
     intent: Literal["query"]
     conditions: List[ConditionModel] = Field(default_factory=list)
@@ -61,7 +61,7 @@ class QueryRecordsModel(BaseTableOperation):
     group_by: Optional[GroupByModel] = None
 
     @model_validator(mode="after")
-    def validate_query_configuration(self) -> "QueryRecordsModel":
+    def validate_query_configuration(self) -> "QueryDocumentsModel":
         """Validate the overall query configuration."""
         if self.group_by:
             # When using group_by, query_fields should only contain grouped fields

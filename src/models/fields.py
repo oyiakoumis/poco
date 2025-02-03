@@ -14,13 +14,13 @@ class OrderByModel(BaseModel):
     direction: SortDirection = Field(description="The direction to order the results by.")
 
 
-class TableSchemaField(BaseModel):
-    """Model for defining table schema fields."""
+class CollectionSchemaField(BaseModel):
+    """Model for defining collection schema fields."""
 
-    name: str = Field(description="The name of the column/field in the table.")
+    name: str = Field(description="The name of the column/field in the collection.")
     type: FieldType = Field(description="The data type of the field.")
     nullable: bool = Field(default=True, description="Whether the field can accept null values.")
-    required: bool = Field(default=False, description="Whether this field must be provided when adding records.")
+    required: bool = Field(default=False, description="Whether this field must be provided when adding documents.")
     options: Optional[List[str]] = Field(default=None, description="Predefined options for 'select' or 'multi-select' field types.")
 
     @field_validator("options")
@@ -42,7 +42,7 @@ class IndexField(BaseModel):
 
 
 class IndexDefinition(BaseModel):
-    """Model for defining table indexes."""
+    """Model for defining collection indexes."""
 
     fields: List[IndexField]
     unique: bool = Field(default=False)
@@ -61,7 +61,7 @@ class RecordValue(BaseModel):
     value: Union[str, int, float, bool, date, datetime, List[str]]
 
 
-class RecordModel(BaseModel):
+class DocumentModel(BaseModel):
     """Model for record operations."""
 
     field: str

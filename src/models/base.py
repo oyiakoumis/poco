@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class BaseTableOperation(BaseModel):
-    """Base model for table operations."""
+class BaseCollectionOperation(BaseModel):
+    """Base model for collection operations."""
 
-    target_table: str = Field(min_length=1)
+    target_collection: str = Field(min_length=1)

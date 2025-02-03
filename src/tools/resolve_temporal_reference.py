@@ -155,10 +155,6 @@ class TemporalReferenceTool(BaseTool):
 
         return (start_dt, end_dt)
 
-    async def _arun(self, **kwargs):
-        """Async implementation of the tool."""
-        return self._run(**kwargs)
-
 
 # Example usage:
 if __name__ == "__main__":
