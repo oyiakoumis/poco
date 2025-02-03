@@ -9,7 +9,7 @@ from database_manager.document import Document
 from database_manager.exceptions import ValidationError
 from database_manager.query import Query
 from database_manager.schema_field import SchemaField
-from database_manager.embedding_wrapper import EmbeddingWrapper, EmbeddingConfig
+from database_manager.embedding_wrapper import EmbeddingWrapper
 
 if TYPE_CHECKING:
     from database_manager.database import Database
@@ -39,105 +39,8 @@ class Collection:
 
     def _create_vector_search_index(self) -> None:
         """Create the vector search index for embeddings."""
-        search_index_model = SearchIndexModel(
-            definition=self.embeddings.get_index_definition(),
-            name=self.embeddings.config.index_name
-        )
+        search_index_model = SearchIndexModel(definition=self.embeddings.get_index_definition(), name=self.embeddings.config.index_name)
         self._mongo_collection.create_search_index(search_index_model)
-
-    def insert_one(self, content: Dict[str, Any]) -> Document:
-        """
-        Insert a document with undo support.
-
-        Args:
-            content: Document content that matches the collection's schema
-
-        Returns:
-            Document: The newly created document
-
-        Raises:
-            ValidationError: If the document doesn't match the schema
-        """
-        return self.database.insert_document(self, content)
-
-    def insert_many(self, contents: List[Dict[str, Any]]) -> List[Document]:
-        """
-        Insert multiple documents with undo support.
-
-        Args:
-            contents: List of document contents that match the collection's schema
-
-        Returns:
-            List[Document]: The newly created documents
-
-        Raises:
-            ValidationError: If any document doesn't match the schema
-        """
-        return self.database.insert_many_documents(self, contents)
-
-    def update_one(self, document: Document, new_content: Dict[str, Any]) -> bool:
-        """
-        Update a document with undo support.
-
-        Args:
-            document: The document to update
-            new_content: New content that matches the collection's schema
-
-        Returns:
-            bool: True if update was successful
-
-        Raises:
-            ValidationError: If the new content doesn't match the schema
-        """
-        return self.database.update_document(document, new_content)
-
-    def update_many(self, filter_dict: Dict[str, Any], update_dict: Dict[str, Any]) -> int:
-        """
-        Update multiple documents matching the filter with undo support.
-
-        Args:
-            filter_dict: Filter to select documents
-            update_dict: Update operations to apply
-
-        Returns:
-            int: Number of documents updated
-
-        Raises:
-            ValidationError: If the updates don't match the schema
-        """
-        # Get affected documents
-        documents = self.find(filter_dict).execute()
-
-        # Let database handle the operation
-        return self.database.update_many_documents(self, documents, update_dict)
-
-    def delete_one(self, document: Document) -> bool:
-        """
-        Delete a document with undo support.
-
-        Args:
-            document: The document to delete
-
-        Returns:
-            bool: True if deletion was successful
-        """
-        return self.database.delete_document(document)
-
-    def delete_many(self, filter_dict: Dict[str, Any]) -> int:
-        """
-        Delete multiple documents matching the filter with undo support.
-
-        Args:
-            filter_dict: Filter to select documents to delete
-
-        Returns:
-            int: Number of documents deleted
-        """
-        documents = self.find(filter_dict).execute()
-        if not documents:
-            return 0
-
-        return self.database.delete_many_documents(self, documents)
 
     def find_one(self, filter_dict: Dict[str, Any]) -> Optional[Document]:
         """
@@ -182,12 +85,7 @@ class Collection:
         Returns:
             List[Document]: List of similar documents
         """
-        pipeline = self.embeddings.get_search_pipeline(
-            query_vector=document.embedding,
-            num_results=num_results,
-            min_score=min_score,
-            filter_dict=filter_dict
-        )
+        pipeline = self.embeddings.get_search_pipeline(query_vector=document.embedding, num_results=num_results, min_score=min_score, filter_dict=filter_dict)
 
         results = list(self._mongo_collection.aggregate(pipeline))
         return [Document.from_dict(data, self) for data in results]
@@ -207,32 +105,3 @@ class Collection:
                 field_schema.validate(document[field_name])
             elif field_schema.required:
                 raise ValidationError(f"Required field {field_name} is missing")
-
-    def add_fields(self, new_fields: Dict[str, SchemaField]) -> None:
-        """
-        Add new fields to the collection's schema.
-
-        Args:
-            new_fields: Dictionary of field name to SchemaField
-        """
-        self.database.add_fields(self.name, new_fields)
-
-    def delete_fields(self, field_names: List[str]) -> None:
-        """
-        Delete fields from the collection's schema.
-
-        Args:
-            field_names: List of field names to delete
-        """
-        self.database.delete_fields(self.name, field_names)
-
-    def rename(self, new_name: str) -> None:
-        """
-        Rename this collection.
-
-        Args:
-            new_name: New name for the collection
-        """
-        self.database.rename_collection(self.name, new_name)
-        self.name = new_name
-        self._mongo_collection = self.database._mongo_db[self.name]

@@ -43,7 +43,7 @@ class DocumentUpdateOperation(DatabaseOperation):
         self.new_content = new_content
 
     def execute(self) -> bool:
-        self.document.collection.validate_document(self.content)
+        self.document.collection.validate_document(self.new_content)
         self.document.content = self.new_content
         return self.document.update()
 

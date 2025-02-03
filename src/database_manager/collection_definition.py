@@ -28,7 +28,7 @@ class CollectionDefinition(Embeddable):
     @property
     def embedding(self) -> List[float]:
         """Get the embedding for this collection definition"""
-        return self.collection_registry.embedding_wrapper.embed(self)
+        return self.collection_registry.embeddings.embed(self)
 
     def get_content_for_embedding(self) -> str:
         """Prepare content used for generating an embedding"""
@@ -49,7 +49,7 @@ class CollectionDefinition(Embeddable):
             "schema": {name: field.to_dict() for name, field in self.schema.items()},
             "_created_at": self.created_at,
             "_updated_at": self.updated_at,
-            self.collection_registry.embedding_wrapper.config.field_name: self.embedding,
+            self.collection_registry.embeddings.config.field_name: self.embedding,
         }
 
     @classmethod
