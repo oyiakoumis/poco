@@ -1,16 +1,18 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
 from database_manager.collection import Collection
 from database_manager.collection_definition import CollectionDefinition
-from database_manager.database import Database
-
-
-from typing import Any, Dict, List, Optional
-
 from database_manager.operations.base import DatabaseOperation
 from database_manager.schema_field import SchemaField
 
+if TYPE_CHECKING:
+    from database_manager.database import Database
+
 
 class CreateCollectionOperation(DatabaseOperation):
-    def __init__(self, database: Database, name: str, schema: Dict[str, Any], description: str) -> None:
+    def __init__(self, database: "Database", name: str, schema: Dict[str, Any], description: str) -> None:
         super().__init__(database)
         self.name = name
         self.schema = schema
@@ -23,7 +25,7 @@ class CreateCollectionOperation(DatabaseOperation):
         self.database.registry.register_collection(definition)
 
         # Create actual collection
-        collection = Collection(self.name, self, self.database.embeddings, self.schema)
+        collection = Collection(self.name, self.database, self.database.embeddings, self.schema)
         collection.create_collection()
         return collection
 
@@ -33,7 +35,7 @@ class CreateCollectionOperation(DatabaseOperation):
 
 
 class DropCollectionOperation(DatabaseOperation):
-    def __init__(self, database: Database, name: str) -> None:
+    def __init__(self, database: "Database", name: str) -> None:
         super().__init__(database)
         self.name = name
         self.schema = None
@@ -57,7 +59,7 @@ class DropCollectionOperation(DatabaseOperation):
 
 
 class RenameCollectionOperation(DatabaseOperation):
-    def __init__(self, database: Database, old_name: str, new_name: str) -> None:
+    def __init__(self, database: "Database", old_name: str, new_name: str) -> None:
         super().__init__(database)
         self.old_name = old_name
         self.new_name = new_name
@@ -86,7 +88,7 @@ class RenameCollectionOperation(DatabaseOperation):
 
 
 class AddFieldsOperation(DatabaseOperation):
-    def __init__(self, database: Database, collection_name: str, new_fields: Dict[str, SchemaField]) -> None:
+    def __init__(self, database: "Database", collection_name: str, new_fields: Dict[str, SchemaField]) -> None:
         super().__init__(database)
         self.collection_name = collection_name
         self.new_fields = new_fields
@@ -119,7 +121,7 @@ class AddFieldsOperation(DatabaseOperation):
 
 
 class DeleteFieldsOperation(DatabaseOperation):
-    def __init__(self, database: Database, collection_name: str, field_names: List[str]) -> None:
+    def __init__(self, database: "Database", collection_name: str, field_names: List[str]) -> None:
         super().__init__(database)
         self.collection_name = collection_name
         self.field_names = field_names

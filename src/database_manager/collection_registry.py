@@ -4,8 +4,8 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from pymongo.operations import SearchIndexModel
 from langchain_core.embeddings import Embeddings
+from pymongo.operations import SearchIndexModel
 
 from database_manager.collection_definition import CollectionDefinition
 from database_manager.embedding_wrapper import EmbeddingWrapper

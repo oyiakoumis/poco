@@ -1,12 +1,13 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
+
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from database_manager.operations.base import DatabaseOperation
+from database_manager.document import Document
 
 if TYPE_CHECKING:
-    from database_manager.database import Database
     from database_manager.collection import Collection
-    from database_manager.document import Document
+    from database_manager.database import Database
 
 
 class DocumentInsertOperation(DatabaseOperation):

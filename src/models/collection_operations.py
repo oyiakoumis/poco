@@ -3,7 +3,7 @@ from typing import List, Literal
 from pydantic import Field, model_validator
 
 from models.base import BaseCollectionOperation
-from models.fields import IndexDefinition, CollectionSchemaField
+from models.fields import CollectionSchemaField, IndexDefinition
 
 
 class CreateCollectionModel(BaseCollectionOperation):

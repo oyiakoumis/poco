@@ -1,4 +1,5 @@
 from typing import List, Optional
+
 from database_manager.operations.base import DatabaseOperation
 
 

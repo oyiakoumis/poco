@@ -1,9 +1,10 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from bson import ObjectId
 
@@ -30,7 +31,7 @@ class Document(Embeddable):
     @property
     def embedding(self) -> List[float]:
         """Get the embedding for the document's content"""
-        return self.collection.embedding_wrapper.embed(self)
+        return self.collection.embeddings.embed(self)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the document to a dictionary representation"""
@@ -39,7 +40,7 @@ class Document(Embeddable):
             "_created_at": self.created_at,
             "_updated_at": self.updated_at,
             "_id": self.id,
-            self.collection.embedding_wrapper.config.field_name: self.embedding,
+            self.collection.embeddings.config.field_name: self.embedding,
         }
 
     def get_content_for_embedding(self) -> str:

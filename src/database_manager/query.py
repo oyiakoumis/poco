@@ -1,10 +1,11 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Literal
+
 from enum import Enum
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from database_manager.document import Document
 
 if TYPE_CHECKING:
     from database_manager.collection import Collection
-    from database_manager.document import Document
 
 
 class AggregateFn(str, Enum):

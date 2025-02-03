@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any
-from database_manager.database import Database
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from database_manager.database import Database
 
 
 class DatabaseOperation(ABC):
@@ -18,8 +22,3 @@ class DatabaseOperation(ABC):
     def undo(self) -> None:
         """Undo the operation."""
         pass
-
-    @abstractmethod
-    def redo(self) -> None:
-        """Redo the operation. By default, this just re-executes the operation."""
-        self.execute()

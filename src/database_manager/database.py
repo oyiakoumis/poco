@@ -1,9 +1,13 @@
-from typing import Dict, List, Optional, Any
 import logging
+from typing import Any, Dict, List, Optional
+
 from pymongo.database import Database as MongoDatabase
 
 from database_manager.collection import Collection
 from database_manager.collection_definition import CollectionDefinition
+from database_manager.collection_registry import CollectionRegistry
+from database_manager.connection import Connection
+from database_manager.document import Document
 from database_manager.embedding_wrapper import EmbeddingWrapper
 from database_manager.operations.collection_operations import (
     AddFieldsOperation,
@@ -12,19 +16,16 @@ from database_manager.operations.collection_operations import (
     DropCollectionOperation,
     RenameCollectionOperation,
 )
-from database_manager.collection_registry import CollectionRegistry
-from database_manager.connection import Connection
-from database_manager.document import Document
-from database_manager.operations.operation_history import OperationHistory
-from database_manager.schema_field import SchemaField
 from database_manager.operations.document_operations import (
     BulkDeleteOperation,
+    BulkInsertOperation,
     BulkUpdateOperation,
+    DocumentDeleteOperation,
     DocumentInsertOperation,
     DocumentUpdateOperation,
-    DocumentDeleteOperation,
-    BulkInsertOperation,
 )
+from database_manager.operations.operation_history import OperationHistory
+from database_manager.schema_field import SchemaField
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +44,13 @@ class Database:
         self.registry: Optional[CollectionRegistry] = None
         self.operation_history = OperationHistory()
 
-    def connect(self, restart: bool = False) -> None:
+    def connect(self, refresh: bool = False) -> None:
         """
         Connect to the database. If restart is True, drop existing collections and registry.
         """
         self.connection.connect()
 
-        if restart:
+        if refresh:
             db = self.connection.client[self.name]
             for collection_name in db.list_collection_names():
                 collection = db[collection_name]

@@ -1,31 +1,38 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
 from langchain_core.embeddings import Embeddings
 from pymongo.collection import Collection as MongoCollection
 from pymongo.operations import SearchIndexModel
 
 from database_manager.document import Document
+from database_manager.embedding_wrapper import EmbeddingWrapper
 from database_manager.exceptions import ValidationError
 from database_manager.query import Query
 from database_manager.schema_field import SchemaField
-from database_manager.embedding_wrapper import EmbeddingWrapper
 
 if TYPE_CHECKING:
     from database_manager.database import Database
 
 
+from dataclasses import dataclass
+from typing import Dict
+
+
+@dataclass
 class Collection:
     """
     Represents a MongoDB collection with schema validation and vector search capabilities.
     Supports document operations with undo/redo functionality.
     """
 
-    def __init__(self, name: str, database: "Database", embeddings: EmbeddingWrapper, schema: Dict[str, SchemaField]):
-        self.name = name
-        self.database = database
-        self.embeddings = embeddings
-        self.schema = schema
+    name: str
+    database: "Database"
+    embeddings: EmbeddingWrapper
+    schema: Dict[str, SchemaField]
+
+    def __post_init__(self):
         self._mongo_collection: MongoCollection = self.database._mongo_db[self.name]
 
     def create_collection(self) -> None:
