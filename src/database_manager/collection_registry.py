@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from pymongo.operations import SearchIndexModel
 from langchain_core.embeddings import Embeddings
 
 from database_manager.collection_definition import CollectionDefinition
+from database_manager.embedding_wrapper import EmbeddingWrapper
 
 if TYPE_CHECKING:
     from database_manager.database import Database
@@ -21,10 +22,8 @@ class CollectionRegistry:
     """
 
     REGISTRY_COLLECTION_NAME = "_collection_registry"
-    EMBEDDING_DIMENSION = 1536  # TODO: Create a dedicated class for embeddings configuration.
-    EMBEDDING_INDEX_NAME = "embedding_index"
 
-    def __init__(self, database: "Database", embeddings: Embeddings) -> None:
+    def __init__(self, database: "Database", embeddings: EmbeddingWrapper) -> None:
         """
         Initialize the collection registry.
         """
@@ -43,17 +42,13 @@ class CollectionRegistry:
             self._mongo_collection.create_index("name", unique=True)
 
             # Create search index for embedding.
-            search_index_definition = {
-                "mappings": {
-                    "dynamic": True,
-                    "fields": {
-                        CollectionDefinition.EMBEDDING_FIELD_NAME: {"type": "knnVector", "dimensions": self.EMBEDDING_DIMENSION, "similarity": "cosine"}
-                    },
-                }
-            }
-            search_index_model = SearchIndexModel(definition=search_index_definition, name=self.EMBEDDING_INDEX_NAME)
-            self._mongo_collection.create_search_index(search_index_model)
+            self._create_vector_search_index()
             logger.info("Initialized collection registry with indexes.")
+
+    def _create_vector_search_index(self) -> None:
+        """Create the vector search index for embeddings."""
+        search_index_model = SearchIndexModel(definition=self.embeddings.get_index_definition(), name=self.embeddings.config.index_name)
+        self._mongo_collection.create_search_index(search_index_model)
 
     def register_collection(self, definition: CollectionDefinition) -> None:
         """
@@ -78,25 +73,13 @@ class CollectionRegistry:
         """
         return [CollectionDefinition.from_dict(data, self) for data in self._mongo_collection.find()]
 
-    def search_similar_collections(self, definition: CollectionDefinition, num_results: int = 5, min_score: float = 0.0) -> List[CollectionDefinition]:
+    def search_similar_collections(
+        self, definition: CollectionDefinition, num_results: int = 5, min_score: float = 0.0, filter_dict: Optional[Dict[str, Any]] = None
+    ) -> List[CollectionDefinition]:
         """
         Search for collections with similar embeddings.
         """
-        pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": self.EMBEDDING_INDEX_NAME,
-                    "path": CollectionDefinition.EMBEDDING_FIELD_NAME,
-                    "queryVector": definition.embedding,
-                    "numCandidates": num_results * 10,  # Adjust as needed.
-                    "limit": num_results,
-                    "exact": False,  # Set to True for an exact nearest neighbor search.
-                }
-            },
-            {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
-            {"$match": {"score": {"$gte": min_score}}},
-            {"$project": {"score": 0}},  # Exclude score field from output.
-        ]
+        pipeline = self.embeddings.get_search_pipeline(query_vector=definition.embedding, num_results=num_results, min_score=min_score, filter_dict=filter_dict)
 
         results = list(self._mongo_collection.aggregate(pipeline))
         return [CollectionDefinition.from_dict(data, self) for data in results]

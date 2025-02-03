@@ -109,6 +109,46 @@ class BulkUpdateOperation(DatabaseOperation):
         )
 
 
+class BulkInsertOperation(DatabaseOperation):
+    """Handles bulk insert operations with undo support."""
+
+    def __init__(self, database: Database, collection: Collection, contents: List[Dict[str, Any]]) -> None:
+        super().__init__(database)
+        self.collection = collection
+        self.contents = contents
+        self.inserted_documents: List[Document] = []
+
+    def execute(self) -> List[Document]:
+        # Validate all documents before insertion
+        for content in self.contents:
+            self.collection.validate_document(content)
+
+        # Insert documents and store them for undo
+        mongo_docs = []
+        for content in self.contents:
+            doc = Document(content=content, collection=self.collection)
+            mongo_doc = {**doc.to_dict(), "content": content}
+            mongo_docs.append(mongo_doc)
+            self.inserted_documents.append(doc)
+
+        # Perform bulk insert
+        self.collection._mongo_collection.insert_many(mongo_docs)
+        return self.inserted_documents
+
+    def undo(self) -> None:
+        if self.inserted_documents:
+            doc_ids = [doc.id for doc in self.inserted_documents]
+            self.collection._mongo_collection.delete_many({"_id": {"$in": doc_ids}})
+
+    def get_state(self) -> OperationState:
+        return OperationState(
+            collection_name=self.collection.name,
+            operation_type=OperationType.INSERT,
+            document_id=",".join(str(doc.id) for doc in self.inserted_documents),
+            new_state={str(doc.id): doc.content for doc in self.inserted_documents},
+        )
+
+
 class BulkDeleteOperation(DatabaseOperation):
     """Handles bulk delete operations with undo support."""
 

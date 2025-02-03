@@ -6,10 +6,10 @@ from pymongo.collection import Collection as MongoCollection
 from pymongo.operations import SearchIndexModel
 
 from database_manager.document import Document
-from database_manager.operations.document_operations import BulkDeleteOperation, BulkUpdateOperation
 from database_manager.exceptions import ValidationError
 from database_manager.query import Query
 from database_manager.schema_field import SchemaField
+from database_manager.embedding_wrapper import EmbeddingWrapper, EmbeddingConfig
 
 if TYPE_CHECKING:
     from database_manager.database import Database
@@ -21,12 +21,7 @@ class Collection:
     Supports document operations with undo/redo functionality.
     """
 
-    EMBEDDING_DIMENSION = 1536
-    EMBEDDING_INDEX_NAME = "embedding_index"
-
-    embeddings: Embeddings
-
-    def __init__(self, name: str, database: "Database", embeddings: Embeddings, schema: Dict[str, SchemaField]):
+    def __init__(self, name: str, database: "Database", embeddings: EmbeddingWrapper, schema: Dict[str, SchemaField]):
         self.name = name
         self.database = database
         self.embeddings = embeddings
@@ -44,13 +39,10 @@ class Collection:
 
     def _create_vector_search_index(self) -> None:
         """Create the vector search index for embeddings."""
-        search_index_definition = {
-            "mappings": {
-                "dynamic": True,
-                "fields": {Document.EMBEDDING_FIELD_NAME: {"type": "knnVector", "dimensions": self.EMBEDDING_DIMENSION, "similarity": "cosine"}},
-            }
-        }
-        search_index_model = SearchIndexModel(definition=search_index_definition, name=self.EMBEDDING_INDEX_NAME)
+        search_index_model = SearchIndexModel(
+            definition=self.embeddings.get_index_definition(),
+            name=self.embeddings.config.index_name
+        )
         self._mongo_collection.create_search_index(search_index_model)
 
     def insert_one(self, content: Dict[str, Any]) -> Document:
@@ -66,6 +58,7 @@ class Collection:
         Raises:
             ValidationError: If the document doesn't match the schema
         """
+        self.validate_document(content)
         return self.database.insert_document(self, content)
 
     def insert_many(self, contents: List[Dict[str, Any]]) -> List[Document]:
@@ -81,7 +74,9 @@ class Collection:
         Raises:
             ValidationError: If any document doesn't match the schema
         """
-        return [self.insert_one(content) for content in contents]
+        for content in contents:
+            self.validate_document(content)
+        return self.database.insert_many_documents(self, contents)
 
     def update_one(self, document: Document, new_content: Dict[str, Any]) -> bool:
         """
@@ -97,6 +92,7 @@ class Collection:
         Raises:
             ValidationError: If the new content doesn't match the schema
         """
+        self.validate_document(new_content)
         return self.database.update_document(document, new_content)
 
     def update_many(self, filter_dict: Dict[str, Any], update_dict: Dict[str, Any]) -> int:
@@ -113,39 +109,18 @@ class Collection:
         Raises:
             ValidationError: If the updates don't match the schema
         """
-        # First get all documents that will be affected
-        query = self.find(filter_dict)
-        documents = query.execute()
-
-        if not documents:
-            return 0
-
-        # Validate the update_dict against schema for all affected fields
+        # Validate update_dict against schema
         for field_name in update_dict:
             if field_name in self.schema:
                 self.schema[field_name].validate(update_dict[field_name])
 
-        # Store original states for undo
-        original_states = [(doc, doc.content.copy()) for doc in documents]
+        # Get affected documents
+        documents = self.find(filter_dict).execute()
+        if not documents:
+            return 0
 
-        try:
-            # Create bulk operation
-            operation = BulkUpdateOperation(self.database, self, original_states, update_dict)
-
-            # Execute the update
-            operation.execute()
-
-            # Add to operation history if successful
-            self.database.operation_history.push(operation.get_state())
-
-            return len(documents)
-
-        except Exception as e:
-            # Rollback changes if something goes wrong
-            for doc, original_content in original_states:
-                doc.content = original_content
-                self._mongo_collection.replace_one({"_id": doc.id}, {**doc.to_dict(), "content": original_content})
-            raise e
+        # Let database handle the operation
+        return self.database.update_many_documents(self, documents, update_dict)
 
     def delete_one(self, document: Document) -> bool:
         """
@@ -169,33 +144,11 @@ class Collection:
         Returns:
             int: Number of documents deleted
         """
-        # First get all documents that will be affected
-        query = self.find(filter_dict)
-        documents = query.execute()
-
+        documents = self.find(filter_dict).execute()
         if not documents:
             return 0
 
-        # Store documents and their content for undo
-        deleted_docs = [(doc, doc.content.copy()) for doc in documents]
-
-        try:
-            # Create bulk operation
-            operation = BulkDeleteOperation(self.database, self, deleted_docs)
-
-            # Execute the deletion
-            operation.execute()
-
-            # Add to operation history if successful
-            self.database.operation_history.push(operation.get_state())
-
-            return len(documents)
-
-        except Exception as e:
-            # Rollback changes if something goes wrong
-            for doc, content in deleted_docs:
-                self._mongo_collection.insert_one({**doc.to_dict(), "content": content})
-            raise e
+        return self.database.delete_many_documents(self, documents)
 
     def find_one(self, filter_dict: Dict[str, Any]) -> Optional[Document]:
         """
@@ -240,26 +193,12 @@ class Collection:
         Returns:
             List[Document]: List of similar documents
         """
-        pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": self.EMBEDDING_INDEX_NAME,
-                    "path": Document.EMBEDDING_FIELD_NAME,
-                    "queryVector": document.embedding,
-                    "numCandidates": num_results * 10,
-                    "limit": num_results,
-                    "exact": False,
-                }
-            },
-            {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
-            {"$match": {"score": {"$gte": min_score}}},
-        ]
-
-        # Add additional filter if provided
-        if filter_dict:
-            pipeline.append({"$match": filter_dict})
-
-        pipeline.append({"$project": {"score": 0}})
+        pipeline = self.embeddings.get_search_pipeline(
+            query_vector=document.embedding,
+            num_results=num_results,
+            min_score=min_score,
+            filter_dict=filter_dict
+        )
 
         results = list(self._mongo_collection.aggregate(pipeline))
         return [Document.from_dict(data, self) for data in results]

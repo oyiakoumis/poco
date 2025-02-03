@@ -4,6 +4,7 @@ from pymongo.database import Database as MongoDatabase
 from langchain_core.embeddings import Embeddings
 
 from database_manager.collection import Collection
+from database_manager.embedding_wrapper import EmbeddingWrapper
 from database_manager.operations.collection_operations import (
     AddFieldsOperation,
     CreateCollectionOperation,
@@ -14,12 +15,15 @@ from database_manager.operations.collection_operations import (
 from database_manager.collection_registry import CollectionRegistry
 from database_manager.connection import Connection
 from database_manager.document import Document
+from database_manager.operations.operation_history import OperationHistory
 from database_manager.schema_field import SchemaField
 from database_manager.operations.document_operations import (
-    OperationHistory,
+    BulkDeleteOperation,
+    BulkUpdateOperation,
     DocumentInsertOperation,
     DocumentUpdateOperation,
     DocumentDeleteOperation,
+    BulkInsertOperation,
     OperationType,
 )
 
@@ -32,7 +36,7 @@ class Database:
     Includes support for undo/redo operations.
     """
 
-    def __init__(self, name: str, connection: Connection, embeddings: Embeddings) -> None:
+    def __init__(self, name: str, connection: Connection, embeddings: EmbeddingWrapper) -> None:
         self.name = name
         self.connection = connection
         self.embeddings = embeddings
@@ -99,9 +103,38 @@ class Database:
         self.operation_history.push(operation.get_state())
         return document
 
+    def insert_many_documents(self, collection: Collection, contents: List[Dict[str, Any]]) -> List[Document]:
+        """
+        Insert multiple documents with undo support.
+
+        Args:
+            collection: Collection to insert into
+            contents: List of document contents that match the collection's schema
+
+        Returns:
+            List[Document]: The newly created documents
+
+        Raises:
+            ValidationError: If any document doesn't match the schema
+        """
+        operation = BulkInsertOperation(self, collection, contents)
+        documents = operation.execute()
+        self.operation_history.push(operation.get_state())
+        return documents
+
     def update_document(self, document: Document, new_content: Dict[str, Any]) -> bool:
         """
         Update a document with undo support.
+
+        Args:
+            document: The document to update
+            new_content: New content that matches the collection's schema
+
+        Returns:
+            bool: True if update was successful
+
+        Raises:
+            ValidationError: If the new content doesn't match the schema
         """
         operation = DocumentUpdateOperation(self, document, new_content)
         success = operation.execute()
@@ -109,15 +142,89 @@ class Database:
             self.operation_history.push(operation.get_state())
         return success
 
+    def update_many_documents(self, collection: Collection, documents: List[Document], update_dict: Dict[str, Any]) -> int:
+        """
+        Update multiple documents with undo support.
+
+        Args:
+            collection: Collection containing the documents
+            documents: List of documents to update
+            update_dict: Update operations to apply
+
+        Returns:
+            int: Number of documents updated
+
+        Raises:
+            ValidationError: If the updates don't match the schema
+        """
+        if not documents:
+            return 0
+
+        # Store original states for undo
+        original_states = [(doc, doc.content.copy()) for doc in documents]
+
+        try:
+            # Create and execute bulk operation
+            operation = BulkUpdateOperation(self, collection, original_states, update_dict)
+            operation.execute()
+            self.operation_history.push(operation.get_state())
+            return len(documents)
+
+        except Exception as e:
+            # Rollback changes if something goes wrong
+            for doc, original_content in original_states:
+                doc.content = original_content
+                collection._mongo_collection.replace_one(
+                    {"_id": doc.id}, 
+                    {**doc.to_dict(), "content": original_content}
+                )
+            raise e
+
     def delete_document(self, document: Document) -> bool:
         """
         Delete a document with undo support.
+
+        Args:
+            document: The document to delete
+
+        Returns:
+            bool: True if deletion was successful
         """
         operation = DocumentDeleteOperation(self, document)
         success = operation.execute()
         if success:
             self.operation_history.push(operation.get_state())
         return success
+
+    def delete_many_documents(self, collection: Collection, documents: List[Document]) -> int:
+        """
+        Delete multiple documents with undo support.
+
+        Args:
+            collection: Collection containing the documents
+            documents: List of documents to delete
+
+        Returns:
+            int: Number of documents deleted
+        """
+        if not documents:
+            return 0
+
+        # Store documents for undo
+        deleted_docs = [(doc, doc.content.copy()) for doc in documents]
+
+        try:
+            # Create and execute bulk operation
+            operation = BulkDeleteOperation(self, collection, deleted_docs)
+            operation.execute()
+            self.operation_history.push(operation.get_state())
+            return len(documents)
+
+        except Exception as e:
+            # Rollback changes if something goes wrong
+            for doc, content in deleted_docs:
+                collection._mongo_collection.insert_one({**doc.to_dict(), "content": content})
+            raise e
 
     def can_undo(self) -> bool:
         """Check if there are operations that can be undone."""

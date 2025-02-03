@@ -54,11 +54,3 @@ class Document(Embeddable):
         document.created_at = data["_created_at"]
         document.updated_at = data["_updated_at"]
         return document
-
-    def update(self) -> bool:
-        """Update the document with undo support"""
-        return self.collection.update_one(self, self.content)
-
-    def delete(self) -> bool:
-        """Delete the document with undo support"""
-        return self.collection.delete_one(self)
