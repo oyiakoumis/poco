@@ -4,7 +4,7 @@
   "python.testing.pytestArgs": [
     "tests"
   ],
-  "python.envFile": "${workspaceFolder}/.env",
+  "python.envFile": "${workspaceFolder}/.venv",
   "python.analysis.extraPaths": [
     "./src"
   ],

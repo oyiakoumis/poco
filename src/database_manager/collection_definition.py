@@ -1,33 +1,41 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Dict, List
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from database_manager.schema_field import DataType, SchemaField
 
 if TYPE_CHECKING:
     from database_manager.collection_registry import CollectionRegistry
 
-from datetime import datetime
-from typing import Optional
-
 
 class CollectionDefinition:
+    """
+    Represents the definition of a collection including its schema and metadata.
+    """
+
     EMBEDDING_FIELD_NAME = "_embedding"
 
-    def __init__(self, name: str, collection_registry: "CollectionRegistry", description: Optional[str], schema: Dict[str, SchemaField]):
+    def __init__(self, name: str, collection_registry: "CollectionRegistry", description: str, schema: Dict[str, SchemaField]) -> None:
         self.name = name
         self.collection_registry = collection_registry
         self.description = description
         self.schema = schema
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
+        self.created_at: datetime = datetime.now(timezone.utc)
+        self.updated_at: datetime = datetime.now(timezone.utc)
 
     @property
     def embedding(self) -> List[float]:
+        """
+        Get the embedding for this collection definition.
+        """
         return self.generate_embedding()
 
     def get_content_for_embedding(self) -> str:
+        """
+        Prepare content used for generating an embedding.
+        """
         content = {
             "name": self.name,
             "description": self.description,
@@ -38,10 +46,16 @@ class CollectionDefinition:
         return json.dumps(content)
 
     def generate_embedding(self) -> List[float]:
+        """
+        Generate an embedding vector for the collection definition.
+        """
         content = self.get_content_for_embedding()
         return self.collection_registry.embeddings.embed_query(content)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, any]:
+        """
+        Convert the collection definition to a dictionary representation.
+        """
         return {
             "name": self.name,
             "description": self.description,
@@ -52,7 +66,10 @@ class CollectionDefinition:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict, collection_registry: "CollectionRegistry") -> "CollectionDefinition":
+    def from_dict(cls, data: Dict[str, any], collection_registry: "CollectionRegistry") -> CollectionDefinition:
+        """
+        Create a CollectionDefinition instance from a dictionary.
+        """
         schema = {
             name: SchemaField(
                 name=field_info["name"],
