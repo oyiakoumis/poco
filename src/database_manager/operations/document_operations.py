@@ -1,8 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple
 
-from database_manager.operations.base import DatabaseOperation, OperationState
-from database_manager.operations.enums import OperationType
+from database_manager.operations.base import DatabaseOperation
 
 if TYPE_CHECKING:
     from database_manager.database import Database
@@ -15,24 +14,22 @@ class DocumentInsertOperation(DatabaseOperation):
         super().__init__(database)
         self.collection = collection
         self.content = content
-        self.inserted_document: Optional[Document] = None
+        self.inserted_id: Optional[str] = None
 
     def execute(self) -> Document:
         self.collection.validate_document(self.content)
-        self.inserted_document = self.collection.insert_one(self.content)
-        return self.inserted_document
+        # Create document dict with metadata
+        doc = Document(content=self.content, collection=self.collection)
+        mongo_doc = {**doc.to_dict(), "content": self.content}
+
+        # Insert directly using PyMongo
+        result = self.collection._mongo_collection.insert_one(mongo_doc)
+        self.inserted_id = result.inserted_id
+        return doc
 
     def undo(self) -> None:
-        if self.inserted_document:
-            self.inserted_document.delete()
-
-    def get_state(self) -> OperationState:
-        return OperationState(
-            collection_name=self.collection.name,
-            operation_type=OperationType.INSERT,
-            document_id=str(self.inserted_document.id) if self.inserted_document else None,
-            new_state=self.content,
-        )
+        if self.inserted_id:
+            self.collection._mongo_collection.delete_one({"_id": self.inserted_id})
 
 
 class DocumentUpdateOperation(DatabaseOperation):
@@ -44,21 +41,15 @@ class DocumentUpdateOperation(DatabaseOperation):
 
     def execute(self) -> bool:
         self.document.collection.validate_document(self.new_content)
-        self.document.content = self.new_content
-        return self.document.update()
+        result = self.document.collection._mongo_collection.update_one({"_id": self.document.id}, {"$set": {"content": self.new_content}})
+        if result.modified_count > 0:
+            self.document.content = self.new_content
+            return True
+        return False
 
     def undo(self) -> None:
+        self.document.collection._mongo_collection.update_one({"_id": self.document.id}, {"$set": {"content": self.old_content}})
         self.document.content = self.old_content
-        self.document.update()
-
-    def get_state(self) -> OperationState:
-        return OperationState(
-            collection_name=self.document.collection.name,
-            operation_type=OperationType.UPDATE,
-            document_id=str(self.document.id),
-            old_state=self.old_content,
-            new_state=self.new_content,
-        )
 
 
 class DocumentDeleteOperation(DatabaseOperation):
@@ -68,18 +59,12 @@ class DocumentDeleteOperation(DatabaseOperation):
         self.deleted_content = document.content.copy()
 
     def execute(self) -> bool:
-        return self.document.delete()
+        result = self.document.collection._mongo_collection.delete_one({"_id": self.document.id})
+        return result.deleted_count > 0
 
     def undo(self) -> None:
-        self.document.collection.insert_one(self.deleted_content)
-
-    def get_state(self) -> OperationState:
-        return OperationState(
-            collection_name=self.document.collection.name,
-            operation_type=OperationType.DELETE,
-            document_id=str(self.document.id),
-            old_state=self.deleted_content,
-        )
+        doc = {**self.document.to_dict(), "content": self.deleted_content}
+        self.document.collection._mongo_collection.insert_one(doc)
 
 
 class BulkUpdateOperation(DatabaseOperation):
@@ -98,21 +83,12 @@ class BulkUpdateOperation(DatabaseOperation):
 
         # Apply updates
         doc_ids = [doc.id for doc, _ in self.original_states]
-        self.collection._mongo_collection.update_many({"_id": {"$in": doc_ids}}, {"$set": self.update_dict})
+        self.collection._mongo_collection.update_many({"_id": {"$in": doc_ids}}, {"$set": {"content": self.update_dict}})
 
     def undo(self) -> None:
-        # Restore original states
+        # Restore original states one by one to ensure proper content structure
         for doc, original_content in self.original_states:
-            self.collection._mongo_collection.replace_one({"_id": doc.id}, {**doc.to_dict(), "content": original_content})
-
-    def get_state(self) -> OperationState:
-        return OperationState(
-            collection_name=self.collection.name,
-            operation_type=OperationType.UPDATE,
-            document_id=",".join(str(doc.id) for doc, _ in self.original_states),
-            old_state={str(doc.id): content for doc, content in self.original_states},
-            new_state=self.update_dict,
-        )
+            self.collection._mongo_collection.update_one({"_id": doc.id}, {"$set": {"content": original_content}})
 
 
 class BulkInsertOperation(DatabaseOperation):
@@ -122,37 +98,30 @@ class BulkInsertOperation(DatabaseOperation):
         super().__init__(database)
         self.collection = collection
         self.contents = contents
-        self.inserted_documents: List[Document] = []
+        self.inserted_ids: List[str] = []
 
     def execute(self) -> List[Document]:
         # Validate all documents before insertion
         for content in self.contents:
             self.collection.validate_document(content)
 
-        # Insert documents and store them for undo
+        # Prepare documents for insertion
+        docs = []
         mongo_docs = []
         for content in self.contents:
             doc = Document(content=content, collection=self.collection)
             mongo_doc = {**doc.to_dict(), "content": content}
+            docs.append(doc)
             mongo_docs.append(mongo_doc)
-            self.inserted_documents.append(doc)
 
         # Perform bulk insert
-        self.collection._mongo_collection.insert_many(mongo_docs)
-        return self.inserted_documents
+        result = self.collection._mongo_collection.insert_many(mongo_docs)
+        self.inserted_ids = result.inserted_ids
+        return docs
 
     def undo(self) -> None:
-        if self.inserted_documents:
-            doc_ids = [doc.id for doc in self.inserted_documents]
-            self.collection._mongo_collection.delete_many({"_id": {"$in": doc_ids}})
-
-    def get_state(self) -> OperationState:
-        return OperationState(
-            collection_name=self.collection.name,
-            operation_type=OperationType.INSERT,
-            document_id=",".join(str(doc.id) for doc in self.inserted_documents),
-            new_state={str(doc.id): doc.content for doc in self.inserted_documents},
-        )
+        if self.inserted_ids:
+            self.collection._mongo_collection.delete_many({"_id": {"$in": self.inserted_ids}})
 
 
 class BulkDeleteOperation(DatabaseOperation):
@@ -164,18 +133,9 @@ class BulkDeleteOperation(DatabaseOperation):
         self.deleted_docs = deleted_docs
 
     def execute(self) -> None:
-        # Delete documents
         doc_ids = [doc.id for doc, _ in self.deleted_docs]
         self.collection._mongo_collection.delete_many({"_id": {"$in": doc_ids}})
 
     def undo(self) -> None:
-        # Restore deleted documents
-        self.collection._mongo_collection.insert_many([{**doc.to_dict(), "content": content} for doc, content in self.deleted_docs])
-
-    def get_state(self) -> OperationState:
-        return OperationState(
-            collection_name=self.collection.name,
-            operation_type=OperationType.DELETE,
-            document_id=",".join(str(doc.id) for doc, _ in self.deleted_docs),
-            old_state={str(doc.id): content for doc, content in self.deleted_docs},
-        )
+        mongo_docs = [{**doc.to_dict(), "content": content} for doc, content in self.deleted_docs]
+        self.collection._mongo_collection.insert_many(mongo_docs)

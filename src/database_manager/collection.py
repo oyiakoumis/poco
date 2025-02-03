@@ -42,6 +42,12 @@ class Collection:
         search_index_model = SearchIndexModel(definition=self.embeddings.get_index_definition(), name=self.embeddings.config.index_name)
         self._mongo_collection.create_search_index(search_index_model)
 
+    def get_all_documents(self) -> List[Document]:
+        query = self.find()
+        documents = query.execute()
+
+        return documents
+
     def find_one(self, filter_dict: Dict[str, Any]) -> Optional[Document]:
         """
         Find a single document matching the filter.
