@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List
 
+from database_manager.embedding_wrapper import Embeddable
 from database_manager.schema_field import FieldType, SchemaField
 
 if TYPE_CHECKING:
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class CollectionDefinition:
+class CollectionDefinition(Embeddable):
     """
     Represents the definition of a collection including its schema and metadata.
     """
@@ -24,19 +25,13 @@ class CollectionDefinition:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
-    EMBEDDING_FIELD_NAME: str = "_embedding"
-
     @property
     def embedding(self) -> List[float]:
-        """
-        Get the embedding for this collection definition.
-        """
-        return self.generate_embedding()
+        """Get the embedding for this collection definition"""
+        return self.collection_registry.embedding_wrapper.embed(self)
 
     def get_content_for_embedding(self) -> str:
-        """
-        Prepare content used for generating an embedding.
-        """
+        """Prepare content used for generating an embedding"""
         content = {
             "name": self.name,
             "description": self.description,
@@ -46,24 +41,15 @@ class CollectionDefinition:
         }
         return json.dumps(content)
 
-    def generate_embedding(self) -> List[float]:
-        """
-        Generate an embedding vector for the collection definition.
-        """
-        content = self.get_content_for_embedding()
-        return self.collection_registry.embeddings.embed_query(content)
-
     def to_dict(self) -> Dict[str, any]:
-        """
-        Convert the collection definition to a dictionary representation.
-        """
+        """Convert the collection definition to a dictionary representation"""
         return {
             "name": self.name,
             "description": self.description,
             "schema": {name: field.to_dict() for name, field in self.schema.items()},
             "_created_at": self.created_at,
             "_updated_at": self.updated_at,
-            self.EMBEDDING_FIELD_NAME: self.embedding,
+            self.collection_registry.embedding_wrapper.config.field_name: self.embedding,
         }
 
     @classmethod

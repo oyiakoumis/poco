@@ -1,13 +1,27 @@
-from typing import Dict, Optional
-
+from typing import Dict, List, Optional, Any
 import logging
 from pymongo.database import Database as MongoDatabase
 from langchain_core.embeddings import Embeddings
 
 from database_manager.collection import Collection
-from database_manager.collection_registry import CollectionDefinition, CollectionRegistry
+from database_manager.collection_operations import (
+    AddFieldsOperation,
+    CreateCollectionOperation,
+    DeleteFieldsOperation,
+    DropCollectionOperation,
+    RenameCollectionOperation,
+)
+from database_manager.collection_registry import CollectionRegistry
 from database_manager.connection import Connection
+from database_manager.document import Document
 from database_manager.schema_field import SchemaField
+from database_manager.document_operations import (
+    OperationHistory,
+    DocumentInsertOperation,
+    DocumentUpdateOperation,
+    DocumentDeleteOperation,
+    OperationType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +29,7 @@ logger = logging.getLogger(__name__)
 class Database:
     """
     Represents a database with collections and registry management.
+    Includes support for undo/redo operations.
     """
 
     def __init__(self, name: str, connection: Connection, embeddings: Embeddings) -> None:
@@ -24,6 +39,7 @@ class Database:
         self.collections: Dict[str, Collection] = {}
         self._mongo_db: Optional[MongoDatabase] = None
         self.registry: Optional[CollectionRegistry] = None
+        self.operation_history = OperationHistory()
 
     def connect(self, restart: bool = False) -> None:
         """
@@ -59,28 +75,194 @@ class Database:
 
     def create_collection(self, name: str, schema: Dict[str, SchemaField], description: str) -> Collection:
         """
-        Create a new collection and register its definition.
+        Create a new collection with undo support.
         """
-        # Create definition first.
-        definition = CollectionDefinition(name, self.registry, description, schema)
-        self.registry.register_collection(definition)
-
-        # Create actual collection instance and database collection.
-        collection = Collection(name, self, self.embeddings, schema)
-        collection.create_collection()
-        self.collections[name] = collection
-        logger.info("Created collection '%s'", name)
+        operation = CreateCollectionOperation(self, name, schema, description)
+        collection = operation.execute()
+        self.operation_history.push(operation.get_state())
         return collection
 
     def drop_collection(self, name: str) -> None:
         """
-        Drop a collection from the database and remove its registry entry.
+        Drop a collection with undo support.
         """
-        if name in self.collections:
-            # Drop the actual collection from the MongoDB database.
-            self._mongo_db.drop_collection(name)
-            # Remove from registry.
-            self.registry.unregister_collection(name)
-            # Remove from local cache.
-            del self.collections[name]
-            logger.info("Dropped collection '%s'", name)
+        operation = DropCollectionOperation(self, name)
+        operation.execute()
+        self.operation_history.push(operation.get_state())
+
+    def insert_document(self, collection: Collection, content: Dict[str, Any]) -> Document:
+        """
+        Insert a document with undo support.
+        """
+        operation = DocumentInsertOperation(self, collection, content)
+        document = operation.execute()
+        self.operation_history.push(operation.get_state())
+        return document
+
+    def update_document(self, document: Document, new_content: Dict[str, Any]) -> bool:
+        """
+        Update a document with undo support.
+        """
+        operation = DocumentUpdateOperation(self, document, new_content)
+        success = operation.execute()
+        if success:
+            self.operation_history.push(operation.get_state())
+        return success
+
+    def delete_document(self, document: Document) -> bool:
+        """
+        Delete a document with undo support.
+        """
+        operation = DocumentDeleteOperation(self, document)
+        success = operation.execute()
+        if success:
+            self.operation_history.push(operation.get_state())
+        return success
+
+    def can_undo(self) -> bool:
+        """Check if there are operations that can be undone."""
+        return self.operation_history.can_undo()
+
+    def can_redo(self) -> bool:
+        """Check if there are operations that can be redone."""
+        return self.operation_history.can_redo()
+
+    def undo(self) -> bool:
+        """
+        Undo the last operation.
+        Returns True if the operation was successfully undone.
+        """
+        if not self.can_undo():
+            return False
+
+        operation_state = self.operation_history.get_undo_operation()
+        if not operation_state:
+            return False
+
+        try:
+            if operation_state.operation_type == OperationType.INSERT:
+                doc = self.collections[operation_state.collection_name].find_one({"_id": operation_state.document_id})
+                if doc:
+                    doc.delete()
+
+            elif operation_state.operation_type == OperationType.UPDATE:
+                doc = self.collections[operation_state.collection_name].find_one({"_id": operation_state.document_id})
+                if doc and operation_state.old_state:
+                    doc.content = operation_state.old_state
+                    doc.update()
+
+            elif operation_state.operation_type == OperationType.DELETE:
+                if operation_state.old_state:
+                    self.collections[operation_state.collection_name].insert_one(operation_state.old_state)
+
+            elif operation_state.operation_type == OperationType.CREATE_COLLECTION:
+                self.drop_collection(operation_state.collection_name)
+
+            elif operation_state.operation_type == OperationType.DROP_COLLECTION:
+                if operation_state.collection_schema and operation_state.collection_description:
+                    self.create_collection(operation_state.collection_name, operation_state.collection_schema, operation_state.collection_description)
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to undo operation: {e}")
+            return False
+
+    def redo(self) -> bool:
+        """
+        Redo the last undone operation.
+        Returns True if the operation was successfully redone.
+        """
+        if not self.can_redo():
+            return False
+
+        operation_state = self.operation_history.get_redo_operation()
+        if not operation_state:
+            return False
+
+        try:
+            if operation_state.operation_type == OperationType.INSERT:
+                if operation_state.new_state:
+                    self.collections[operation_state.collection_name].insert_one(operation_state.new_state)
+
+            elif operation_state.operation_type == OperationType.UPDATE:
+                doc = self.collections[operation_state.collection_name].find_one({"_id": operation_state.document_id})
+                if doc and operation_state.new_state:
+                    doc.content = operation_state.new_state
+                    doc.update()
+
+            elif operation_state.operation_type == OperationType.DELETE:
+                doc = self.collections[operation_state.collection_name].find_one({"_id": operation_state.document_id})
+                if doc:
+                    doc.delete()
+
+            elif operation_state.operation_type == OperationType.CREATE_COLLECTION:
+                if operation_state.collection_schema and operation_state.collection_description:
+                    self.create_collection(operation_state.collection_name, operation_state.collection_schema, operation_state.collection_description)
+
+            elif operation_state.operation_type == OperationType.DROP_COLLECTION:
+                self.drop_collection(operation_state.collection_name)
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to redo operation: {e}")
+            return False
+
+    def get_operation_history(self) -> List[Dict[str, Any]]:
+        """
+        Get a list of all operations in the history.
+        Returns a list of dictionaries containing operation details.
+        """
+        history = []
+        for op in self.operation_history.history:
+            history_entry = {
+                "collection_name": op.collection_name,
+                "operation_type": op.operation_type.value,
+                "timestamp": op.timestamp,
+                "document_id": op.document_id if op.document_id else None,
+            }
+            history.append(history_entry)
+        return history
+
+    def clear_history(self) -> None:
+        """
+        Clear the operation history.
+        """
+        self.operation_history = OperationHistory()
+        logger.info("Operation history cleared")
+
+    def rename_collection(self, old_name: str, new_name: str) -> None:
+        """
+        Rename a collection with undo support.
+        """
+        operation = RenameCollectionOperation(self, old_name, new_name)
+        operation.execute()
+        self.operation_history.push(operation.get_state())
+        logger.info("Renamed collection '%s' to '%s'", old_name, new_name)
+
+    def add_fields(self, collection_name: str, new_fields: Dict[str, SchemaField]) -> None:
+        """
+        Add new fields to a collection's schema with undo support.
+
+        Args:
+            collection_name: Name of the collection to modify
+            new_fields: Dictionary of field names to SchemaField objects
+        """
+        operation = AddFieldsOperation(self, collection_name, new_fields)
+        operation.execute()
+        self.operation_history.push(operation.get_state())
+        logger.info("Added fields %s to collection '%s'", list(new_fields.keys()), collection_name)
+
+    def delete_fields(self, collection_name: str, field_names: List[str]) -> None:
+        """
+        Delete fields from a collection's schema with undo support.
+
+        Args:
+            collection_name: Name of the collection to modify
+            field_names: List of field names to delete
+        """
+        operation = DeleteFieldsOperation(self, collection_name, field_names)
+        operation.execute()
+        self.operation_history.push(operation.get_state())
+        logger.info("Deleted fields %s from collection '%s'", field_names, collection_name)
