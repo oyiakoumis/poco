@@ -62,12 +62,3 @@ class Document(Embeddable):
     def delete(self) -> bool:
         """Delete the document with undo support"""
         return self.collection.delete_one(self)
-
-    def get_content_for_embedding(self) -> str:
-        """Get content for generating embeddings"""
-        return json.dumps(self.content)
-
-    def generate_embedding(self) -> List[float]:
-        """Generate an embedding vector for the document's content"""
-        content = self.get_content_for_embedding()
-        return self.collection.embeddings.embed_query(content)

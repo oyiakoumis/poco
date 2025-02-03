@@ -1,10 +1,11 @@
 from database_manager.collection import Collection
 from database_manager.database import Database
-from database_manager.document_operations import DatabaseOperation, OperationState, OperationType
 
 
 from typing import Any, Dict, List, Optional
 
+from database_manager.operations.base import DatabaseOperation, OperationState
+from database_manager.operations.enums import OperationType
 from database_manager.schema_field import SchemaField
 
 

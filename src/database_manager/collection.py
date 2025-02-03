@@ -6,7 +6,7 @@ from pymongo.collection import Collection as MongoCollection
 from pymongo.operations import SearchIndexModel
 
 from database_manager.document import Document
-from database_manager.document_operations import BulkDeleteOperation
+from database_manager.operations.document_operations import BulkDeleteOperation, BulkUpdateOperation
 from database_manager.exceptions import ValidationError
 from database_manager.query import Query
 from database_manager.schema_field import SchemaField
@@ -109,34 +109,42 @@ class Collection:
 
         Returns:
             int: Number of documents updated
+
+        Raises:
+            ValidationError: If the updates don't match the schema
         """
-        # First get all documents that will be affected and store their original state
+        # First get all documents that will be affected
         query = self.find(filter_dict)
         documents = query.execute()
 
         if not documents:
             return 0
 
+        # Validate the update_dict against schema for all affected fields
+        for field_name in update_dict:
+            if field_name in self.schema:
+                self.schema[field_name].validate(update_dict[field_name])
+
         # Store original states for undo
         original_states = [(doc, doc.content.copy()) for doc in documents]
 
         try:
-            # Use PyMongo's update_many for better performance
-            result = self._mongo_collection.update_many(filter_dict, {"$set": update_dict})
+            # Create bulk operation
+            operation = BulkUpdateOperation(self.database, self, original_states, update_dict)
 
-            # If successful, create a bulk update operation for undo history
-            if result.modified_count > 0:
-                from database_manager.document_operations import BulkUpdateOperation
+            # Execute the update
+            operation.execute()
 
-                self.database.operation_history.push(BulkUpdateOperation(self.database, self, original_states, update_dict).get_state())
+            # Add to operation history if successful
+            self.database.operation_history.push(operation.get_state())
 
-            return result.modified_count
+            return len(documents)
 
         except Exception as e:
             # Rollback changes if something goes wrong
             for doc, original_content in original_states:
                 doc.content = original_content
-                self._mongo_collection.replace_one({"_id": doc.id}, doc.to_dict())
+                self._mongo_collection.replace_one({"_id": doc.id}, {**doc.to_dict(), "content": original_content})
             raise e
 
     def delete_one(self, document: Document) -> bool:
@@ -161,31 +169,32 @@ class Collection:
         Returns:
             int: Number of documents deleted
         """
-        # First get all documents that will be affected and store their content
+        # First get all documents that will be affected
         query = self.find(filter_dict)
         documents = query.execute()
 
         if not documents:
             return 0
 
-        # Store documents for undo
+        # Store documents and their content for undo
         deleted_docs = [(doc, doc.content.copy()) for doc in documents]
 
         try:
-            # Use PyMongo's delete_many for better performance
-            result = self._mongo_collection.delete_many(filter_dict)
+            # Create bulk operation
+            operation = BulkDeleteOperation(self.database, self, deleted_docs)
 
-            # If successful, create a bulk delete operation for undo history
-            if result.deleted_count > 0:
+            # Execute the deletion
+            operation.execute()
 
-                self.database.operation_history.push(BulkDeleteOperation(self.database, self, deleted_docs).get_state())
+            # Add to operation history if successful
+            self.database.operation_history.push(operation.get_state())
 
-            return result.deleted_count
+            return len(documents)
 
         except Exception as e:
             # Rollback changes if something goes wrong
             for doc, content in deleted_docs:
-                self._mongo_collection.insert_one(doc.to_dict())
+                self._mongo_collection.insert_one({**doc.to_dict(), "content": content})
             raise e
 
     def find_one(self, filter_dict: Dict[str, Any]) -> Optional[Document]:

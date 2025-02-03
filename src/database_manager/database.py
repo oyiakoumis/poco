@@ -4,7 +4,7 @@ from pymongo.database import Database as MongoDatabase
 from langchain_core.embeddings import Embeddings
 
 from database_manager.collection import Collection
-from database_manager.collection_operations import (
+from database_manager.operations.collection_operations import (
     AddFieldsOperation,
     CreateCollectionOperation,
     DeleteFieldsOperation,
@@ -15,7 +15,7 @@ from database_manager.collection_registry import CollectionRegistry
 from database_manager.connection import Connection
 from database_manager.document import Document
 from database_manager.schema_field import SchemaField
-from database_manager.document_operations import (
+from database_manager.operations.document_operations import (
     OperationHistory,
     DocumentInsertOperation,
     DocumentUpdateOperation,
