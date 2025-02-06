@@ -40,42 +40,33 @@ class DatasetManager:
         try:
             # Create manager instance
             manager = cls(mongodb_client)
-            
+
             # Setup datasets collection indexes
-            await manager._datasets.create_indexes([
-                # Compound index for unique dataset names per user
-                pymongo.IndexModel(
-                    [("user_id", 1), ("name", 1)],
-                    unique=True,
-                    background=True
-                ),
-                # Index for listing user's datasets
-                pymongo.IndexModel(
-                    [("user_id", 1)],
-                    background=True
-                )
-            ])
+            await manager._datasets.create_indexes(
+                [
+                    # Compound index for unique dataset names per user
+                    pymongo.IndexModel([("user_id", 1), ("name", 1)], unique=True, background=True),
+                    # Index for listing user's datasets
+                    pymongo.IndexModel([("user_id", 1)], background=True),
+                ]
+            )
 
             # Setup records collection indexes
-            await manager._records.create_indexes([
-                # Index for querying records by dataset
-                pymongo.IndexModel(
-                    [("user_id", 1), ("dataset_id", 1)],
-                    background=True
-                ),
-                # Index for record lookups
-                pymongo.IndexModel(
-                    [("user_id", 1), ("dataset_id", 1), ("_id", 1)],
-                    background=True
-                )
-            ])
+            await manager._records.create_indexes(
+                [
+                    # Index for querying records by dataset
+                    pymongo.IndexModel([("user_id", 1), ("dataset_id", 1)], background=True),
+                    # Index for record lookups
+                    pymongo.IndexModel([("user_id", 1), ("dataset_id", 1), ("_id", 1)], background=True),
+                ]
+            )
 
             return manager
-            
+
         except Exception as e:
             raise DatabaseError(f"Failed to setup indexes: {str(e)}")
 
-    async def create_dataset(self, user_id: str, name: str, description: str, structure: List[Field]) -> str:
+    async def create_dataset(self, user_id: str, name: str, description: str, structure: List[Field]) -> ObjectId:
         """Creates a new dataset with the given structure."""
         try:
             dataset = Dataset(
@@ -85,13 +76,13 @@ class DatasetManager:
                 structure=structure,
             )
             result = await self._datasets.insert_one(dataset.model_dump(by_alias=True))
-            return str(result.inserted_id)
+            return result.inserted_id
         except Exception as e:
             if "duplicate key error" in str(e).lower():
                 raise DatasetNameExistsError(f"Dataset with name '{name}' already exists for user {user_id}")
             raise DatabaseError(f"Failed to create dataset: {str(e)}")
 
-    async def update_dataset(self, user_id: str, dataset_id: str, name: str, description: str, structure: List[Field]) -> None:
+    async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str, structure: List[Field]) -> None:
         """Updates an existing dataset."""
         try:
             # Validate dataset exists and belongs to user
@@ -110,7 +101,7 @@ class DatasetManager:
 
             # Update in database
             result = await self._datasets.replace_one(
-                {"_id": ObjectId(dataset_id), "user_id": user_id},
+                {"_id": dataset_id, "user_id": user_id},
                 updated.model_dump(by_alias=True),
             )
 
@@ -124,7 +115,7 @@ class DatasetManager:
                 raise DatasetNameExistsError(f"Dataset with name '{name}' already exists for user {user_id}")
             raise DatabaseError(f"Failed to update dataset: {str(e)}")
 
-    async def delete_dataset(self, user_id: str, dataset_id: str) -> None:
+    async def delete_dataset(self, user_id: str, dataset_id: ObjectId) -> None:
         """Deletes a dataset and all its records."""
         try:
             # Verify dataset exists and belongs to user
@@ -140,7 +131,7 @@ class DatasetManager:
 
             result = await self._datasets.delete_one(
                 {
-                    "_id": ObjectId(dataset_id),
+                    "_id": dataset_id,
                     "user_id": user_id,
                 }
             )
@@ -156,23 +147,18 @@ class DatasetManager:
     async def list_datasets(self, user_id: str) -> List[Dataset]:
         """Lists all datasets belonging to the user."""
         try:
-            cursor = await self._datasets.find({"user_id": user_id})
             datasets = []
+            cursor = self._datasets.find({"user_id": user_id})
             async for doc in cursor:
                 datasets.append(Dataset.model_validate(doc))
             return datasets
         except Exception as e:
             raise DatabaseError(f"Failed to list datasets: {str(e)}")
 
-    async def get_dataset(self, user_id: str, dataset_id: str) -> Dataset:
+    async def get_dataset(self, user_id: str, dataset_id: ObjectId) -> Dataset:
         """Retrieves a specific dataset."""
         try:
-            doc = await self._datasets.find_one(
-                {
-                    "_id": ObjectId(dataset_id),
-                    "user_id": user_id
-                }
-            )
+            doc = await self._datasets.find_one({"_id": dataset_id, "user_id": user_id})
             if not doc:
                 raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
             return Dataset.model_validate(doc)
@@ -181,7 +167,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to get dataset: {str(e)}")
 
-    async def create_record(self, user_id: str, dataset_id: str, data: RecordData) -> str:
+    async def create_record(self, user_id: str, dataset_id: ObjectId, data: RecordData) -> ObjectId:
         """Creates a new record in the specified dataset."""
         try:
             # Get dataset to validate against structure
@@ -198,14 +184,14 @@ class DatasetManager:
             )
 
             result = await self._records.insert_one(record.model_dump(by_alias=True))
-            return str(result.inserted_id)
+            return result.inserted_id
 
         except (DatasetNotFoundError, InvalidRecordDataError):
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to create record: {str(e)}")
 
-    async def update_record(self, user_id: str, dataset_id: str, record_id: str, data: RecordData) -> None:
+    async def update_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId, data: RecordData) -> None:
         """Updates an existing record."""
         try:
             # Get dataset to validate against structure
@@ -217,7 +203,7 @@ class DatasetManager:
             # Update record
             result = await self._records.update_one(
                 {
-                    "_id": ObjectId(record_id),
+                    "_id": record_id,
                     "user_id": user_id,
                     "dataset_id": dataset_id,
                 },
@@ -233,7 +219,7 @@ class DatasetManager:
                 # Check if record exists
                 record = await self._records.find_one(
                     {
-                        "_id": ObjectId(record_id),
+                        "_id": record_id,
                         "user_id": user_id,
                         "dataset_id": dataset_id,
                     }
@@ -246,7 +232,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to update record: {str(e)}")
 
-    async def delete_record(self, user_id: str, dataset_id: str, record_id: str) -> None:
+    async def delete_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId) -> None:
         """Deletes a record."""
         try:
             # Verify dataset exists
@@ -255,7 +241,7 @@ class DatasetManager:
             # Delete record
             result = await self._records.delete_one(
                 {
-                    "_id": ObjectId(record_id),
+                    "_id": record_id,
                     "user_id": user_id,
                     "dataset_id": dataset_id,
                 }
@@ -269,7 +255,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to delete record: {str(e)}")
 
-    async def get_record(self, user_id: str, dataset_id: str, record_id: str) -> Record:
+    async def get_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId) -> Record:
         """Retrieves a specific record."""
         try:
             # Verify dataset exists
@@ -278,7 +264,7 @@ class DatasetManager:
             # Get record
             doc = await self._records.find_one(
                 {
-                    "_id": ObjectId(record_id),
+                    "_id": record_id,
                     "user_id": user_id,
                     "dataset_id": dataset_id,
                 }
@@ -294,7 +280,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to get record: {str(e)}")
 
-    async def find_records(self, user_id: str, dataset_id: str, query: Optional[Dict] = None) -> List[Record]:
+    async def find_records(self, user_id: str, dataset_id: ObjectId, query: Optional[Dict] = None) -> List[Record]:
         """Finds records in the specified dataset."""
         try:
             # Verify dataset exists and get structure for query validation
@@ -314,8 +300,8 @@ class DatasetManager:
                     mongo_query[f"data.{field}"] = value
 
             # Execute query
-            cursor = await self._records.find(mongo_query)
             records = []
+            cursor = self._records.find(mongo_query)
             async for doc in cursor:
                 records.append(Record.model_validate(doc))
             return records

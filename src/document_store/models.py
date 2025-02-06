@@ -1,7 +1,11 @@
 """Pydantic models for the document store module."""
+
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from bson import ObjectId
+
+from .types import PydanticObjectId
 from pydantic import BaseModel, Field, field_validator
 
 from .exceptions import InvalidDatasetStructureError, InvalidFieldTypeError
@@ -10,7 +14,8 @@ from .types import Field as StructureField, FieldType, RecordData
 
 class Dataset(BaseModel):
     """Dataset model representing a collection of records with a defined structure."""
-    id: Optional[str] = Field(default=None, alias="_id")
+
+    id: Optional[PydanticObjectId] = Field(default_factory=ObjectId, alias="_id")
     user_id: str
     name: str
     description: str
@@ -45,26 +50,21 @@ class Dataset(BaseModel):
                     elif field.type == FieldType.STRING:
                         field.default = str(field.default)
                 except (ValueError, TypeError):
-                    raise InvalidFieldTypeError(
-                        f"Default value {field.default} does not match type {field.type}"
-                    )
+                    raise InvalidFieldTypeError(f"Default value {field.default} does not match type {field.type}")
 
         return structure
 
-    model_config = {
-        "populate_by_name": True
-    }
+    model_config = {"populate_by_name": True}
 
 
 class Record(BaseModel):
     """Record model representing a single document in a dataset."""
-    id: Optional[str] = Field(default=None, alias="_id")
+
+    id: Optional[PydanticObjectId] = Field(default_factory=ObjectId, alias="_id")
     user_id: str
-    dataset_id: str
+    dataset_id: PydanticObjectId
     data: RecordData
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    model_config = {
-        "populate_by_name": True
-    }
+    model_config = {"populate_by_name": True}

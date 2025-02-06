@@ -101,7 +101,7 @@ def create_mock_collection(return_doc: dict = None) -> AsyncMock:
     # Configure find() to return a cursor that supports async iteration
     cursor = AsyncMock()
     cursor.__aiter__.return_value = []
-    collection.find.side_effect = lambda *args, **kwargs: AsyncMock(return_value=cursor)()
+    collection.find.side_effect = lambda *args, **kwargs: cursor
     
     return collection
 
@@ -158,7 +158,7 @@ def mock_datasets_collection() -> AsyncMock:
     # Configure find with cursor
     cursor = AsyncMock()
     cursor.__aiter__.return_value = []
-    collection.find.side_effect = lambda *args, **kwargs: AsyncMock(return_value=cursor)()
+    collection.find.side_effect = lambda *args, **kwargs: cursor
     
     return collection
 
@@ -192,7 +192,7 @@ def mock_records_collection() -> AsyncMock:
     # Configure find with cursor
     cursor = AsyncMock()
     cursor.__aiter__.return_value = []
-    collection.find.side_effect = lambda *args, **kwargs: AsyncMock(return_value=cursor)()
+    collection.find.side_effect = lambda *args, **kwargs: cursor
     
     return collection
 
@@ -224,7 +224,7 @@ async def manager(
     datasets_collection.delete_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result_delete)()
     cursor = AsyncMock()
     cursor.__aiter__.return_value = [sample_dataset.model_dump(by_alias=True)]
-    datasets_collection.find.side_effect = lambda *args, **kwargs: AsyncMock(return_value=cursor)()
+    datasets_collection.find.side_effect = lambda *args, **kwargs: cursor
     
     # Configure records collection with sample record
     records_collection.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_record.model_dump(by_alias=True))()
@@ -240,7 +240,7 @@ async def manager(
     records_collection.delete_many.side_effect = lambda *args, **kwargs: AsyncMock(return_value=AsyncMock())()
     cursor = AsyncMock()
     cursor.__aiter__.return_value = [sample_record.model_dump(by_alias=True)]
-    records_collection.find.side_effect = lambda *args, **kwargs: AsyncMock(return_value=cursor)()
+    records_collection.find.side_effect = lambda *args, **kwargs: cursor
     
     # Configure get_collection to return appropriate collection
     mock_client.get_database().get_collection.side_effect = lambda name: {
@@ -315,7 +315,7 @@ class TestDatasetOperations:
         result = await manager.create_dataset(user_id=user_id, name="test_dataset", description="Test dataset", structure=sample_structure)
 
         # Verify
-        assert result == dataset_id
+        assert result == ObjectId(dataset_id)
 
     async def test_create_dataset_duplicate_name(
         self, manager: DatasetManager, user_id: str, sample_structure: List[Field]
@@ -337,7 +337,8 @@ class TestDatasetOperations:
         
         # Verify
         filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
-        assert filter_doc == {"_id": ObjectId(dataset_id), "user_id": user_id}
+        assert filter_doc["user_id"] == user_id
+        assert filter_doc["_id"] == dataset_id
         assert update_doc["name"] == "updated_dataset"
         assert update_doc["description"] == "Updated dataset"
 
@@ -370,7 +371,7 @@ class TestDatasetOperations:
 
         # Verify
         assert isinstance(result, Dataset)
-        assert result.id == dataset_id
+        assert str(result.id) == dataset_id
         assert result.user_id == user_id
 
     async def test_get_dataset_not_found(self, manager: DatasetManager, user_id: str, dataset_id: str) -> None:
@@ -387,7 +388,7 @@ class TestDatasetOperations:
         # Setup - override manager's mock behavior
         cursor = AsyncMock()
         cursor.__aiter__.return_value = [sample_dataset.model_dump(by_alias=True)]
-        manager._datasets.find.side_effect = lambda *args, **kwargs: AsyncMock(return_value=cursor)()
+        manager._datasets.find.side_effect = lambda *args, **kwargs: cursor
 
         # Execute
         results = await manager.list_datasets(user_id)
@@ -410,7 +411,7 @@ class TestRecordOperations:
         result = await manager.create_record(user_id=user_id, dataset_id=dataset_id, data={"age": 25, "name": "John"})
 
         # Verify
-        assert result == record_id
+        assert result == ObjectId(record_id)
 
     async def test_create_record_invalid_data(
         self, manager: DatasetManager, user_id: str, dataset_id: str
@@ -455,9 +456,9 @@ class TestRecordOperations:
 
         # Verify
         assert isinstance(result, Record)
-        assert result.id == record_id
+        assert str(result.id) == record_id
         assert result.user_id == user_id
-        assert result.dataset_id == dataset_id
+        assert result.dataset_id == ObjectId(dataset_id)
 
     async def test_find_records(
         self, manager: DatasetManager, user_id: str, dataset_id: str, sample_record: Record
@@ -470,4 +471,4 @@ class TestRecordOperations:
         assert len(results) == 1
         assert isinstance(results[0], Record)
         assert results[0].user_id == user_id
-        assert results[0].dataset_id == dataset_id
+        assert str(results[0].dataset_id) == dataset_id

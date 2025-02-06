@@ -1,6 +1,8 @@
 """Tests for the document store models."""
+
 from datetime import datetime, timezone
 
+from bson import ObjectId
 import pytest
 from pydantic import ValidationError
 
@@ -19,19 +21,9 @@ def test_dataset_creation():
         name="test_dataset",
         description="Test dataset",
         structure=[
-            Field(
-                field_name="age",
-                description="User age",
-                type=FieldType.INTEGER,
-                required=True
-            ),
-            Field(
-                field_name="name",
-                description="User name",
-                type=FieldType.STRING,
-                required=True
-            )
-        ]
+            Field(field_name="age", description="User age", type=FieldType.INTEGER, required=True),
+            Field(field_name="name", description="User name", type=FieldType.STRING, required=True),
+        ],
     )
     assert dataset.user_id == "user123"
     assert dataset.name == "test_dataset"
@@ -48,17 +40,9 @@ def test_dataset_duplicate_fields():
             name="test_dataset",
             description="Test dataset",
             structure=[
-                Field(
-                    field_name="name",
-                    description="First name",
-                    type=FieldType.STRING
-                ),
-                Field(
-                    field_name="name",
-                    description="Last name",
-                    type=FieldType.STRING
-                )
-            ]
+                Field(field_name="name", description="First name", type=FieldType.STRING),
+                Field(field_name="name", description="Last name", type=FieldType.STRING),
+            ],
         )
 
 
@@ -69,13 +53,7 @@ def test_dataset_invalid_field_type():
             user_id="user123",
             name="test_dataset",
             description="Test dataset",
-            structure=[
-                Field(
-                    field_name="field1",
-                    description="Test field",
-                    type="invalid_type"
-                )
-            ]
+            structure=[Field(field_name="field1", description="Test field", type="invalid_type")],
         )
     assert "Input should be" in str(exc.value)
     assert "int" in str(exc.value)
@@ -91,25 +69,10 @@ def test_dataset_default_value_validation():
         name="test_dataset",
         description="Test dataset",
         structure=[
-            Field(
-                field_name="age",
-                description="Age",
-                type=FieldType.INTEGER,
-                default=25
-            ),
-            Field(
-                field_name="height",
-                description="Height",
-                type=FieldType.FLOAT,
-                default=1.75
-            ),
-            Field(
-                field_name="name",
-                description="Name",
-                type=FieldType.STRING,
-                default="John"
-            )
-        ]
+            Field(field_name="age", description="Age", type=FieldType.INTEGER, default=25),
+            Field(field_name="height", description="Height", type=FieldType.FLOAT, default=1.75),
+            Field(field_name="name", description="Name", type=FieldType.STRING, default="John"),
+        ],
     )
     assert isinstance(dataset.structure[0].default, int)
     assert isinstance(dataset.structure[1].default, float)
@@ -121,29 +84,15 @@ def test_dataset_default_value_validation():
             user_id="user123",
             name="test_dataset",
             description="Test dataset",
-            structure=[
-                Field(
-                    field_name="age",
-                    description="Age",
-                    type=FieldType.INTEGER,
-                    default="not_a_number"
-                )
-            ]
+            structure=[Field(field_name="age", description="Age", type=FieldType.INTEGER, default="not_a_number")],
         )
 
 
 def test_record_creation():
     """Test creating a record with valid data."""
-    record = Record(
-        user_id="user123",
-        dataset_id="dataset123",
-        data={
-            "name": "John Doe",
-            "age": 30
-        }
-    )
+    record = Record(user_id="user123", dataset_id="67a4b04db3e538515b35a158", data={"name": "John Doe", "age": 30})
     assert record.user_id == "user123"
-    assert record.dataset_id == "dataset123"
+    assert record.dataset_id == ObjectId("67a4b04db3e538515b35a158")
     assert record.data["name"] == "John Doe"
     assert record.data["age"] == 30
     assert isinstance(record.created_at, datetime)
@@ -152,41 +101,22 @@ def test_record_creation():
 
 def test_record_empty_data():
     """Test creating a record with empty data."""
-    record = Record(
-        user_id="user123",
-        dataset_id="dataset123",
-        data={}
-    )
+    record = Record(user_id="user123", dataset_id="67a4b04db3e538515b35a158", data={})
     assert record.data == {}
 
 
 def test_record_invalid_data_type():
     """Test that record creation fails with invalid data type."""
     with pytest.raises(ValidationError):
-        Record(
-            user_id="user123",
-            dataset_id="dataset123",
-            data="invalid_data"  # Should be a dict
-        )
+        Record(user_id="user123", dataset_id="67a4b04db3e538515b35a158", data="invalid_data")  # Should be a dict
 
 
 def test_model_id_alias():
     """Test that _id alias works for both Dataset and Record."""
     # Test Dataset
-    dataset = Dataset(
-        _id="123",
-        user_id="user123",
-        name="test_dataset",
-        description="Test dataset",
-        structure=[]
-    )
-    assert dataset.id == "123"
+    dataset = Dataset(_id="67a4b03bb3e538515b35a156", user_id="user123", name="test_dataset", description="Test dataset", structure=[])
+    assert dataset.id == ObjectId("67a4b03bb3e538515b35a156")
 
     # Test Record
-    record = Record(
-        _id="456",
-        user_id="user123",
-        dataset_id="dataset123",
-        data={}
-    )
-    assert record.id == "456"
+    record = Record(_id="67a4b04db3e538515b35a157", user_id="user123", dataset_id="67a4b03bb3e538515b35a156", data={})
+    assert record.id == ObjectId("67a4b04db3e538515b35a157")

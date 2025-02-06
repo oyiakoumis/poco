@@ -65,10 +65,23 @@ async def main() -> None:
     """Run the demo."""
     # Connect to MongoDB
     client = AsyncIOMotorClient(DATABASE_CONNECTION_STRING)
-    manager = DatasetManager.setup(client)
+    client.get_io_loop = asyncio.get_running_loop
+
+    # Initialize manager with proper setup
+    manager = await DatasetManager.setup(client)
     user_id = "demo_user"
 
     try:
+        # Clean up any existing dataset from previous runs
+        existing_datasets = await manager.list_datasets(user_id)
+        for dataset in existing_datasets:
+            if dataset.name == "Employees":
+                try:
+                    await manager.delete_dataset(user_id, dataset.id)
+                    print("Cleaned up existing dataset")
+                except DatasetNotFoundError:
+                    pass  # Dataset was already deleted
+
         await print_separator("Creating Dataset")
         # Create a dataset for employee records
         structure = [
@@ -102,6 +115,13 @@ async def main() -> None:
                 type=FieldType.STRING,
                 required=True,
             ),
+            Field(
+                field_name="notes",
+                description="Additional notes",
+                type=FieldType.STRING,
+                required=False,
+                default="",
+            ),
         ]
 
         dataset_id = await manager.create_dataset(
@@ -129,6 +149,7 @@ async def main() -> None:
                 "age": 35,
                 "salary": 85000.00,
                 "department": "Engineering",
+                "notes": "Team lead",
             },
             {
                 "employee_id": "EMP003",
