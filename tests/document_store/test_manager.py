@@ -318,8 +318,8 @@ class TestDatasetOperations:
         """Test creating a dataset with duplicate name fails."""
         # Setup - override manager's mock behavior
         async def mock_insert(*args, **kwargs):
-            raise Exception("duplicate key error")
-        manager._datasets.insert_one = AsyncMock(wraps=mock_insert)
+            raise pymongo.errors.DuplicateKeyError("duplicate key error")
+        manager._datasets.insert_one = AsyncMock(side_effect=mock_insert)
 
         # Execute and verify
         with pytest.raises(DatasetNameExistsError):
