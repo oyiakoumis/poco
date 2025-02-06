@@ -1,46 +1,3 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "document-db"
-version = "0.1.0"
-description = "A MongoDB-based document database with schema validation and natural language interface"
-requires-python = ">=3.9"
-dependencies = [
-    "motor",
-    "pydantic>=2.0.0",
-    "pymongo",
-    "langgraph",
-    "langchain",
-    "langchain-openai",
-    "langchain-community",
-    "langsmith",
-    "python-dotenv",
-    "python-dateutil",
-    "pytz",
-    "rich"
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "pytest-asyncio",
-    "pytest-cov",
-    "black",
-    "isort",
-    "mypy",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-addopts = "-v --cov=src --cov-report=term-missing"
-
 [tool.black]
 line-length = 160
 target-version = ['py313']
@@ -49,14 +6,3 @@ src = ["src", "tests"]
 [tool.isort]
 profile = "black"
 src_paths = ["src", "tests"]
-
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-check_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["motor.*", "pymongo.*", "langchain.*", "langgraph.*"]
-ignore_missing_imports = true

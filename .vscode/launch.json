@@ -7,6 +7,16 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/main.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug document_store_demo.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/document_store_demo.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
         }
     ]
 }
