@@ -12,7 +12,7 @@ from document_store.exceptions import (
     RecordNotFoundError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import Field, FieldType
+from document_store.types import SchemaField, FieldType
 
 __all__ = [
     # Main class
@@ -20,7 +20,7 @@ __all__ = [
     # Models
     "Dataset",
     "Record",
-    "Field",
+    "SchemaField",
     # Types
     "FieldType",
     # Exceptions

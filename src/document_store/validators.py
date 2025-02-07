@@ -3,26 +3,26 @@
 from typing import Any, Dict, List, Optional
 
 from .exceptions import InvalidFieldValueError, InvalidRecordDataError
-from .types import Field, FieldType
+from .types import DatasetSchema, SchemaField, FieldType
 
 
-def validate_record_data(data: Dict[str, Any], structure: List[Field]) -> Dict[str, Any]:
+def validate_record_data(data: Dict[str, Any], schema: DatasetSchema) -> Dict[str, Any]:
     """
-    Validate record data against dataset structure.
+    Validate record data against dataset schema.
 
     Args:
         data: Record data to validate
-        structure: Dataset structure to validate against
+        schema: Dataset schema to validate against
 
     Returns:
         Validated and type-converted data
 
     Raises:
-        InvalidRecordDataError: If data doesn't match structure
+        InvalidRecordDataError: If data doesn't match schema
         InvalidFieldValueError: If field value doesn't match type
     """
     validated_data = {}
-    field_map = {field.field_name: field for field in structure}
+    field_map = {field.field_name: field for field in schema}
 
     # Check for unknown fields
     unknown_fields = set(data.keys()) - set(field_map.keys())
@@ -30,7 +30,7 @@ def validate_record_data(data: Dict[str, Any], structure: List[Field]) -> Dict[s
         raise InvalidRecordDataError(f"Unknown fields in record data: {', '.join(unknown_fields)}")
 
     # Check required fields and validate types
-    for field in structure:
+    for field in schema:
         value = data.get(field.field_name)
 
         # Handle required fields
@@ -60,18 +60,18 @@ def validate_record_data(data: Dict[str, Any], structure: List[Field]) -> Dict[s
     return validated_data
 
 
-def validate_query_fields(query: Dict[str, Any], structure: List[Field]) -> None:
+def validate_query_fields(query: Dict[str, Any], schema: DatasetSchema) -> None:
     """
-    Validate that query fields exist in dataset structure.
+    Validate that query fields exist in dataset schema.
 
     Args:
         query: Query dictionary
-        structure: Dataset structure to validate against
+        schema: Dataset schema to validate against
 
     Raises:
         InvalidRecordDataError: If query contains unknown fields
     """
-    field_names = {field.field_name for field in structure}
+    field_names = {field.field_name for field in schema}
     query_fields = set(query.keys())
     unknown_fields = query_fields - field_names
 

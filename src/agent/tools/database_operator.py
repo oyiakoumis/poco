@@ -6,104 +6,67 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
-from document_store.types import Field as FieldType
+from document_store.types import DatasetSchema, SchemaField as FieldType
 from document_store.types import PydanticObjectId, RecordData
 
 
-class BaseArgs(BaseModel):
-    user_id: str = Field(
-        description="Unique identifier for the user making the request",
-        example="user_123"
-    )
-
-
-class DatasetArgs(BaseArgs):
-    dataset_id: PydanticObjectId = Field(
-        description="Unique identifier for the dataset",
-        example="507f1f77bcf86cd799439011"
-    )
+class DatasetArgs(BaseModel):
+    dataset_id: PydanticObjectId = Field(description="Unique identifier for the dataset", example="507f1f77bcf86cd799439011")
 
 
 class RecordArgs(DatasetArgs):
-    record_id: PydanticObjectId = Field(
-        description="Unique identifier for the record within the dataset",
-        example="507f1f77bcf86cd799439012"
-    )
+    record_id: PydanticObjectId = Field(description="Unique identifier for the record within the dataset", example="507f1f77bcf86cd799439012")
 
 
-class CreateDatasetArgs(BaseArgs):
-    name: str = Field(
-        description="Name of the dataset to be created",
-        min_length=1,
-        max_length=100,
-        example="Customer Feedback"
-    )
+class CreateDatasetArgs(BaseModel):
+    name: str = Field(description="Name of the dataset to be created", min_length=1, max_length=100, example="Customer Feedback")
     description: str = Field(
         description="Detailed description of the dataset's purpose and contents",
         min_length=1,
         max_length=500,
-        example="Collection of customer feedback responses from Q1 2024"
+        example="Collection of customer feedback responses from Q1 2024",
     )
-    structure: List[FieldType] = Field(
+    schema: DatasetSchema = Field(
         description="List of field definitions that describe the schema of the dataset",
-        example=[
-            {"name": "feedback_text", "type": "string"},
-            {"name": "rating", "type": "integer", "min": 1, "max": 5}
-        ]
+        example=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
     )
 
 
 class UpdateDatasetArgs(DatasetArgs):
-    name: str = Field(
-        description="Updated name for the dataset",
-        min_length=1,
-        max_length=100,
-        example="Customer Feedback 2024"
-    )
+    name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, example="Customer Feedback 2024")
     description: str = Field(
         description="Updated description for the dataset",
         min_length=1,
         max_length=500,
-        example="Updated collection of customer feedback responses from Q1 2024"
+        example="Updated collection of customer feedback responses from Q1 2024",
     )
-    structure: List[FieldType] = Field(
+    schema: DatasetSchema = Field(
         description="Updated list of field definitions for the dataset schema",
         example=[
             {"name": "feedback_text", "type": "string"},
             {"name": "rating", "type": "integer", "min": 1, "max": 5},
-            {"name": "category", "type": "string", "enum": ["bug", "feature", "support"]}
-        ]
+            {"name": "category", "type": "string", "enum": ["bug", "feature", "support"]},
+        ],
     )
 
 
 class CreateRecordArgs(DatasetArgs):
     data: RecordData = Field(
-        description="Record data that matches the dataset's defined structure",
-        example={
-            "feedback_text": "Great product, but needs better documentation",
-            "rating": 4
-        }
+        description="Record data that matches the dataset's defined schema",
+        example={"feedback_text": "Great product, but needs better documentation", "rating": 4},
     )
 
 
 class UpdateRecordArgs(RecordArgs):
     data: RecordData = Field(
-        description="Updated record data that matches the dataset's defined structure",
-        example={
-            "feedback_text": "Great product, documentation has improved",
-            "rating": 5
-        }
+        description="Updated record data that matches the dataset's defined schema",
+        example={"feedback_text": "Great product, documentation has improved", "rating": 5},
     )
 
 
 class FindRecordsArgs(DatasetArgs):
     query: Optional[Dict] = Field(
-        default=None,
-        description="Optional query parameters to filter records in the dataset",
-        example={
-            "rating": {"$gte": 4},
-            "category": "feature"
-        }
+        default=None, description="Optional query parameters to filter records in the dataset", example={"rating": {"$gte": 4}, "category": "feature"}
     )
 
 
@@ -114,7 +77,7 @@ class BaseDBOperator(BaseTool):
     def __init__(self, db: DatasetManager):
         super().__init__(db=db)
 
-    def _run(self, config: RunnableConfig):
+    def _run(self, config: RunnableConfig, **kwargs):
         return asyncio.run(self._arun(config))
 
 
@@ -138,7 +101,7 @@ class CreateDatasetOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
         user_id = config.get("configurable", {}).get("user_id")
         args = CreateDatasetArgs(**kwargs)
-        result = await self.db.create_dataset(user_id, args.name, args.description, args.structure)
+        result = await self.db.create_dataset(user_id, args.name, args.description, args.schema)
         return {"dataset_id": result}
 
 
@@ -151,7 +114,7 @@ class UpdateDatasetOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateDatasetArgs(**kwargs)
-        await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description, args.structure)
+        await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description, args.schema)
 
 
 class DeleteDatasetOperator(BaseDBOperator):

@@ -7,16 +7,16 @@ import pymongo
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 
-from .exceptions import (
+from document_store.exceptions import (
     DatabaseError,
     DatasetNameExistsError,
     DatasetNotFoundError,
     InvalidRecordDataError,
     RecordNotFoundError,
 )
-from .models import Dataset, Record
-from .types import Field, RecordData
-from .validators import validate_query_fields, validate_record_data
+from document_store.models import Dataset, Record
+from document_store.types import DatasetSchema, RecordData
+from document_store.validators import validate_query_fields, validate_record_data
 
 
 class DatasetManager:
@@ -68,14 +68,14 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to setup indexes: {str(e)}")
 
-    async def create_dataset(self, user_id: str, name: str, description: str, structure: List[Field]) -> ObjectId:
-        """Creates a new dataset with the given structure."""
+    async def create_dataset(self, user_id: str, name: str, description: str, schema: DatasetSchema) -> ObjectId:
+        """Creates a new dataset with the given schema."""
         try:
             dataset = Dataset(
                 user_id=user_id,
                 name=name,
                 description=description,
-                structure=structure,
+                schema=schema,
             )
             result = await self._datasets.insert_one(dataset.model_dump(by_alias=True))
             return result.inserted_id
@@ -84,7 +84,7 @@ class DatasetManager:
                 raise DatasetNameExistsError(f"Dataset with name '{name}' already exists for user {user_id}")
             raise DatabaseError(f"Failed to create dataset: {str(e)}")
 
-    async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str, structure: List[Field]) -> None:
+    async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str, schema: DatasetSchema) -> None:
         """Updates an existing dataset."""
         try:
             # Validate dataset exists and belongs to user
@@ -96,7 +96,7 @@ class DatasetManager:
                 user_id=user_id,
                 name=name,
                 description=description,
-                structure=structure,
+                schema=schema,
                 created_at=dataset.created_at,
                 updated_at=datetime.now(timezone.utc),
             )
@@ -172,11 +172,11 @@ class DatasetManager:
     async def create_record(self, user_id: str, dataset_id: ObjectId, data: RecordData) -> ObjectId:
         """Creates a new record in the specified dataset."""
         try:
-            # Get dataset to validate against structure
+            # Get dataset to validate against schema
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate and convert data
-            validated_data = validate_record_data(data, dataset.structure)
+            validated_data = validate_record_data(data, dataset.schema)
 
             # Create record
             record = Record(
@@ -196,11 +196,11 @@ class DatasetManager:
     async def update_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId, data: RecordData) -> None:
         """Updates an existing record."""
         try:
-            # Get dataset to validate against structure
+            # Get dataset to validate against schema
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate and convert data
-            validated_data = validate_record_data(data, dataset.structure)
+            validated_data = validate_record_data(data, dataset.schema)
 
             # Update record
             result = await self._records.update_one(
@@ -285,7 +285,7 @@ class DatasetManager:
     async def find_records(self, user_id: str, dataset_id: ObjectId, query: Optional[Dict] = None) -> List[Record]:
         """Finds records in the specified dataset."""
         try:
-            # Verify dataset exists and get structure for query validation
+            # Verify dataset exists and get schema for query validation
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Build query
@@ -295,8 +295,8 @@ class DatasetManager:
             }
 
             if query:
-                # Validate query fields exist in structure
-                validate_query_fields(query, dataset.structure)
+                # Validate query fields exist in schema
+                validate_query_fields(query, dataset.schema)
                 # Add data field conditions
                 for field, value in query.items():
                     mongo_query[f"data.{field}"] = value

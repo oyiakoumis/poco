@@ -9,7 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from constants import DATABASE_CONNECTION_STRING
 from document_store.dataset_manager import DatasetManager
 from document_store.exceptions import DatasetNotFoundError, InvalidRecordDataError
-from document_store.types import Field, FieldType
+from document_store.types import SchemaField, FieldType
 
 
 async def print_separator(title: str = "") -> None:
@@ -26,8 +26,8 @@ async def print_dataset(dataset_id: str, manager: DatasetManager, user_id: str) 
         dataset = await manager.get_dataset(user_id, dataset_id)
         print(f"Dataset: {dataset.name}")
         print(f"Description: {dataset.description}")
-        print("\nStructure:")
-        for field in dataset.structure:
+        print("\nSchema:")
+        for field in dataset.schema:
             print(f"  - {field.field_name} ({field.type.value})")
             print(f"    Description: {field.description}")
             print(f"    Required: {field.required}")
@@ -84,38 +84,38 @@ async def main() -> None:
 
         await print_separator("Creating Dataset")
         # Create a dataset for employee records
-        structure = [
-            Field(
+        schema = [
+            SchemaField(
                 field_name="employee_id",
                 description="Unique employee identifier",
                 type=FieldType.STRING,
                 required=True,
             ),
-            Field(
+            SchemaField(
                 field_name="name",
                 description="Employee full name",
                 type=FieldType.STRING,
                 required=True,
             ),
-            Field(
+            SchemaField(
                 field_name="age",
                 description="Employee age",
                 type=FieldType.INTEGER,
                 required=True,
             ),
-            Field(
+            SchemaField(
                 field_name="salary",
                 description="Annual salary",
                 type=FieldType.FLOAT,
                 required=True,
             ),
-            Field(
+            SchemaField(
                 field_name="department",
                 description="Department name",
                 type=FieldType.STRING,
                 required=True,
             ),
-            Field(
+            SchemaField(
                 field_name="notes",
                 description="Additional notes",
                 type=FieldType.STRING,
@@ -128,7 +128,7 @@ async def main() -> None:
             user_id=user_id,
             name="Employees",
             description="Employee records with salary information",
-            structure=structure,
+            schema=schema,
         )
         print(f"Created dataset with ID: {dataset_id}")
         await print_dataset(dataset_id, manager, user_id)

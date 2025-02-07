@@ -31,8 +31,8 @@ class DatasetNameExistsError(DatasetError):
     pass
 
 
-class InvalidDatasetStructureError(DatasetError):
-    """Raised when the dataset structure is invalid."""
+class InvalidDatasetSchemaError(DatasetError):
+    """Raised when the dataset schema is invalid."""
 
     pass
 
@@ -50,7 +50,7 @@ class RecordNotFoundError(RecordError):
 
 
 class InvalidRecordDataError(RecordError):
-    """Raised when record data does not match the dataset structure."""
+    """Raised when record data does not match the dataset schema."""
 
     pass
 

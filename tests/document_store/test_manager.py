@@ -19,7 +19,7 @@ from document_store.exceptions import (
     RecordNotFoundError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import Field, FieldType
+from document_store.types import DatasetSchema, SchemaField, FieldType
 
 
 @pytest.fixture
@@ -41,23 +41,23 @@ def record_id() -> str:
 
 
 @pytest.fixture
-def sample_structure() -> List[Field]:
-    """Sample dataset structure for testing."""
+def sample_schema() -> DatasetSchema:
+    """Sample dataset schema for testing."""
     return [
-        Field(field_name="age", description="User age", type=FieldType.INTEGER, required=True),
-        Field(field_name="name", description="User name", type=FieldType.STRING, required=True),
+        SchemaField(field_name="age", description="User age", type=FieldType.INTEGER, required=True),
+        SchemaField(field_name="name", description="User name", type=FieldType.STRING, required=True),
     ]
 
 
 @pytest.fixture
-def sample_dataset(user_id: str, dataset_id: str, sample_structure: List[Field]) -> Dataset:
+def sample_dataset(user_id: str, dataset_id: str, sample_schema: DatasetSchema) -> Dataset:
     """Sample dataset for testing."""
     return Dataset(
         id=dataset_id,
         user_id=user_id,
         name="test_dataset",
         description="Test dataset",
-        structure=sample_structure,
+        schema=sample_schema,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
@@ -301,7 +301,7 @@ class TestManagerSetup:
 class TestDatasetOperations:
     """Tests for dataset operations."""
 
-    async def test_create_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_structure: List[Field]) -> None:
+    async def test_create_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_schema: DatasetSchema) -> None:
         """Test creating a dataset."""
         # Setup - override manager's mock behavior
         result = AsyncMock()
@@ -309,12 +309,12 @@ class TestDatasetOperations:
         manager._datasets.insert_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
 
         # Execute
-        result = await manager.create_dataset(user_id=user_id, name="test_dataset", description="Test dataset", structure=sample_structure)
+        result = await manager.create_dataset(user_id=user_id, name="test_dataset", description="Test dataset", schema=sample_schema)
 
         # Verify
         assert result == ObjectId(dataset_id)
 
-    async def test_create_dataset_duplicate_name(self, manager: DatasetManager, user_id: str, sample_structure: List[Field]) -> None:
+    async def test_create_dataset_duplicate_name(self, manager: DatasetManager, user_id: str, sample_schema: DatasetSchema) -> None:
         """Test creating a dataset with duplicate name fails."""
 
         # Setup - override manager's mock behavior
@@ -325,12 +325,12 @@ class TestDatasetOperations:
 
         # Execute and verify
         with pytest.raises(DatasetNameExistsError):
-            await manager.create_dataset(user_id=user_id, name="test_dataset", description="Test dataset", structure=sample_structure)
+            await manager.create_dataset(user_id=user_id, name="test_dataset", description="Test dataset", schema=sample_schema)
 
-    async def test_update_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset, sample_structure: List[Field]) -> None:
+    async def test_update_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset, sample_schema: DatasetSchema) -> None:
         """Test updating a dataset."""
         # Execute
-        await manager.update_dataset(user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset", structure=sample_structure)
+        await manager.update_dataset(user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset", schema=sample_schema)
 
         # Verify
         filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
@@ -339,16 +339,14 @@ class TestDatasetOperations:
         assert update_doc["name"] == "updated_dataset"
         assert update_doc["description"] == "Updated dataset"
 
-    async def test_update_dataset_not_found(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_structure: List[Field]) -> None:
+    async def test_update_dataset_not_found(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_schema: DatasetSchema) -> None:
         """Test updating a non-existent dataset."""
         # Setup - override manager's mock behavior
         manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=None)()
 
         # Execute and verify
         with pytest.raises(DatasetNotFoundError):
-            await manager.update_dataset(
-                user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset", structure=sample_structure
-            )
+            await manager.update_dataset(user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset", schema=sample_schema)
 
     async def test_delete_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str) -> None:
         """Test deleting a dataset."""

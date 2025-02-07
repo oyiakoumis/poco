@@ -1,6 +1,5 @@
 from langchain.schema import SystemMessage
 from langchain_openai import ChatOpenAI
-from langgraph.graph import MessagesState
 from langgraph.prebuilt import create_react_agent
 
 from agent.tools.database_operator import (
@@ -17,6 +16,7 @@ from agent.tools.database_operator import (
 )
 from agent.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
+from state import State
 
 ASSISTANT_SYSTEM_MESSAGE = """
 You are a helpful assistant that manages structured data through natural conversations. Your role is to help users store and retrieve information seamlessly while handling all the technical complexities behind the scenes.
@@ -31,7 +31,7 @@ Core Responsibilities:
 Tool Usage Protocol:
 
 1. Dataset Operations:
-- list_datasets: Always use first to get dataset details (id, name, description, structure)
+- list_datasets: Always use first to get dataset details (id, name, description, schema)
 - create_dataset, update_dataset, delete_dataset: Manage dataset structures
 - get_dataset: Retrieve specific dataset details
 
@@ -55,7 +55,7 @@ Interaction Guidelines:
 - Suggest relevant data operations based on context
 
 For all interactions:
-1. First understand the data structure (list_datasets)
+1. First understand the data schema (list_datasets)
 2. Infer the relevant dataset
 3. If needed, locate specific records
 4. Process any temporal references
@@ -82,12 +82,12 @@ class Assistant:
             FindRecordsOperator(db),
         ]
 
-    def __call__(self, state: MessagesState):
+    async def __call__(self, state: State):
         # Initialize the language model
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
         runnable = create_react_agent(llm, self.tools)
 
-        response = runnable.invoke({"messages": [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages})
+        response = await runnable.ainvoke({"messages": [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages})
 
         return {"messages": response["messages"]}

@@ -14,6 +14,7 @@ from print_event import print_event, print_message
 async def main():
     # Connect to the database
     client = AsyncIOMotorClient(DATABASE_CONNECTION_STRING)
+    client.get_io_loop = asyncio.get_running_loop
     db = await DatasetManager.setup(client)
 
     # Get the graph
@@ -22,7 +23,7 @@ async def main():
     graph = graph.compile(checkpointer=MemorySaver())
 
     # Configuration for the graph
-    config = RunnableConfig(configurable={"thread_id": "1", "user_id": "1"}, recursion_limit=10)
+    config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123"}, recursion_limit=10)
 
     for message in [HumanMessage(content="Create a document to store my todos")]:
         print_message(message, "Human")
