@@ -6,9 +6,9 @@ from typing import List, Optional
 from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator
 
-from .exceptions import InvalidDatasetSchemaError, InvalidFieldTypeError
-from .types import DatasetSchema
-from .types import FieldType, PydanticObjectId, RecordData
+from document_store.exceptions import InvalidDatasetSchemaError, InvalidFieldTypeError
+from document_store.types import DatasetSchema, FieldType, PydanticObjectId, RecordData
+from document_store.validators.factory import get_validator
 
 
 class Dataset(BaseModel):
@@ -37,23 +37,25 @@ class Dataset(BaseModel):
                 try:
                     field.type = FieldType(field.type)
                 except ValueError:
-                    raise InvalidFieldTypeError(f"Invalid field type: {field.type}")
+                    raise InvalidDatasetSchemaError(f"Invalid field type: {field.type}")
 
-            # Validate default value type if provided
+            # Validate default value using appropriate validator
             if field.default is not None:
                 try:
-                    if field.type == FieldType.INTEGER:
-                        field.default = int(field.default)
-                    elif field.type == FieldType.FLOAT:
-                        field.default = float(field.default)
-                    elif field.type == FieldType.STRING:
-                        field.default = str(field.default)
-                except (ValueError, TypeError):
-                    raise InvalidFieldTypeError(f"Default value {field.default} does not match type {field.type}")
+                    validator = get_validator(field.type)
+                    field.default = validator.validate_default(field.default)
+                except ValueError as e:
+                    raise InvalidFieldTypeError(
+                        f"Invalid default value for field '{field.field_name}': {str(e)}"
+                    )
 
         return schema
 
-    model_config = {"populate_by_name": True}
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "from_attributes": True
+    }
 
 
 class Record(BaseModel):

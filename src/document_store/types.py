@@ -43,6 +43,12 @@ class SchemaField(BaseModel):
     required: bool = Field(default=False, description="Whether this field must be present in all records", example=True)
     default: Optional[Any] = Field(default=None, description="Default value for the field if not provided", example=0)
 
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "populate_by_name": True,
+        "from_attributes": True
+    }
+
 
 DatasetSchema = List[SchemaField]
 

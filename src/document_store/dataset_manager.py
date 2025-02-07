@@ -44,8 +44,6 @@ class DatasetManager:
             # Setup datasets collection indexes
             await manager._datasets.create_indexes(
                 [
-                    # Compound index for unique dataset id per user
-                    pymongo.IndexModel([("user_id", 1), ("dataset_id", 1)], unique=True, background=True),
                     # Compound index for unique dataset names per user
                     pymongo.IndexModel([("user_id", 1), ("name", 1)], unique=True, background=True),
                     # Index for listing user's datasets
