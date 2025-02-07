@@ -1,30 +1,28 @@
 """Document store package."""
-from .exceptions import (
+
+from document_store.dataset_manager import DatasetManager
+from document_store.exceptions import (
+    DatabaseError,
     DatasetNameExistsError,
     DatasetNotFoundError,
-    DatabaseError,
     DocumentStoreError,
     InvalidFieldTypeError,
     InvalidFieldValueError,
     InvalidRecordDataError,
     RecordNotFoundError,
 )
-from .manager import DatasetManager
-from .models import Dataset, Record
-from .types import Field, FieldType
+from document_store.models import Dataset, Record
+from document_store.types import Field, FieldType
 
 __all__ = [
     # Main class
     "DatasetManager",
-    
     # Models
     "Dataset",
     "Record",
     "Field",
-    
     # Types
     "FieldType",
-    
     # Exceptions
     "DocumentStoreError",
     "DatasetNameExistsError",

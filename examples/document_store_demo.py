@@ -7,8 +7,8 @@ from typing import Any, Dict, List
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from constants import DATABASE_CONNECTION_STRING
+from document_store.dataset_manager import DatasetManager
 from document_store.exceptions import DatasetNotFoundError, InvalidRecordDataError
-from document_store.manager import DatasetManager
 from document_store.types import Field, FieldType
 
 

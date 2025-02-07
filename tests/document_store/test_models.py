@@ -2,8 +2,8 @@
 
 from datetime import datetime, timezone
 
-from bson import ObjectId
 import pytest
+from bson import ObjectId
 from pydantic import ValidationError
 
 from src.document_store.exceptions import (

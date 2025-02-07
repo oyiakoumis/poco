@@ -4,20 +4,20 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pymongo
 import pytest
 import pytest_asyncio
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
-import pymongo
 
+from document_store.dataset_manager import DatasetManager
 from document_store.exceptions import (
+    DatabaseError,
     DatasetNameExistsError,
     DatasetNotFoundError,
-    DatabaseError,
     InvalidRecordDataError,
     RecordNotFoundError,
 )
-from document_store.manager import DatasetManager
 from document_store.models import Dataset, Record
 from document_store.types import Field, FieldType
 
@@ -316,9 +316,11 @@ class TestDatasetOperations:
 
     async def test_create_dataset_duplicate_name(self, manager: DatasetManager, user_id: str, sample_structure: List[Field]) -> None:
         """Test creating a dataset with duplicate name fails."""
+
         # Setup - override manager's mock behavior
         async def mock_insert(*args, **kwargs):
             raise pymongo.errors.DuplicateKeyError("duplicate key error")
+
         manager._datasets.insert_one = AsyncMock(side_effect=mock_insert)
 
         # Execute and verify

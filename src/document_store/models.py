@@ -4,12 +4,11 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from bson import ObjectId
-
-from .types import PydanticObjectId
 from pydantic import BaseModel, Field, field_validator
 
 from .exceptions import InvalidDatasetStructureError, InvalidFieldTypeError
-from .types import Field as StructureField, FieldType, RecordData
+from .types import Field as StructureField
+from .types import FieldType, PydanticObjectId, RecordData
 
 
 class Dataset(BaseModel):
