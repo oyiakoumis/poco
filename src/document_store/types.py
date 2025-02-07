@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from bson import ObjectId
 from pydantic import BaseModel, Field
+from pydantic_core import core_schema
 
 
 class PydanticObjectId(ObjectId):
@@ -15,7 +16,25 @@ class PydanticObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v, handler):
+    def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> core_schema.CoreSchema:
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.str_schema(),
+            python_schema=core_schema.union_schema(
+                [
+                    core_schema.is_instance_schema(ObjectId),
+                    core_schema.chain_schema(
+                        [
+                            core_schema.str_schema(),
+                            core_schema.no_info_plain_validator_function(cls.validate),
+                        ]
+                    ),
+                ]
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda x: str(x), when_used="json"),
+        )
+
+    @classmethod
+    def validate(cls, v):
         if isinstance(v, ObjectId):
             return v
         if isinstance(v, str):
@@ -43,11 +62,7 @@ class SchemaField(BaseModel):
     required: bool = Field(default=False, description="Whether this field must be present in all records", example=True)
     default: Optional[Any] = Field(default=None, description="Default value for the field if not provided", example=0)
 
-    model_config = {
-        "arbitrary_types_allowed": True,
-        "populate_by_name": True,
-        "from_attributes": True
-    }
+    model_config = {"arbitrary_types_allowed": True, "populate_by_name": True, "from_attributes": True}
 
 
 DatasetSchema = List[SchemaField]

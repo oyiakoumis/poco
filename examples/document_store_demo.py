@@ -27,7 +27,7 @@ async def print_dataset(dataset_id: str, manager: DatasetManager, user_id: str) 
         print(f"Dataset: {dataset.name}")
         print(f"Description: {dataset.description}")
         print("\nSchema:")
-        for field in dataset.schema:
+        for field in dataset.dataset_schema:
             print(f"  - {field.field_name} ({field.type.value})")
             print(f"    Description: {field.description}")
             print(f"    Required: {field.required}")

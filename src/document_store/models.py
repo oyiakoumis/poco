@@ -18,11 +18,11 @@ class Dataset(BaseModel):
     user_id: str
     name: str
     description: str
-    schema: DatasetSchema
+    dataset_schema: DatasetSchema
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    @field_validator("schema")
+    @field_validator("dataset_schema")
     @classmethod
     def validate_schema(cls, schema: DatasetSchema) -> DatasetSchema:
         """Validate dataset schema."""
@@ -45,17 +45,11 @@ class Dataset(BaseModel):
                     validator = get_validator(field.type)
                     field.default = validator.validate_default(field.default)
                 except ValueError as e:
-                    raise InvalidFieldTypeError(
-                        f"Invalid default value for field '{field.field_name}': {str(e)}"
-                    )
+                    raise InvalidFieldTypeError(f"Invalid default value for field '{field.field_name}': {str(e)}")
 
         return schema
 
-    model_config = {
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True,
-        "from_attributes": True
-    }
+    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True, "from_attributes": True}
 
 
 class Record(BaseModel):

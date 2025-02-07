@@ -25,7 +25,7 @@ async def main():
     # Configuration for the graph
     config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123"}, recursion_limit=10)
 
-    for message in [HumanMessage(content="Create a document to store my todos")]:
+    for message in [HumanMessage(content="Add buy eggs to my list of todos"), HumanMessage(content="Can you mark it as completed?")]:
         print_message(message, "Human")
         # Process and print each event
         async for namespace, event in graph.astream({"messages": [message]}, config, stream_mode="updates", subgraphs=True):

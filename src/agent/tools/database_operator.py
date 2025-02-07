@@ -26,7 +26,7 @@ class CreateDatasetArgs(BaseModel):
         max_length=500,
         example="Collection of customer feedback responses from Q1 2024",
     )
-    schema: DatasetSchema = Field(
+    dataset_schema: DatasetSchema = Field(
         description="List of field definitions that describe the schema of the dataset",
         example=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
     )
@@ -40,7 +40,7 @@ class UpdateDatasetArgs(DatasetArgs):
         max_length=500,
         example="Updated collection of customer feedback responses from Q1 2024",
     )
-    schema: DatasetSchema = Field(
+    dataset_schema: DatasetSchema = Field(
         description="Updated list of field definitions for the dataset schema",
         example=[
             {"name": "feedback_text", "type": "string"},
@@ -78,7 +78,7 @@ class BaseDBOperator(BaseTool):
         super().__init__(db=db)
 
     def _run(self, config: RunnableConfig, **kwargs):
-        return asyncio.run(self._arun(config))
+        return asyncio.run(self._arun(config, **kwargs))
 
 
 # List Dataset Operator
@@ -95,31 +95,37 @@ class ListDatasetsOperator(BaseDBOperator):
 # Create Dataset Operator
 class CreateDatasetOperator(BaseDBOperator):
     name: str = "create_dataset"
-    description: str = "Create a new dataset"
+    description: str = f"""Create a new dataset
+    {CreateDatasetArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = CreateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
         user_id = config.get("configurable", {}).get("user_id")
         args = CreateDatasetArgs(**kwargs)
-        result = await self.db.create_dataset(user_id, args.name, args.description, args.schema)
+        result = await self.db.create_dataset(user_id, args.name, args.description, args.dataset_schema)
         return {"dataset_id": result}
 
 
 # Update Dataset Operator
 class UpdateDatasetOperator(BaseDBOperator):
     name: str = "update_dataset"
-    description: str = "Update a dataset"
+    description: str = f"""Update a dataset
+    {UpdateDatasetArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = UpdateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateDatasetArgs(**kwargs)
-        await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description, args.schema)
+        await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description, args.dataset_schema)
 
 
 class DeleteDatasetOperator(BaseDBOperator):
     name: str = "delete_dataset"
-    description: str = "Delete a dataset"
+    description: str = f"""Delete a dataset
+    {DatasetArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -130,7 +136,9 @@ class DeleteDatasetOperator(BaseDBOperator):
 
 class GetDatasetOperator(BaseDBOperator):
     name: str = "get_dataset"
-    description: str = "Get a dataset"
+    description: str = f"""Get a dataset
+    {DatasetArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
@@ -143,7 +151,9 @@ class GetDatasetOperator(BaseDBOperator):
 # Get All Records Operator
 class GetAllRecordsOperator(BaseDBOperator):
     name: str = "get_all_records"
-    description: str = "Get all records"
+    description: str = f"""Get all records
+    {DatasetArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
@@ -155,7 +165,9 @@ class GetAllRecordsOperator(BaseDBOperator):
 
 class CreateRecordOperator(BaseDBOperator):
     name: str = "create_record"
-    description: str = "Create a new record"
+    description: str = f"""Create a new record
+    {CreateRecordArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = CreateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
@@ -167,7 +179,9 @@ class CreateRecordOperator(BaseDBOperator):
 
 class UpdateRecordOperator(BaseDBOperator):
     name: str = "update_record"
-    description: str = "Update a record"
+    description: str = f"""Update a record
+    {UpdateRecordArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = UpdateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -178,7 +192,9 @@ class UpdateRecordOperator(BaseDBOperator):
 
 class DeleteRecordOperator(BaseDBOperator):
     name: str = "delete_record"
-    description: str = "Delete record"
+    description: str = f"""Delete record
+    {RecordArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -189,7 +205,9 @@ class DeleteRecordOperator(BaseDBOperator):
 
 class GetRecordOperator(BaseDBOperator):
     name: str = "get_record"
-    description: str = "Get record"
+    description: str = f"""Get record
+    {RecordArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
@@ -201,7 +219,9 @@ class GetRecordOperator(BaseDBOperator):
 
 class FindRecordsOperator(BaseDBOperator):
     name: str = "find_records"
-    description: str = "Find records"
+    description: str = f"""Find records
+    {FindRecordsArgs.model_json_schema()}
+    """
     args_schema: ClassVar[BaseModel] = FindRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:

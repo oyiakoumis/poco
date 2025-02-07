@@ -20,14 +20,14 @@ def test_dataset_creation():
         user_id="user123",
         name="test_dataset",
         description="Test dataset",
-        schema=[
+        dataset_schema=[
             SchemaField(field_name="age", description="User age", type=FieldType.INTEGER, required=True),
             SchemaField(field_name="name", description="User name", type=FieldType.STRING, required=True),
         ],
     )
     assert dataset.user_id == "user123"
     assert dataset.name == "test_dataset"
-    assert len(dataset.schema) == 2
+    assert len(dataset.dataset_schema) == 2
     assert isinstance(dataset.created_at, datetime)
     assert dataset.created_at.tzinfo == timezone.utc
 
@@ -39,7 +39,7 @@ def test_dataset_duplicate_fields():
             user_id="user123",
             name="test_dataset",
             description="Test dataset",
-            schema=[
+            dataset_schema=[
                 SchemaField(field_name="name", description="First name", type=FieldType.STRING),
                 SchemaField(field_name="name", description="Last name", type=FieldType.STRING),
             ],
@@ -53,7 +53,7 @@ def test_dataset_invalid_field_type():
             user_id="user123",
             name="test_dataset",
             description="Test dataset",
-            schema=[SchemaField(field_name="field1", description="Test field", type="invalid_type")],
+            dataset_schema=[SchemaField(field_name="field1", description="Test field", type="invalid_type")],
         )
     assert "Input should be" in str(exc.value)
     assert "int" in str(exc.value)
@@ -68,15 +68,15 @@ def test_dataset_default_value_validation():
         user_id="user123",
         name="test_dataset",
         description="Test dataset",
-        schema=[
+        dataset_schema=[
             SchemaField(field_name="age", description="Age", type=FieldType.INTEGER, default=25),
             SchemaField(field_name="height", description="Height", type=FieldType.FLOAT, default=1.75),
             SchemaField(field_name="name", description="Name", type=FieldType.STRING, default="John"),
         ],
     )
-    assert isinstance(dataset.schema[0].default, int)
-    assert isinstance(dataset.schema[1].default, float)
-    assert isinstance(dataset.schema[2].default, str)
+    assert isinstance(dataset.dataset_schema[0].default, int)
+    assert isinstance(dataset.dataset_schema[1].default, float)
+    assert isinstance(dataset.dataset_schema[2].default, str)
 
     # Invalid default values
     with pytest.raises(Exception):
@@ -84,7 +84,7 @@ def test_dataset_default_value_validation():
             user_id="user123",
             name="test_dataset",
             description="Test dataset",
-            schema=[SchemaField(field_name="age", description="Age", type=FieldType.INTEGER, default="not_a_number")],
+            dataset_schema=[SchemaField(field_name="age", description="Age", type=FieldType.INTEGER, default="not_a_number")],
         )
 
 
@@ -114,7 +114,7 @@ def test_record_invalid_data_type():
 def test_model_id_alias():
     """Test that _id alias works for both Dataset and Record."""
     # Test Dataset
-    dataset = Dataset(_id="67a4b03bb3e538515b35a156", user_id="user123", name="test_dataset", description="Test dataset", schema=[])
+    dataset = Dataset(_id="67a4b03bb3e538515b35a156", user_id="user123", name="test_dataset", description="Test dataset", dataset_schema=[])
     assert dataset.id == ObjectId("67a4b03bb3e538515b35a156")
 
     # Test Record

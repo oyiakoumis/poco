@@ -73,7 +73,7 @@ class DatasetManager:
                 user_id=user_id,
                 name=name,
                 description=description,
-                schema=schema,
+                dataset_schema=schema,
             )
             result = await self._datasets.insert_one(dataset.model_dump(by_alias=True))
             return result.inserted_id
@@ -94,7 +94,7 @@ class DatasetManager:
                 user_id=user_id,
                 name=name,
                 description=description,
-                schema=schema,
+                dataset_schema=schema,
                 created_at=dataset.created_at,
                 updated_at=datetime.now(timezone.utc),
             )
@@ -174,7 +174,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate and convert data
-            validated_data = validate_record_data(data, dataset.schema)
+            validated_data = validate_record_data(data, dataset.dataset_schema)
 
             # Create record
             record = Record(
@@ -198,7 +198,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate and convert data
-            validated_data = validate_record_data(data, dataset.schema)
+            validated_data = validate_record_data(data, dataset.dataset_schema)
 
             # Update record
             result = await self._records.update_one(
@@ -294,7 +294,7 @@ class DatasetManager:
 
             if query:
                 # Validate query fields exist in schema
-                validate_query_fields(query, dataset.schema)
+                validate_query_fields(query, dataset.dataset_schema)
                 # Add data field conditions
                 for field, value in query.items():
                     mongo_query[f"data.{field}"] = value

@@ -57,7 +57,7 @@ def sample_dataset(user_id: str, dataset_id: str, sample_schema: DatasetSchema) 
         user_id=user_id,
         name="test_dataset",
         description="Test dataset",
-        schema=sample_schema,
+        dataset_schema=sample_schema,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
