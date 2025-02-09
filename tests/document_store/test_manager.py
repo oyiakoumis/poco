@@ -327,10 +327,10 @@ class TestDatasetOperations:
         with pytest.raises(DatasetNameExistsError):
             await manager.create_dataset(user_id=user_id, name="test_dataset", description="Test dataset", schema=sample_schema)
 
-    async def test_update_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset, sample_schema: DatasetSchema) -> None:
+    async def test_update_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
         """Test updating a dataset."""
         # Execute
-        await manager.update_dataset(user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset", schema=sample_schema)
+        await manager.update_dataset(user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset")
 
         # Verify
         filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
@@ -338,6 +338,7 @@ class TestDatasetOperations:
         assert filter_doc["_id"] == dataset_id
         assert update_doc["name"] == "updated_dataset"
         assert update_doc["description"] == "Updated dataset"
+        assert update_doc["dataset_schema"] == [c.model_dump(by_alias=True) for c in sample_dataset.dataset_schema]  # Ensure schema is unchanged
 
     async def test_update_dataset_not_found(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_schema: DatasetSchema) -> None:
         """Test updating a non-existent dataset."""
@@ -346,7 +347,7 @@ class TestDatasetOperations:
 
         # Execute and verify
         with pytest.raises(DatasetNotFoundError):
-            await manager.update_dataset(user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset", schema=sample_schema)
+            await manager.update_dataset(user_id=user_id, dataset_id=dataset_id, name="updated_dataset", description="Updated dataset")
 
     async def test_delete_dataset(self, manager: DatasetManager, user_id: str, dataset_id: str) -> None:
         """Test deleting a dataset."""

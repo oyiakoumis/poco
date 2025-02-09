@@ -82,7 +82,7 @@ class DatasetManager:
                 raise DatasetNameExistsError(f"Dataset with name '{name}' already exists for user {user_id}")
             raise DatabaseError(f"Failed to create dataset: {str(e)}")
 
-    async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str, schema: DatasetSchema) -> None:
+    async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str) -> None:
         """Updates an existing dataset."""
         try:
             # Validate dataset exists and belongs to user
@@ -94,7 +94,7 @@ class DatasetManager:
                 user_id=user_id,
                 name=name,
                 description=description,
-                dataset_schema=schema,
+                dataset_schema=dataset.dataset_schema,
                 created_at=dataset.created_at,
                 updated_at=datetime.now(timezone.utc),
             )

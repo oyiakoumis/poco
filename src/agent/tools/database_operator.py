@@ -41,14 +41,6 @@ class UpdateDatasetArgs(DatasetArgs):
         max_length=500,
         example="Updated collection of customer feedback responses from Q1 2024",
     )
-    dataset_schema: DatasetSchema = Field(
-        description="Updated list of field definitions for the dataset schema",
-        example=[
-            {"name": "feedback_text", "type": "string"},
-            {"name": "rating", "type": "integer", "min": 1, "max": 5},
-            {"name": "category", "type": "string", "enum": ["bug", "feature", "support"]},
-        ],
-    )
 
 
 class CreateRecordArgs(DatasetArgs):
@@ -115,7 +107,7 @@ class UpdateDatasetOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateDatasetArgs(**kwargs)
-        await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description, args.dataset_schema)
+        await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description)
 
 
 class DeleteDatasetOperator(BaseDBOperator):
