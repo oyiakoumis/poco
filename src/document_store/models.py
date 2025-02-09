@@ -39,10 +39,15 @@ class Dataset(BaseModel):
                 except ValueError:
                     raise InvalidDatasetSchemaError(f"Invalid field type: {field.type}")
 
+            validator = get_validator(field.type)
+            if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
+                if not field.options:
+                    raise InvalidDatasetSchemaError(f"Options not provided for {field.type} field '{field.field_name}'")
+                validator.set_options(field.options)
+
             # Validate default value using appropriate validator
             if field.default is not None:
                 try:
-                    validator = get_validator(field.type)
                     field.default = validator.validate_default(field.default)
                 except ValueError as e:
                     raise InvalidFieldTypeError(f"Invalid default value for field '{field.field_name}': {str(e)}")

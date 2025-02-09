@@ -23,11 +23,27 @@ def test_dataset_creation():
         dataset_schema=[
             SchemaField(field_name="age", description="User age", type=FieldType.INTEGER, required=True),
             SchemaField(field_name="name", description="User name", type=FieldType.STRING, required=True),
+            SchemaField(
+                field_name="status",
+                description="User status",
+                type=FieldType.SELECT,
+                required=True,
+                options=["active", "inactive", "pending"],
+                default="active"
+            ),
+            SchemaField(
+                field_name="roles",
+                description="User roles",
+                type=FieldType.MULTI_SELECT,
+                required=False,
+                options=["admin", "user", "moderator"],
+                default=["user"]
+            ),
         ],
     )
     assert dataset.user_id == "user123"
     assert dataset.name == "test_dataset"
-    assert len(dataset.dataset_schema) == 2
+    assert len(dataset.dataset_schema) == 4
     assert isinstance(dataset.created_at, datetime)
     assert dataset.created_at.tzinfo == timezone.utc
 

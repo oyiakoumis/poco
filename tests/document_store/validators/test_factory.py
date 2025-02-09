@@ -11,6 +11,8 @@ from document_store.validators.validators import (
     DateValidator,
     FloatValidator,
     IntegerValidator,
+    MultiSelectValidator,
+    SelectValidator,
     StringValidator,
 )
 
@@ -49,6 +51,18 @@ def test_get_validator_datetime():
     """Should return DateTimeValidator for DATETIME type."""
     validator = get_validator(FieldType.DATETIME)
     assert isinstance(validator, DateTimeValidator)
+
+
+def test_get_validator_select():
+    """Should return SelectValidator for SELECT type."""
+    validator = get_validator(FieldType.SELECT)
+    assert isinstance(validator, SelectValidator)
+
+
+def test_get_validator_multi_select():
+    """Should return MultiSelectValidator for MULTI_SELECT type."""
+    validator = get_validator(FieldType.MULTI_SELECT)
+    assert isinstance(validator, MultiSelectValidator)
 
 
 def test_get_validator_unknown():

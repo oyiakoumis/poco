@@ -3,7 +3,7 @@
 from typing import Any, Dict
 
 from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
-from document_store.types import DatasetSchema
+from document_store.types import DatasetSchema, FieldType
 from document_store.validators.factory import get_validator
 
 
@@ -44,6 +44,13 @@ def validate_record_data(data: Dict[str, Any], schema: DatasetSchema) -> Dict[st
         # Skip optional fields with no value
         if value is None:
             if field.default is not None:
+                # Set options for select/multi-select fields
+                if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
+                    if not field.options:
+                        raise InvalidFieldValueError(
+                            f"Options not provided for {field.type} field '{field.field_name}'"
+                        )
+                    validator.set_options(field.options)
                 try:
                     validated_data[field.field_name] = validator.validate_default(field.default)
                 except ValueError as e:
@@ -51,6 +58,14 @@ def validate_record_data(data: Dict[str, Any], schema: DatasetSchema) -> Dict[st
                         f"Invalid default value for field '{field.field_name}': {str(e)}"
                     )
             continue
+
+        # Set options for select/multi-select fields
+        if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
+            if not field.options:
+                raise InvalidFieldValueError(
+                    f"Options not provided for {field.type} field '{field.field_name}'"
+                )
+            validator.set_options(field.options)
 
         # Validate and convert field value
         try:

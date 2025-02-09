@@ -1,7 +1,7 @@
 """Concrete validator implementations for different field types."""
 
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any, List, Optional, Set, Union
 
 from document_store.types import FieldType
 from document_store.validators.base import TypeValidator
@@ -110,6 +110,88 @@ class DateValidator(TypeValidator):
 
     def validate_default(self, value: Any) -> Optional[date]:
         """Validate and convert default value to date."""
+        if value is None:
+            return None
+        return self.validate(value)
+
+
+class SelectValidator(TypeValidator):
+    """Validator for select fields."""
+
+    field_type = FieldType.SELECT
+
+    def __init__(self):
+        super().__init__()
+        self._options: Optional[Set[str]] = None
+
+    def set_options(self, options: List[str]) -> None:
+        """Set allowed options for the field.
+        
+        Args:
+            options: List of allowed values
+        """
+        self._options = set(options)
+
+    def validate(self, value: Any) -> str:
+        """Validate and convert to allowed string value."""
+        if self._options is None:
+            raise ValueError("Options not set for select field")
+
+        str_value = str(value)
+        if str_value not in self._options:
+            raise ValueError(f"Value must be one of: {', '.join(sorted(self._options))}")
+
+        return str_value
+
+    def validate_default(self, value: Any) -> Optional[str]:
+        """Validate and convert default value to string."""
+        if value is None:
+            return None
+        return self.validate(value)
+
+
+class MultiSelectValidator(TypeValidator):
+    """Validator for multi-select fields."""
+
+    field_type = FieldType.MULTI_SELECT
+
+    def __init__(self):
+        super().__init__()
+        self._options: Optional[Set[str]] = None
+
+    def set_options(self, options: List[str]) -> None:
+        """Set allowed options for the field.
+        
+        Args:
+            options: List of allowed values
+        """
+        self._options = set(options)
+
+    def validate(self, value: Any) -> List[str]:
+        """Validate and convert to list of allowed string values."""
+        if self._options is None:
+            raise ValueError("Options not set for multi-select field")
+
+        if isinstance(value, str):
+            # Handle empty string case
+            if not value:
+                return []
+            values = [v.strip() for v in value.split(',')]
+        elif isinstance(value, (list, tuple, set)):
+            values = [str(v) for v in value]
+        else:
+            raise ValueError("Value must be string (comma-separated) or list/tuple/set")
+
+        # Convert to set for validation, then back to list for consistent order
+        value_set = set(values)
+        invalid = value_set - self._options
+        if invalid:
+            raise ValueError(f"Invalid options: {', '.join(sorted(invalid))}. Must be from: {', '.join(sorted(self._options))}")
+
+        return sorted(values)  # Sort for consistent order
+
+    def validate_default(self, value: Any) -> Optional[List[str]]:
+        """Validate and convert default value to list of strings."""
         if value is None:
             return None
         return self.validate(value)

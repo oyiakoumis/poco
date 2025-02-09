@@ -10,6 +10,8 @@ from document_store.validators.validators import (
     DateValidator,
     FloatValidator,
     IntegerValidator,
+    MultiSelectValidator,
+    SelectValidator,
     StringValidator,
 )
 
@@ -24,6 +26,8 @@ class ValidatorFactory:
         FieldType.BOOLEAN.value: BooleanValidator,
         FieldType.DATE.value: DateValidator,
         FieldType.DATETIME.value: DateTimeValidator,
+        FieldType.SELECT.value: SelectValidator,
+        FieldType.MULTI_SELECT.value: MultiSelectValidator,
     }
 
     @classmethod

@@ -8,6 +8,8 @@ from document_store.validators.validators import (
     DateValidator,
     FloatValidator,
     IntegerValidator,
+    MultiSelectValidator,
+    SelectValidator,
     StringValidator,
 )
 from document_store.validators.record import validate_record_data, validate_query_fields
@@ -21,6 +23,8 @@ __all__ = [
     "FloatValidator",
     "IntegerValidator",
     "StringValidator",
+    "SelectValidator",
+    "MultiSelectValidator",
     "validate_record_data",
     "validate_query_fields",
 ]
