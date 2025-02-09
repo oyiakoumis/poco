@@ -49,6 +49,7 @@ class UpdateDatasetArgs(DatasetArgs):
         ],
     )
 
+
 class CreateRecordArgs(DatasetArgs):
     data: RecordData = Field(
         description="Record data that matches the dataset's defined schema",
@@ -154,7 +155,7 @@ class GetAllRecordsOperator(BaseDBOperator):
 
 class CreateRecordOperator(BaseDBOperator):
     name: str = "create_record"
-    description: str = "Create a new record"
+    description: str = f"Create a new record: {CreateRecordArgs.model_json_schema()}"
     args_schema: ClassVar[BaseModel] = CreateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:

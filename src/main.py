@@ -27,7 +27,9 @@ async def main():
         # Configuration for the graph
         config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123"}, recursion_limit=10)
 
-        for message in [HumanMessage(content="Add the movie 'Inception' marked as seen to dataset_id: 67a8e06542919007abc04396.")]:
+        for message in [
+            HumanMessage(content="How do you use the create_dataset tool? give me all you know about it"),
+        ]:
             print_message(message, "Human")
             # Process and print each event
             async for namespace, event in graph.astream({"messages": [message]}, config, stream_mode="updates", subgraphs=True):
