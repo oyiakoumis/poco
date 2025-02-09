@@ -11,7 +11,7 @@ from src.document_store.exceptions import (
     InvalidFieldTypeError,
 )
 from src.document_store.models import Dataset, Record
-from src.document_store.types import SchemaField, FieldType
+from src.document_store.types import FieldType, SchemaField
 
 
 def test_dataset_creation():
@@ -29,7 +29,7 @@ def test_dataset_creation():
                 type=FieldType.SELECT,
                 required=True,
                 options=["active", "inactive", "pending"],
-                default="active"
+                default="active",
             ),
             SchemaField(
                 field_name="roles",
@@ -37,7 +37,7 @@ def test_dataset_creation():
                 type=FieldType.MULTI_SELECT,
                 required=False,
                 options=["admin", "user", "moderator"],
-                default=["user"]
+                default=["user"],
             ),
         ],
     )

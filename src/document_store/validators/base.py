@@ -14,13 +14,13 @@ class TypeValidator(ABC):
     @abstractmethod
     def validate(self, value: Any) -> Any:
         """Validate and convert a value to the correct type.
-        
+
         Args:
             value: Value to validate and convert
-            
+
         Returns:
             Converted value
-            
+
         Raises:
             ValueError: If value cannot be converted to the correct type
         """
@@ -29,13 +29,13 @@ class TypeValidator(ABC):
     @abstractmethod
     def validate_default(self, value: Any) -> Optional[Any]:
         """Validate and convert a default value.
-        
+
         Args:
             value: Default value to validate and convert
-            
+
         Returns:
             Converted default value or None if value is None
-            
+
         Raises:
             ValueError: If value cannot be converted to the correct type
         """

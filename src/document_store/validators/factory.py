@@ -33,7 +33,7 @@ class ValidatorFactory:
     @classmethod
     def register_validator(cls, validator_class: Type[TypeValidator]) -> None:
         """Register a new validator class.
-        
+
         Args:
             validator_class: Validator class to register
         """
@@ -42,17 +42,17 @@ class ValidatorFactory:
     @classmethod
     def get_validator(cls, field_type: FieldType) -> TypeValidator:
         """Get a validator instance for a field type.
-        
+
         Args:
             field_type: Field type to get validator for
-            
+
         Returns:
             Validator instance
-            
+
         Raises:
             ValueError: If no validator exists for the field type
         """
-        validator_class = cls._validators.get(getattr(field_type, 'value', None))
+        validator_class = cls._validators.get(getattr(field_type, "value", None))
         if not validator_class:
             raise ValueError(f"No validator registered for field type: {field_type}")
         return validator_class()

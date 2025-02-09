@@ -6,20 +6,21 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
-from document_store.types import DatasetSchema
-from document_store.types import PydanticObjectId, RecordData
+from document_store.types import DatasetSchema, PydanticObjectId, RecordData
 
 
 class DatasetArgs(BaseModel):
-    dataset_id: PydanticObjectId = Field(description="Unique identifier for the dataset", example="507f1f77bcf86cd799439011")
+    dataset_id: PydanticObjectId = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
 
 
 class RecordArgs(DatasetArgs):
-    record_id: PydanticObjectId = Field(description="Unique identifier for the record within the dataset", example="507f1f77bcf86cd799439012")
+    record_id: PydanticObjectId = Field(
+        description="Unique identifier for the record within the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439012"]}
+    )
 
 
 class CreateDatasetArgs(BaseModel):
-    name: str = Field(description="Name of the dataset to be created", min_length=1, max_length=100, example="Customer Feedback")
+    name: str = Field(description="Name of the dataset to be created", min_length=1, max_length=100, json_schema_extra={"examples": ["Customer Feedback"]})
     description: str = Field(
         description="Detailed description of the dataset's purpose and contents",
         min_length=1,
@@ -33,7 +34,7 @@ class CreateDatasetArgs(BaseModel):
 
 
 class UpdateDatasetArgs(DatasetArgs):
-    name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, example="Customer Feedback 2024")
+    name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, json_schema_extra={"examples": ["Customer Feedback 2024"]})
     description: str = Field(
         description="Updated description for the dataset",
         min_length=1,

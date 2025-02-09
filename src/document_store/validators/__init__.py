@@ -1,7 +1,7 @@
 """Type validation system for document store."""
 
-from .base import TypeValidator
 from document_store.validators.factory import get_validator
+from document_store.validators.record import validate_query_fields, validate_record_data
 from document_store.validators.validators import (
     BooleanValidator,
     DateTimeValidator,
@@ -12,7 +12,8 @@ from document_store.validators.validators import (
     SelectValidator,
     StringValidator,
 )
-from document_store.validators.record import validate_record_data, validate_query_fields
+
+from .base import TypeValidator
 
 __all__ = [
     "TypeValidator",

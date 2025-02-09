@@ -47,33 +47,25 @@ def validate_record_data(data: Dict[str, Any], schema: DatasetSchema) -> Dict[st
                 # Set options for select/multi-select fields
                 if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
                     if not field.options:
-                        raise InvalidFieldValueError(
-                            f"Options not provided for {field.type} field '{field.field_name}'"
-                        )
+                        raise InvalidFieldValueError(f"Options not provided for {field.type} field '{field.field_name}'")
                     validator.set_options(field.options)
                 try:
                     validated_data[field.field_name] = validator.validate_default(field.default)
                 except ValueError as e:
-                    raise InvalidFieldValueError(
-                        f"Invalid default value for field '{field.field_name}': {str(e)}"
-                    )
+                    raise InvalidFieldValueError(f"Invalid default value for field '{field.field_name}': {str(e)}")
             continue
 
         # Set options for select/multi-select fields
         if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
             if not field.options:
-                raise InvalidFieldValueError(
-                    f"Options not provided for {field.type} field '{field.field_name}'"
-                )
+                raise InvalidFieldValueError(f"Options not provided for {field.type} field '{field.field_name}'")
             validator.set_options(field.options)
 
         # Validate and convert field value
         try:
             validated_data[field.field_name] = validator.validate(value)
         except ValueError as e:
-            raise InvalidFieldValueError(
-                f"Invalid value for field '{field.field_name}': {str(e)}"
-            )
+            raise InvalidFieldValueError(f"Invalid value for field '{field.field_name}': {str(e)}")
 
     return validated_data
 

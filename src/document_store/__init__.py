@@ -12,7 +12,7 @@ from document_store.exceptions import (
     RecordNotFoundError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import SchemaField, FieldType
+from document_store.types import FieldType, SchemaField
 
 __all__ = [
     # Main class

@@ -3,7 +3,7 @@
 import pytest
 
 from document_store.types import FieldType
-from document_store.validators.validators import SelectValidator, MultiSelectValidator
+from document_store.validators.validators import MultiSelectValidator, SelectValidator
 
 
 class TestSelectValidator:

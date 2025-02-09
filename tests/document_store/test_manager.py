@@ -19,7 +19,7 @@ from document_store.exceptions import (
     RecordNotFoundError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import DatasetSchema, SchemaField, FieldType
+from document_store.types import DatasetSchema, FieldType, SchemaField
 
 
 @pytest.fixture

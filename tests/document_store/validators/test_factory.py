@@ -67,6 +67,7 @@ def test_get_validator_multi_select():
 
 def test_get_validator_unknown():
     """Should raise ValueError for unknown field type."""
+
     # Create a field type that isn't registered
     class UnknownType:
         value = "unknown"
