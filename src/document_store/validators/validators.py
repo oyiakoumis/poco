@@ -1,5 +1,6 @@
 """Concrete validator implementations for different field types."""
 
+from datetime import date, datetime
 from typing import Any, Optional
 
 from document_store.types import FieldType
@@ -76,6 +77,72 @@ class StringValidator(TypeValidator):
 
     def validate_default(self, value: Any) -> Optional[str]:
         """Validate and convert default value to string."""
+        if value is None:
+            return None
+        return self.validate(value)
+
+
+class DateValidator(TypeValidator):
+    """Validator for date fields."""
+
+    field_type = FieldType.DATE
+
+    def validate(self, value: Any) -> date:
+        """Validate and convert to date.
+        
+        Accepts:
+        - date objects
+        - datetime objects (date part only)
+        - strings in YYYY-MM-DD format
+        """
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            if isinstance(value, datetime):  # Handle datetime subclass
+                return value.date()
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.strptime(value, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError(f"Invalid date format. Expected YYYY-MM-DD, got: {value}")
+        raise ValueError(f"Cannot convert {type(value)} to date")
+
+    def validate_default(self, value: Any) -> Optional[date]:
+        """Validate and convert default value to date."""
+        if value is None:
+            return None
+        return self.validate(value)
+
+
+class DateTimeValidator(TypeValidator):
+    """Validator for datetime fields."""
+
+    field_type = FieldType.DATETIME
+
+    def validate(self, value: Any) -> datetime:
+        """Validate and convert to datetime.
+        
+        Accepts:
+        - datetime objects
+        - strings in YYYY-MM-DD[T ]HH:MM:SS format
+        """
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S")
+            except ValueError:
+                try:
+                    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    raise ValueError(
+                        "Invalid datetime format. Expected YYYY-MM-DD[T ]HH:MM:SS"
+                    )
+        raise ValueError(f"Cannot convert {type(value)} to datetime")
+
+    def validate_default(self, value: Any) -> Optional[datetime]:
+        """Validate and convert default value to datetime."""
         if value is None:
             return None
         return self.validate(value)

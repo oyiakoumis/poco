@@ -6,6 +6,8 @@ from document_store.types import FieldType
 from document_store.validators.base import TypeValidator
 from document_store.validators.validators import (
     BooleanValidator,
+    DateTimeValidator,
+    DateValidator,
     FloatValidator,
     IntegerValidator,
     StringValidator,
@@ -20,6 +22,8 @@ class ValidatorFactory:
         FieldType.FLOAT.value: FloatValidator,
         FieldType.STRING.value: StringValidator,
         FieldType.BOOLEAN.value: BooleanValidator,
+        FieldType.DATE.value: DateValidator,
+        FieldType.DATETIME.value: DateTimeValidator,
     }
 
     @classmethod

@@ -1,10 +1,14 @@
 """Tests for validator implementations."""
 
+from datetime import date, datetime
+
 import pytest
 
 from document_store.types import FieldType
 from document_store.validators.validators import (
     BooleanValidator,
+    DateTimeValidator,
+    DateValidator,
     FloatValidator,
     IntegerValidator,
     StringValidator,
@@ -146,3 +150,110 @@ class TestStringValidator:
     def test_field_type(self):
         """Should return correct field type."""
         assert self.validator.get_field_type() == FieldType.STRING
+
+
+class TestDateValidator:
+    """Test cases for DateValidator."""
+
+    def setup_method(self):
+        """Set up test cases."""
+        self.validator = DateValidator()
+
+    def test_validate_date(self):
+        """Should validate and convert to date."""
+        # Test date object
+        test_date = date(2024, 2, 9)
+        assert self.validator.validate(test_date) == test_date
+
+        # Test datetime object
+        test_datetime = datetime(2024, 2, 9, 12, 34, 56)
+        assert self.validator.validate(test_datetime) == test_datetime.date()
+
+        # Test string in YYYY-MM-DD format
+        assert self.validator.validate("2024-02-09") == date(2024, 2, 9)
+
+    def test_validate_invalid_date(self):
+        """Should raise ValueError for invalid dates."""
+        # Test invalid format
+        with pytest.raises(ValueError) as exc:
+            self.validator.validate("09/02/2024")
+        assert "Invalid date format" in str(exc.value)
+
+        # Test invalid date string
+        with pytest.raises(ValueError):
+            self.validator.validate("2024-13-45")  # Invalid month and day
+
+        # Test invalid type
+        with pytest.raises(ValueError):
+            self.validator.validate(123)
+
+    def test_validate_default(self):
+        """Should validate default values."""
+        # Test None value
+        assert self.validator.validate_default(None) is None
+
+        # Test valid default
+        test_date = date(2024, 2, 9)
+        assert self.validator.validate_default(test_date) == test_date
+
+        # Test string default
+        assert self.validator.validate_default("2024-02-09") == date(2024, 2, 9)
+
+    def test_field_type(self):
+        """Should return correct field type."""
+        assert self.validator.get_field_type() == FieldType.DATE
+
+
+class TestDateTimeValidator:
+    """Test cases for DateTimeValidator."""
+
+    def setup_method(self):
+        """Set up test cases."""
+        self.validator = DateTimeValidator()
+
+    def test_validate_datetime(self):
+        """Should validate and convert to datetime."""
+        # Test datetime object
+        test_datetime = datetime(2024, 2, 9, 12, 34, 56)
+        assert self.validator.validate(test_datetime) == test_datetime
+
+        # Test ISO format string with T
+        assert self.validator.validate("2024-02-09T12:34:56") == datetime(2024, 2, 9, 12, 34, 56)
+
+        # Test space-separated format
+        assert self.validator.validate("2024-02-09 12:34:56") == datetime(2024, 2, 9, 12, 34, 56)
+
+    def test_validate_invalid_datetime(self):
+        """Should raise ValueError for invalid datetimes."""
+        # Test invalid format
+        with pytest.raises(ValueError) as exc:
+            self.validator.validate("09/02/2024 12:34:56")
+        assert "Invalid datetime format" in str(exc.value)
+
+        # Test invalid datetime string
+        with pytest.raises(ValueError):
+            self.validator.validate("2024-13-45T25:67:89")  # Invalid values
+
+        # Test invalid type
+        with pytest.raises(ValueError):
+            self.validator.validate(123)
+
+        # Test date without time
+        with pytest.raises(ValueError):
+            self.validator.validate("2024-02-09")
+
+    def test_validate_default(self):
+        """Should validate default values."""
+        # Test None value
+        assert self.validator.validate_default(None) is None
+
+        # Test valid default
+        test_datetime = datetime(2024, 2, 9, 12, 34, 56)
+        assert self.validator.validate_default(test_datetime) == test_datetime
+
+        # Test string default
+        assert self.validator.validate_default("2024-02-09T12:34:56") == datetime(2024, 2, 9, 12, 34, 56)
+
+    def test_field_type(self):
+        """Should return correct field type."""
+        assert self.validator.get_field_type() == FieldType.DATETIME

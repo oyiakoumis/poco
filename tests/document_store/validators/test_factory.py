@@ -7,6 +7,8 @@ from document_store.validators.base import TypeValidator
 from document_store.validators.factory import ValidatorFactory, get_validator
 from document_store.validators.validators import (
     BooleanValidator,
+    DateTimeValidator,
+    DateValidator,
     FloatValidator,
     IntegerValidator,
     StringValidator,
@@ -35,6 +37,18 @@ def test_get_validator_boolean():
     """Should return BooleanValidator for BOOLEAN type."""
     validator = get_validator(FieldType.BOOLEAN)
     assert isinstance(validator, BooleanValidator)
+
+
+def test_get_validator_date():
+    """Should return DateValidator for DATE type."""
+    validator = get_validator(FieldType.DATE)
+    assert isinstance(validator, DateValidator)
+
+
+def test_get_validator_datetime():
+    """Should return DateTimeValidator for DATETIME type."""
+    validator = get_validator(FieldType.DATETIME)
+    assert isinstance(validator, DateTimeValidator)
 
 
 def test_get_validator_unknown():

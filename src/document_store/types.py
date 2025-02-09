@@ -1,5 +1,6 @@
 """Type definitions for the document store module."""
 
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
@@ -52,6 +53,8 @@ class FieldType(str, Enum):
     FLOAT = "float"
     STRING = "str"
     BOOLEAN = "bool"
+    DATE = "date"
+    DATETIME = "datetime"
 
 
 class SchemaField(BaseModel):
@@ -66,15 +69,6 @@ class SchemaField(BaseModel):
     model_config = {"arbitrary_types_allowed": True, "populate_by_name": True, "from_attributes": True}
 
 
+# Type definitions for better readability
 DatasetSchema = List[SchemaField]
-
-
-# Type aliases for better code readability
-DatasetId = str
-RecordId = str
-UserId = str
 RecordData = Dict[str, Any]
-QueryFilter = Dict[str, Any]
-
-# Type for values that can be stored in a record
-FieldValue = Union[int, float, str]

@@ -4,6 +4,8 @@ from .base import TypeValidator
 from document_store.validators.factory import get_validator
 from document_store.validators.validators import (
     BooleanValidator,
+    DateTimeValidator,
+    DateValidator,
     FloatValidator,
     IntegerValidator,
     StringValidator,
@@ -14,6 +16,8 @@ __all__ = [
     "TypeValidator",
     "get_validator",
     "BooleanValidator",
+    "DateTimeValidator",
+    "DateValidator",
     "FloatValidator",
     "IntegerValidator",
     "StringValidator",
