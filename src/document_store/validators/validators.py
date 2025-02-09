@@ -6,6 +6,29 @@ from document_store.types import FieldType
 from document_store.validators.base import TypeValidator
 
 
+class BooleanValidator(TypeValidator):
+    """Validator for boolean fields."""
+
+    field_type = FieldType.BOOLEAN
+
+    def validate(self, value: Any) -> bool:
+        """Validate and convert to boolean."""
+        if isinstance(value, str):
+            value = value.lower()
+            if value in ('true', '1', 'yes'):
+                return True
+            if value in ('false', '0', 'no'):
+                return False
+            raise ValueError(f"Cannot convert string '{value}' to boolean")
+        return bool(value)
+
+    def validate_default(self, value: Any) -> Optional[bool]:
+        """Validate and convert default value to boolean."""
+        if value is None:
+            return None
+        return self.validate(value)
+
+
 class IntegerValidator(TypeValidator):
     """Validator for integer fields."""
 

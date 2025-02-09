@@ -4,7 +4,12 @@ from typing import Dict, Type
 
 from document_store.types import FieldType
 from document_store.validators.base import TypeValidator
-from document_store.validators.validators import FloatValidator, IntegerValidator, StringValidator
+from document_store.validators.validators import (
+    BooleanValidator,
+    FloatValidator,
+    IntegerValidator,
+    StringValidator,
+)
 
 
 class ValidatorFactory:
@@ -14,6 +19,7 @@ class ValidatorFactory:
         FieldType.INTEGER.value: IntegerValidator,
         FieldType.FLOAT.value: FloatValidator,
         FieldType.STRING.value: StringValidator,
+        FieldType.BOOLEAN.value: BooleanValidator,
     }
 
     @classmethod

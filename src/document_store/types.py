@@ -51,6 +51,7 @@ class FieldType(str, Enum):
     INTEGER = "int"
     FLOAT = "float"
     STRING = "str"
+    BOOLEAN = "bool"
 
 
 class SchemaField(BaseModel):

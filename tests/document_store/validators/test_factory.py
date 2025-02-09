@@ -6,6 +6,7 @@ from document_store.types import FieldType
 from document_store.validators.base import TypeValidator
 from document_store.validators.factory import ValidatorFactory, get_validator
 from document_store.validators.validators import (
+    BooleanValidator,
     FloatValidator,
     IntegerValidator,
     StringValidator,
@@ -28,6 +29,12 @@ def test_get_validator_string():
     """Should return StringValidator for STRING type."""
     validator = get_validator(FieldType.STRING)
     assert isinstance(validator, StringValidator)
+
+
+def test_get_validator_boolean():
+    """Should return BooleanValidator for BOOLEAN type."""
+    validator = get_validator(FieldType.BOOLEAN)
+    assert isinstance(validator, BooleanValidator)
 
 
 def test_get_validator_unknown():

@@ -6,7 +6,7 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
-from document_store.types import DatasetSchema, SchemaField as FieldType
+from document_store.types import DatasetSchema
 from document_store.types import PydanticObjectId, RecordData
 
 
@@ -49,7 +49,6 @@ class UpdateDatasetArgs(DatasetArgs):
         ],
     )
 
-
 class CreateRecordArgs(DatasetArgs):
     data: RecordData = Field(
         description="Record data that matches the dataset's defined schema",
@@ -77,7 +76,7 @@ class BaseDBOperator(BaseTool):
     def __init__(self, db: DatasetManager):
         super().__init__(db=db)
 
-    def _run(self,config: RunnableConfig, **kwargs):
+    def _run(self, config: RunnableConfig, **kwargs):
         return asyncio.run(self._arun(config, **kwargs))
 
 
