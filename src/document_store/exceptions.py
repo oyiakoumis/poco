@@ -77,3 +77,15 @@ class InvalidFieldValueError(ValidationError):
     """Raised when a field value does not match its defined type."""
 
     pass
+
+
+class InvalidSchemaUpdateError(ValidationError):
+    """Raised when a schema update is invalid."""
+
+    pass
+
+
+class TypeConversionError(ValidationError):
+    """Raised when type conversion fails."""
+
+    pass

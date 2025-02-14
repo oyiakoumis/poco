@@ -79,6 +79,18 @@ class SchemaField(BaseModel):
     model_config = {"arbitrary_types_allowed": True, "populate_by_name": True, "from_attributes": True}
 
 
+# Safe type conversion mappings
+SAFE_TYPE_CONVERSIONS = {
+    FieldType.INTEGER: {FieldType.FLOAT, FieldType.STRING},
+    FieldType.FLOAT: {FieldType.STRING},
+    FieldType.BOOLEAN: {FieldType.STRING},
+    FieldType.DATE: {FieldType.STRING, FieldType.DATETIME},
+    FieldType.DATETIME: {FieldType.STRING},
+    # SELECT and MULTI_SELECT only allow same type conversions
+    FieldType.SELECT: {FieldType.SELECT},
+    FieldType.MULTI_SELECT: {FieldType.MULTI_SELECT},
+}
+
 # Type definitions for better readability
 DatasetSchema = List[SchemaField]
 RecordData = Dict[str, Any]

@@ -9,10 +9,12 @@ from document_store.exceptions import (
     InvalidFieldTypeError,
     InvalidFieldValueError,
     InvalidRecordDataError,
+    InvalidSchemaUpdateError,
     RecordNotFoundError,
+    TypeConversionError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import FieldType, SchemaField
+from document_store.types import DatasetSchema, FieldType, SchemaField, SAFE_TYPE_CONVERSIONS
 
 __all__ = [
     # Main class
@@ -22,7 +24,9 @@ __all__ = [
     "Record",
     "SchemaField",
     # Types
+    "DatasetSchema",
     "FieldType",
+    "SAFE_TYPE_CONVERSIONS",
     # Exceptions
     "DocumentStoreError",
     "DatasetNameExistsError",
@@ -31,5 +35,7 @@ __all__ = [
     "InvalidFieldTypeError",
     "InvalidFieldValueError",
     "InvalidRecordDataError",
+    "InvalidSchemaUpdateError",
     "RecordNotFoundError",
+    "TypeConversionError",
 ]
