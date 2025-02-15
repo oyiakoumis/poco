@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
 from document_store.types import DatasetSchema, PydanticObjectId, RecordData
+from document_store.validators.schema import validate_schema_update
 
 
 class DatasetArgs(BaseModel):
@@ -30,6 +31,16 @@ class CreateDatasetArgs(BaseModel):
     dataset_schema: DatasetSchema = Field(
         description="List of field definitions that describe the schema of the dataset",
         example=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
+    )
+
+
+class UpdateSchemaArgs(DatasetArgs):
+    new_schema: DatasetSchema = Field(
+        description="New schema to apply t  o the dataset",
+        example=[
+            {"field_name": "feedback_text", "type": "string"},
+            {"field_name": "rating", "type": "integer"}
+        ]
     )
 
 
@@ -108,6 +119,17 @@ class UpdateDatasetOperator(BaseDBOperator):
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateDatasetArgs(**kwargs)
         await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description)
+
+
+class UpdateSchemaOperator(BaseDBOperator):
+    name: str = "update_schema"
+    description: str = "Update a dataset's schema and convert existing records to match the new schema"
+    args_schema: ClassVar[BaseModel] = UpdateSchemaArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> None:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = UpdateSchemaArgs(**kwargs)
+        await self.db.update_schema(user_id, args.dataset_id, args.new_schema)
 
 
 class DeleteDatasetOperator(BaseDBOperator):

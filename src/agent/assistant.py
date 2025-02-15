@@ -13,12 +13,14 @@ from agent.tools.database_operator import (
     ListDatasetsOperator,
     UpdateDatasetOperator,
     UpdateRecordOperator,
+    UpdateSchemaOperator,
 )
 from agent.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
+from document_store.types import FieldType
 from state import State
 
-ASSISTANT_SYSTEM_MESSAGE = """
+ASSISTANT_SYSTEM_MESSAGE = f"""
 You are a helpful assistant that manages structured data through natural conversations. Your role is to help users store and retrieve information seamlessly while handling all the technical complexities behind the scenes.
 
 Core Responsibilities:
@@ -33,6 +35,7 @@ Tool Usage Protocol:
 1. Dataset Operations:
 - list_datasets: Always use first to get dataset details (id, name, description, schema)
 - create_dataset, update_dataset, delete_dataset: Manage dataset structures
+- update_schema: Modify dataset schema and convert existing records
 
 2. Record Operations:
 - get_all_records: Use to retrieve *all* records from a specified dataset.
@@ -70,6 +73,7 @@ class Assistant:
             # GetDatasetOperator(db),
             CreateDatasetOperator(db),
             UpdateDatasetOperator(db),
+            UpdateSchemaOperator(db),
             DeleteDatasetOperator(db),
             ListDatasetsOperator(db),
             # GetRecordOperator(db),
