@@ -3,9 +3,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from agent.tools.database_operator import (
+    AddFieldOperator,
     CreateDatasetOperator,
     CreateRecordOperator,
     DeleteDatasetOperator,
+    DeleteFieldOperator,
     DeleteRecordOperator,
     FindRecordsOperator,
     GetDatasetOperator,
@@ -29,6 +31,24 @@ Core Responsibilities:
 3. Handle record identification by querying and matching user references (if applicable)
 4. Process temporal expressions into proper datetime formats
 5. Guide users proactively through data operations
+6. Choose the most appropriate field type when creating or updating schemas
+
+Field Type Selection Guidelines:
+When creating or updating fields, proactively choose the most appropriate type:
+- INTEGER: For whole numbers (e.g., age, quantity, count)
+- FLOAT: For decimal numbers (e.g., price, weight, measurements)
+- STRING: Only for truly free-form text that doesn't fit other types
+- BOOLEAN: For true/false conditions (e.g., is_active, is_completed)
+- DATE: For calendar dates without time (e.g., birth_date, start_date)
+- DATETIME: For timestamps with time component (e.g., created_at, last_login)
+- SELECT: For single-choice categorical data with fixed options (e.g., status=['pending', 'completed', 'cancelled'])
+- MULTI_SELECT: For multiple-choice categorical data (e.g., tags=['urgent', 'important', 'follow-up'])
+
+Remember to:
+- Always include 'options' when using SELECT or MULTI_SELECT types
+- Consider data validation needs when choosing types
+- Use specific types (SELECT, MULTI_SELECT, BOOLEAN, DATE) instead of STRING when possible
+- Follow the schema field structure with proper descriptions and required flags
 
 Tool Usage Protocol:
 
@@ -36,6 +56,8 @@ Tool Usage Protocol:
 - list_datasets: Always use first to get dataset details (id, name, description, schema)
 - create_dataset, update_dataset, delete_dataset: Manage dataset structures
 - update_field: Update a field in the dataset schema and convert existing records if needed
+- add_field: Add a new field to the dataset schema
+- delete_field: Remove a field from the dataset schema
 
 2. Record Operations:
 - get_all_records: Use to retrieve *all* records from a specified dataset.
@@ -81,6 +103,8 @@ class Assistant:
             DeleteRecordOperator(db),
             FindRecordsOperator(db),
             UpdateFieldOperator(db),
+            DeleteFieldOperator(db),
+            AddFieldOperator(db),
         ]
 
     async def __call__(self, state: State):

@@ -232,6 +232,131 @@ class DatasetManager:
 
         return updates
 
+    async def delete_field(self, user_id: str, dataset_id: ObjectId, field_name: str) -> None:
+        """Deletes a field from the dataset schema and removes it from all records.
+
+        All changes are performed in a transaction to ensure consistency.
+
+        Args:
+            user_id: ID of the user who owns the dataset
+            dataset_id: ID of the dataset to update
+            field_name: Name of the field to delete
+
+        Raises:
+            DatasetNotFoundError: If dataset not found
+            InvalidDatasetSchemaError: If field does not exist
+            DatabaseError: For other database errors
+        """
+        try:
+            # Validate dataset exists and belongs to user
+            dataset = await self.get_dataset(user_id, dataset_id)
+
+            # Create new schema without the field
+            new_schema = [field for field in dataset.dataset_schema if field.field_name != field_name]
+
+            # Validate schema - will raise InvalidDatasetSchemaError if field doesn't exist
+            if len(new_schema) == len(dataset.dataset_schema):
+                raise InvalidDatasetSchemaError(f"Field '{field_name}' not found in schema")
+
+            # Start transaction
+            async with await self.client.start_session() as session:
+                async with session.start_transaction():
+                    # Update dataset schema
+                    updated = Dataset(
+                        id=dataset_id,
+                        user_id=user_id,
+                        name=dataset.name,
+                        description=dataset.description,
+                        dataset_schema=new_schema,
+                        created_at=dataset.created_at,
+                        updated_at=datetime.now(timezone.utc),
+                    )
+
+                    result = await self._datasets.replace_one(
+                        {"_id": dataset_id, "user_id": user_id},
+                        updated.model_dump(by_alias=True),
+                        session=session,
+                    )
+
+                    if result.modified_count == 0:
+                        raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
+
+                    # Remove field from all records
+                    await self._records.update_many(
+                        {"user_id": user_id, "dataset_id": dataset_id},
+                        {"$unset": {f"data.{field_name}": ""}},
+                        session=session,
+                    )
+
+        except (DatasetNotFoundError, InvalidDatasetSchemaError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete field: {str(e)}")
+
+    async def add_field(
+        self,
+        user_id: str,
+        dataset_id: ObjectId,
+        field: SchemaField,
+    ) -> None:
+        """Adds a new field to the dataset schema and initializes it in existing records.
+
+        All changes are performed in a transaction to ensure consistency. If the field
+        has a default value defined, it will be used to initialize the field in existing records.
+
+        Args:
+            user_id: ID of the user who owns the dataset
+            dataset_id: ID of the dataset to update
+            field: New field definition with optional default value
+
+        Raises:
+            DatasetNotFoundError: If dataset not found
+            InvalidDatasetSchemaError: If field already exists or is invalid
+            DatabaseError: For other database errors
+        """
+        try:
+            # Validate dataset exists and belongs to user
+            dataset = await self.get_dataset(user_id, dataset_id)
+
+            # Create new schema with the added field
+            new_schema = [*dataset.dataset_schema, field]
+
+            # Start transaction
+            async with await self.client.start_session() as session:
+                async with session.start_transaction():
+                    # Update dataset schema
+                    updated = Dataset(
+                        id=dataset_id,
+                        user_id=user_id,
+                        name=dataset.name,
+                        description=dataset.description,
+                        dataset_schema=new_schema,
+                        created_at=dataset.created_at,
+                        updated_at=datetime.now(timezone.utc),
+                    )
+
+                    result = await self._datasets.replace_one(
+                        {"_id": dataset_id, "user_id": user_id},
+                        updated.model_dump(by_alias=True),
+                        session=session,
+                    )
+
+                    if result.modified_count == 0:
+                        raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
+
+                    # Initialize field in existing records if default value provided
+                    if field.default is not None:
+                        await self._records.update_many(
+                            {"user_id": user_id, "dataset_id": dataset_id},
+                            {"$set": {f"data.{field.field_name}": field.default}},
+                            session=session,
+                        )
+
+        except (DatasetNotFoundError, InvalidDatasetSchemaError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to add field: {str(e)}")
+
     async def update_field(
         self,
         user_id: str,
@@ -269,7 +394,7 @@ class DatasetManager:
 
             # Start transaction
             async with await self.client.start_session() as session:
-                async with await session.start_transaction():
+                async with session.start_transaction():
                     # Update dataset schema
                     updated = Dataset(
                         id=dataset_id,

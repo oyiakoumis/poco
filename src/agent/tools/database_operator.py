@@ -68,6 +68,14 @@ class UpdateFieldArgs(DatasetArgs):
     field_update: SchemaField = Field(description="New field definition with updated properties")
 
 
+class DeleteFieldArgs(DatasetArgs):
+    field_name: str = Field(description="Name of the field to delete", min_length=1, max_length=100)
+
+
+class AddFieldArgs(DatasetArgs):
+    field: SchemaField = Field(description="New field definition to add to the dataset schema")
+
+
 # Base Table Operator
 class BaseDBOperator(BaseTool):
     db: DatasetManager
@@ -218,3 +226,25 @@ class UpdateFieldOperator(BaseDBOperator):
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateFieldArgs(**kwargs)
         await self.db.update_field(user_id, args.dataset_id, args.field_name, args.field_update)
+
+
+class DeleteFieldOperator(BaseDBOperator):
+    name: str = "delete_field"
+    description: str = "Delete a field from the dataset schema"
+    args_schema: ClassVar[BaseModel] = DeleteFieldArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> None:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = DeleteFieldArgs(**kwargs)
+        await self.db.delete_field(user_id, args.dataset_id, args.field_name)
+
+
+class AddFieldOperator(BaseDBOperator):
+    name: str = "add_field"
+    description: str = "Add a new field to the dataset schema"
+    args_schema: ClassVar[BaseModel] = AddFieldArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> None:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = AddFieldArgs(**kwargs)
+        await self.db.add_field(user_id, args.dataset_id, args.field)

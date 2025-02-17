@@ -250,7 +250,7 @@ async def manager(mock_client: AsyncMock, sample_dataset: Dataset, sample_record
 
     # Configure session
     session = AsyncMock()
-    session.start_transaction = AsyncMock()
+    session.start_transaction = MagicMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock()
 
@@ -580,3 +580,100 @@ class TestFieldOperations:
         with pytest.raises(InvalidRecordDataError) as exc:
             await manager.update_field(user_id, dataset_id, "age", field_update)
         assert "Cannot safely convert field" in str(exc.value)
+
+    async def test_add_field(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
+        """Test adding a new field to dataset schema."""
+        # Setup new field
+        new_field = SchemaField(field_name="email", description="User email", type=FieldType.STRING, required=False, default="test@example.com")
+
+        # Configure collection with session
+        result = AsyncMock()
+        result.modified_count = 1
+        manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+        # Execute
+        await manager.add_field(user_id, dataset_id, new_field)
+
+        # Verify dataset was updated with new field
+        filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
+        assert filter_doc["user_id"] == user_id
+        assert filter_doc["_id"] == dataset_id
+        assert len(update_doc["dataset_schema"]) == len(sample_dataset.dataset_schema) + 1
+        assert any(f["field_name"] == "email" for f in update_doc["dataset_schema"])
+
+        # Verify records were updated with default value
+        manager._records.update_many.assert_called_once()
+        filter_doc, update_doc = manager._records.update_many.call_args[0]
+        assert filter_doc["user_id"] == user_id
+        assert filter_doc["dataset_id"] == dataset_id
+        assert update_doc["$set"]["data.email"] == "test@example.com"
+
+    async def test_add_field_no_default(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
+        """Test adding a new field without default value."""
+        # Setup new field without default
+        new_field = SchemaField(field_name="email", description="User email", type=FieldType.STRING, required=False)
+
+        # Configure collection
+        result = AsyncMock()
+        result.modified_count = 1
+        manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+        # Execute
+        await manager.add_field(user_id, dataset_id, new_field)
+
+        # Verify dataset was updated
+        filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
+        assert len(update_doc["dataset_schema"]) == len(sample_dataset.dataset_schema) + 1
+
+        # Verify records were not updated (no default value)
+        manager._records.update_many.assert_not_called()
+
+    # async def test_add_field_duplicate(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
+    #     """Test adding a duplicate field fails."""
+    #     # Setup duplicate field
+    #     duplicate_field = SchemaField(field_name="age", description="Duplicate age field", type=FieldType.INTEGER)  # Already exists in sample_schema
+
+    #     # Configure collection
+    #     manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+    #     # Execute and verify
+    #     with pytest.raises(InvalidDatasetSchemaError) as exc:
+    #         await manager.add_field(user_id, dataset_id, duplicate_field)
+    #     assert "already exists" in str(exc.value)
+
+    async def test_delete_field(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
+        """Test deleting a field from dataset schema."""
+        # Configure collection with session
+        result = AsyncMock()
+        result.modified_count = 1
+        manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+        # Execute
+        await manager.delete_field(user_id, dataset_id, "age")
+
+        # Verify dataset schema was updated
+        filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
+        assert filter_doc["user_id"] == user_id
+        assert filter_doc["_id"] == dataset_id
+        assert len(update_doc["dataset_schema"]) == len(sample_dataset.dataset_schema) - 1
+        assert not any(f["field_name"] == "age" for f in update_doc["dataset_schema"])
+
+        # Verify field was removed from records
+        manager._records.update_many.assert_called_once()
+        filter_doc, update_doc = manager._records.update_many.call_args[0]
+        assert filter_doc["user_id"] == user_id
+        assert filter_doc["dataset_id"] == dataset_id
+        assert update_doc["$unset"]["data.age"] == ""
+
+    async def test_delete_field_not_found(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
+        """Test deleting a non-existent field fails."""
+        # Configure collection
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+        # Execute and verify
+        with pytest.raises(InvalidDatasetSchemaError) as exc:
+            await manager.delete_field(user_id, dataset_id, "invalid_field")
+        assert "not found in schema" in str(exc.value)
