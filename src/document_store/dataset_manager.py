@@ -87,10 +87,7 @@ class DatasetManager:
             raise DatabaseError(f"Failed to create dataset: {str(e)}")
 
     async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str) -> None:
-        """Updates dataset metadata (name and description).
-
-        For schema updates, use update_schema() instead.
-        """
+        """Updates dataset metadata (name and description)."""
         try:
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
@@ -121,109 +118,6 @@ class DatasetManager:
             if "duplicate key error" in str(e).lower():
                 raise DatasetNameExistsError(f"Dataset with name '{name}' already exists for user {user_id}")
             raise DatabaseError(f"Failed to update dataset: {str(e)}")
-
-    def _prepare_record_update(self, record_data: Dict, current_fields: Dict[str, SchemaField], new_fields: Dict[str, SchemaField]) -> Dict:
-        """Prepare updated record data with type conversions.
-
-        Args:
-            record_data: Current record data
-            current_fields: Mapping of current field names to SchemaField
-            new_fields: Mapping of new field names to SchemaField
-
-        Returns:
-            Updated record data with converted values
-
-        Raises:
-            TypeConversionError: If type conversion fails
-        """
-        updated_data = {}
-
-        # Handle existing and modified fields
-        for field_name, value in record_data.items():
-            if field_name in new_fields:
-                new_field = new_fields[field_name]
-                current_field = current_fields[field_name]
-
-                if new_field.type != current_field.type:
-                    # Type conversion needed
-                    try:
-                        validator = get_validator(new_field.type)
-                        if new_field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
-                            validator.set_options(new_field.options)
-                        updated_data[field_name] = validator.validate(value)
-                    except ValueError as e:
-                        raise TypeConversionError(f"Failed to convert field '{field_name}' value: {str(e)}")
-                else:
-                    # No conversion needed
-                    updated_data[field_name] = value
-
-        # Handle new fields
-        for field_name, field in new_fields.items():
-            if field_name not in record_data:
-                updated_data[field_name] = field.default
-
-        return updated_data
-
-    async def update_schema(self, user_id: str, dataset_id: ObjectId, new_schema: DatasetSchema) -> None:
-        """Update dataset schema and convert existing records.
-
-        Args:
-            user_id: User ID
-            dataset_id: Dataset ID
-            new_schema: New schema to apply
-
-        Raises:
-            DatasetNotFoundError: If dataset not found
-            InvalidSchemaUpdateError: If schema update is invalid
-            TypeConversionError: If type conversion fails
-            DatabaseError: If database operation fails
-        """
-        try:
-            # Get current dataset and validate existence
-            dataset = await self.get_dataset(user_id, dataset_id)
-
-            # Validate schema update
-            validate_schema_update(dataset.dataset_schema, new_schema)
-
-            # Create field mappings for efficient lookup
-            current_fields = {field.field_name: field for field in dataset.dataset_schema}
-            new_fields = {field.field_name: field for field in new_schema}
-
-            # Start transaction
-            async with await self.client.start_session() as session:
-                async with session.start_transaction():
-                    # Get all records that need updating
-                    pipeline = [{"$match": {"user_id": user_id, "dataset_id": dataset_id}}, {"$project": {"_id": 1, "data": 1}}]
-
-                    # Prepare bulk write operations
-                    bulk_operations = []
-                    async for record in self._records.aggregate(pipeline, session=session):
-                        try:
-                            updated_data = self._prepare_record_update(record["data"], current_fields, new_fields)
-
-                            bulk_operations.append(
-                                pymongo.UpdateOne({"_id": record["_id"], "user_id": user_id, "dataset_id": dataset_id}, {"$set": {"data": updated_data}})
-                            )
-
-                        except TypeConversionError as e:
-                            # Rollback will happen automatically on exception
-                            raise TypeConversionError(f"Failed to convert record {record['_id']}: {str(e)}")
-
-                    # Execute bulk update if there are operations
-                    if bulk_operations:
-                        await self._records.bulk_write(bulk_operations, ordered=False, session=session)  # Allow parallel processing
-
-                    # Update dataset schema
-                    await self._datasets.update_one(
-                        {"_id": dataset_id, "user_id": user_id},
-                        {"$set": {"dataset_schema": [field.model_dump() for field in new_schema], "updated_at": datetime.now(timezone.utc)}},
-                        session=session,
-                    )
-
-        except (DatasetNotFoundError, InvalidSchemaUpdateError, TypeConversionError):
-            raise
-        except Exception as e:
-            raise DatabaseError(f"Failed to update schema: {str(e)}")
 
     async def delete_dataset(self, user_id: str, dataset_id: ObjectId) -> None:
         """Deletes a dataset and all its records."""

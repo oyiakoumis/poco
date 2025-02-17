@@ -33,17 +33,6 @@ class CreateDatasetArgs(BaseModel):
         example=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
     )
 
-
-class UpdateSchemaArgs(DatasetArgs):
-    new_schema: DatasetSchema = Field(
-        description="New schema to apply t  o the dataset",
-        example=[
-            {"field_name": "feedback_text", "type": "string"},
-            {"field_name": "rating", "type": "integer"}
-        ]
-    )
-
-
 class UpdateDatasetArgs(DatasetArgs):
     name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, json_schema_extra={"examples": ["Customer Feedback 2024"]})
     description: str = Field(
@@ -120,16 +109,6 @@ class UpdateDatasetOperator(BaseDBOperator):
         args = UpdateDatasetArgs(**kwargs)
         await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description)
 
-
-class UpdateSchemaOperator(BaseDBOperator):
-    name: str = "update_schema"
-    description: str = "Update a dataset's schema and convert existing records to match the new schema"
-    args_schema: ClassVar[BaseModel] = UpdateSchemaArgs
-
-    async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = UpdateSchemaArgs(**kwargs)
-        await self.db.update_schema(user_id, args.dataset_id, args.new_schema)
 
 
 class DeleteDatasetOperator(BaseDBOperator):

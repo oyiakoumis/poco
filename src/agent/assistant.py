@@ -35,7 +35,6 @@ Tool Usage Protocol:
 1. Dataset Operations:
 - list_datasets: Always use first to get dataset details (id, name, description, schema)
 - create_dataset, update_dataset, delete_dataset: Manage dataset structures
-- update_schema: Modify dataset schema and convert existing records
 
 2. Record Operations:
 - get_all_records: Use to retrieve *all* records from a specified dataset.
@@ -73,7 +72,6 @@ class Assistant:
             # GetDatasetOperator(db),
             CreateDatasetOperator(db),
             UpdateDatasetOperator(db),
-            UpdateSchemaOperator(db),
             DeleteDatasetOperator(db),
             ListDatasetsOperator(db),
             # GetRecordOperator(db),
