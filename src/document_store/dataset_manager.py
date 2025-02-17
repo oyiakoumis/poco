@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import pymongo
+from pymongo.errors import BulkWriteError
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 
@@ -11,13 +12,15 @@ from document_store.exceptions import (
     DatabaseError,
     DatasetNameExistsError,
     DatasetNotFoundError,
+    InvalidDatasetSchemaError,
     InvalidRecordDataError,
     RecordNotFoundError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import DatasetSchema, RecordData
+from document_store.types import DatasetSchema, FieldType, RecordData, SchemaField, SAFE_TYPE_CONVERSIONS
 from document_store.validators import validate_query_fields, validate_record_data
 from document_store.validators.factory import get_validator
+from document_store.validators.schema import validate_schema, validate_field_update
 
 
 class DatasetManager:
@@ -167,6 +170,143 @@ class DatasetManager:
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to get dataset: {str(e)}")
+
+    async def _prepare_record_updates(
+        self, user_id: str, dataset_id: ObjectId, field_name: str, old_field: SchemaField, field_update: SchemaField, session
+    ) -> List[pymongo.UpdateOne]:
+        """Prepares bulk update operations for records.
+
+        Args:
+            user_id: User ID
+            dataset_id: Dataset ID
+            field_name: Field being updated
+            old_field: Original field definition
+            field_update: New field definition
+            session: MongoDB session for transaction
+
+        Returns:
+            List of UpdateOne operations
+
+        Raises:
+            InvalidRecordDataError: If conversion fails
+        """
+        if old_field.type == field_update.type:
+            return []
+
+        # Get validator for new type
+        validator = get_validator(field_update.type)
+        if field_update.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
+            validator.set_options(field_update.options)
+
+        # Get records with this field using session
+        mongo_query = {"user_id": user_id, "dataset_id": dataset_id, f"data.{field_name}": {"$exists": True}}  # Only get records that have this field
+
+        records = []
+        cursor = self._records.find(mongo_query, session=session)
+        async for doc in cursor:
+            records.append(Record.model_validate(doc))
+
+        updates = []
+        for record in records:
+            try:
+                # Convert and validate value
+                converted_value = validator.validate(record.data[field_name])
+
+                # Create update operation
+                updates.append(
+                    pymongo.UpdateOne(
+                        {
+                            "_id": record.id,
+                            "user_id": user_id,
+                            "dataset_id": dataset_id,
+                        },
+                        {
+                            "$set": {
+                                f"data.{field_name}": converted_value,
+                                "updated_at": datetime.now(timezone.utc),
+                            }
+                        },
+                    )
+                )
+            except ValueError as e:
+                raise InvalidRecordDataError(f"Failed to convert field '{field_name}' in record {record.id}: {str(e)}")
+
+        return updates
+
+    async def update_field(
+        self,
+        user_id: str,
+        dataset_id: ObjectId,
+        field_name: str,
+        field_update: SchemaField,
+    ) -> None:
+        """Updates a single field in the dataset schema and converts existing records.
+
+        All changes are performed in a transaction to ensure consistency. If the field
+        type changes, existing record values will be converted if the conversion is safe.
+        Only updates records if the field type has changed.
+
+        Args:
+            user_id: ID of the user who owns the dataset
+            dataset_id: ID of the dataset to update
+            field_name: Name of the field to update
+            field_update: New field definition
+
+        Raises:
+            DatasetNotFoundError: If dataset not found
+            InvalidDatasetSchemaError: If field update is invalid
+            InvalidRecordDataError: If records cannot be converted to new field type
+            DatabaseError: For other database errors
+        """
+        try:
+            # Validate dataset exists and belongs to user
+            dataset = await self.get_dataset(user_id, dataset_id)
+
+            # Validate field update
+            old_field, new_schema = validate_field_update(dataset, field_name, field_update)
+            if not old_field:
+                # No changes needed
+                return
+
+            # Start transaction
+            async with await self.client.start_session() as session:
+                async with session.start_transaction():
+                    # Update dataset schema
+                    updated = Dataset(
+                        id=dataset_id,
+                        user_id=user_id,
+                        name=dataset.name,
+                        description=dataset.description,
+                        dataset_schema=new_schema,
+                        created_at=dataset.created_at,
+                        updated_at=datetime.now(timezone.utc),
+                    )
+
+                    result = await self._datasets.replace_one(
+                        {"_id": dataset_id, "user_id": user_id},
+                        updated.model_dump(by_alias=True),
+                        session=session,
+                    )
+
+                    if result.modified_count == 0:
+                        raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
+
+                    # Prepare record updates if needed
+                    updates = await self._prepare_record_updates(user_id, dataset_id, field_name, old_field, field_update, session)
+
+                    # Execute bulk updates if any
+                    if updates:
+                        try:
+                            result = await self._records.bulk_write(updates, session=session)
+                            if result.modified_count != len(updates):
+                                raise DatabaseError(f"Failed to update all records: {result.modified_count}/{len(updates)} updated")
+                        except BulkWriteError as e:
+                            raise DatabaseError(f"Failed to update records: {str(e)}")
+
+        except (DatasetNotFoundError, InvalidDatasetSchemaError, InvalidRecordDataError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to update field: {str(e)}")
 
     async def create_record(self, user_id: str, dataset_id: ObjectId, data: RecordData) -> ObjectId:
         """Creates a new record in the specified dataset."""
