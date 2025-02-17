@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
 from document_store.types import DatasetSchema, PydanticObjectId, RecordData
-from document_store.validators.schema import validate_schema_update
 
 
 class DatasetArgs(BaseModel):
@@ -32,6 +31,7 @@ class CreateDatasetArgs(BaseModel):
         description="List of field definitions that describe the schema of the dataset",
         example=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
     )
+
 
 class UpdateDatasetArgs(DatasetArgs):
     name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, json_schema_extra={"examples": ["Customer Feedback 2024"]})
@@ -108,7 +108,6 @@ class UpdateDatasetOperator(BaseDBOperator):
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateDatasetArgs(**kwargs)
         await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description)
-
 
 
 class DeleteDatasetOperator(BaseDBOperator):

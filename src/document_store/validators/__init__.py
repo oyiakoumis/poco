@@ -2,7 +2,7 @@
 
 from document_store.validators.factory import get_validator
 from document_store.validators.record import validate_query_fields, validate_record_data
-from document_store.validators.schema import validate_schema, validate_schema_update
+from document_store.validators.schema import validate_schema
 from document_store.validators.validators import (
     BooleanValidator,
     DateTimeValidator,
@@ -30,5 +30,4 @@ __all__ = [
     "validate_record_data",
     "validate_query_fields",
     "validate_schema",
-    "validate_schema_update",
 ]

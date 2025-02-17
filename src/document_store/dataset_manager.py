@@ -12,14 +12,11 @@ from document_store.exceptions import (
     DatasetNameExistsError,
     DatasetNotFoundError,
     InvalidRecordDataError,
-    InvalidSchemaUpdateError,
     RecordNotFoundError,
-    TypeConversionError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import DatasetSchema, FieldType, RecordData, SchemaField
+from document_store.types import DatasetSchema, RecordData
 from document_store.validators import validate_query_fields, validate_record_data
-from document_store.validators.schema import validate_schema_update
 from document_store.validators.factory import get_validator
 
 
