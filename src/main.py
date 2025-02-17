@@ -28,7 +28,7 @@ async def main():
         config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123"}, recursion_limit=10)
 
         for message in [
-            HumanMessage(content="Add 'category' column to my grocery list"),
+            HumanMessage(content="Change default quantity in my grocery list to 2"),
         ]:
             print_message(message, "Human")
             # Process and print each event

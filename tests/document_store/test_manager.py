@@ -15,6 +15,7 @@ from document_store.exceptions import (
     DatabaseError,
     DatasetNameExistsError,
     DatasetNotFoundError,
+    InvalidDatasetSchemaError,
     InvalidRecordDataError,
     RecordNotFoundError,
 )
@@ -247,6 +248,18 @@ async def manager(mock_client: AsyncMock, sample_dataset: Dataset, sample_record
         DatasetManager.COLLECTION_RECORDS: records_collection,
     }[name]
 
+    # Configure session
+    session = AsyncMock()
+    session.start_transaction = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock()
+
+    session_context = AsyncMock()
+    session_context.__aenter__ = AsyncMock(return_value=session)
+    session_context.__aexit__ = AsyncMock()
+
+    mock_client.start_session = AsyncMock(return_value=session_context)
+
     return await DatasetManager.setup(mock_client)
 
 
@@ -452,3 +465,118 @@ class TestRecordOperations:
         assert isinstance(results[0], Record)
         assert results[0].user_id == user_id
         assert str(results[0].dataset_id) == dataset_id
+
+
+@pytest.mark.asyncio
+class TestFieldOperations:
+    """Tests for field operations."""
+
+    async def test_update_field_same_type(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
+        """Test updating a field with same type."""
+        # Setup field update
+        field_update = SchemaField(
+            field_name="age",
+            description="Updated age description",
+            type=FieldType.INTEGER,
+            required=True,
+        )
+
+        # Configure collection with session
+        result = AsyncMock()
+        result.modified_count = 1
+        manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+        # Execute
+        await manager.update_field(user_id, dataset_id, "age", field_update)
+
+        # Verify dataset was updated
+        filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
+        assert filter_doc["user_id"] == user_id
+        assert filter_doc["_id"] == dataset_id
+        assert any(f["description"] == "Updated age description" for f in update_doc["dataset_schema"])
+
+    async def test_update_field_type_conversion(
+        self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset, sample_record: Record
+    ) -> None:
+        """Test updating a field with type conversion."""
+        # Setup field update
+        field_update = SchemaField(
+            field_name="age",
+            description="Age as float",
+            type=FieldType.FLOAT,
+            required=True,
+        )
+
+        # Configure collection with session
+        result = AsyncMock()
+        result.modified_count = 1
+        manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+        class AsyncIterator:
+            def __init__(self, items):
+                self.items = items
+                self.index = 0
+
+            async def __anext__(self):
+                if self.index >= len(self.items):
+                    raise StopAsyncIteration
+                item = self.items[self.index]
+                self.index += 1
+                return item
+
+            def __aiter__(self):
+                return self
+
+        # Configure records collection for type conversion
+        mock_cursor = AsyncIterator([sample_record.model_dump(by_alias=True)])
+        mock_records = MagicMock()
+        mock_records.find.return_value = mock_cursor
+        manager._records.bulk_write = AsyncMock()
+
+        # Execute
+        await manager.update_field(user_id, dataset_id, "age", field_update)
+
+        # Verify dataset was updated
+        filter_doc, update_doc = manager._datasets.replace_one.call_args[0]
+        assert filter_doc["user_id"] == user_id
+        assert filter_doc["_id"] == dataset_id
+        assert any(f["type"] == "float" for f in update_doc["dataset_schema"])
+
+        # Verify records were updated
+        assert manager._records.bulk_write.called
+
+    async def test_update_field_not_found(self, manager: DatasetManager, user_id: str, dataset_id: str) -> None:
+        """Test updating a non-existent field."""
+        # Setup field update
+        field_update = SchemaField(
+            field_name="invalid_field",
+            description="Invalid field",
+            type=FieldType.STRING,
+        )
+
+        # Execute and verify
+        with pytest.raises(InvalidDatasetSchemaError) as exc:
+            await manager.update_field(user_id, dataset_id, "invalid_field", field_update)
+        assert "not found in schema" in str(exc.value)
+
+    async def test_update_field_invalid_conversion(self, manager: DatasetManager, user_id: str, sample_dataset: Dataset, dataset_id: str) -> None:
+        """Test updating a field with invalid type conversion."""
+        # Setup field update
+        field_update = SchemaField(
+            field_name="age",
+            description="Age as string",
+            type=FieldType.BOOLEAN,
+        )
+
+        # Configure collection with session
+        result = AsyncMock()
+        result.modified_count = 1
+        manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+
+        # Execute and verify
+        with pytest.raises(InvalidRecordDataError) as exc:
+            await manager.update_field(user_id, dataset_id, "age", field_update)
+        assert "Cannot safely convert field" in str(exc.value)

@@ -13,7 +13,7 @@ from agent.tools.database_operator import (
     ListDatasetsOperator,
     UpdateDatasetOperator,
     UpdateRecordOperator,
-    UpdateSchemaOperator,
+    UpdateFieldOperator,
 )
 from agent.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
@@ -35,6 +35,7 @@ Tool Usage Protocol:
 1. Dataset Operations:
 - list_datasets: Always use first to get dataset details (id, name, description, schema)
 - create_dataset, update_dataset, delete_dataset: Manage dataset structures
+- update_field: Update a field in the dataset schema and convert existing records if needed
 
 2. Record Operations:
 - get_all_records: Use to retrieve *all* records from a specified dataset.
@@ -79,6 +80,7 @@ class Assistant:
             UpdateRecordOperator(db),
             DeleteRecordOperator(db),
             FindRecordsOperator(db),
+            UpdateFieldOperator(db),
         ]
 
     async def __call__(self, state: State):

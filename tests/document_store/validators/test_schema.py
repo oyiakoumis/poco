@@ -6,11 +6,10 @@ import pytest
 
 from document_store.exceptions import (
     InvalidDatasetSchemaError,
-    InvalidSchemaUpdateError,
-    TypeConversionError,
+    InvalidRecordDataError,
 )
+from document_store.models import Dataset, validate_schema, validate_field_update
 from document_store.types import FieldType, SchemaField
-from document_store.validators.schema import validate_schema
 
 
 def test_validate_schema():
@@ -115,3 +114,68 @@ def test_validate_schema_default_values():
     with pytest.raises(InvalidDatasetSchemaError) as exc:
         validate_schema(schema)
     assert "Invalid default value" in str(exc.value)
+
+
+def test_validate_field_update():
+    """Test field update validation."""
+    # Create a test dataset
+    dataset = Dataset(
+        user_id="test_user",
+        name="test_dataset",
+        description="Test dataset",
+        dataset_schema=[
+            SchemaField(
+                field_name="age",
+                description="User age",
+                type=FieldType.INTEGER,
+            ),
+            SchemaField(
+                field_name="name",
+                description="User name",
+                type=FieldType.STRING,
+            ),
+        ],
+    )
+
+    # Test valid update (same type)
+    field_update = SchemaField(
+        field_name="age",
+        description="Updated age description",
+        type=FieldType.INTEGER,
+    )
+    old_field, new_schema = validate_field_update(dataset, "age", field_update)
+    assert old_field is not None
+    assert old_field.type == FieldType.INTEGER
+    assert len(new_schema) == 2
+    assert new_schema[0].description == "Updated age description"
+
+    # Test valid type conversion (integer to float)
+    field_update = SchemaField(
+        field_name="age",
+        description="Age as float",
+        type=FieldType.FLOAT,
+    )
+    old_field, new_schema = validate_field_update(dataset, "age", field_update)
+    assert old_field is not None
+    assert old_field.type == FieldType.INTEGER
+    assert new_schema[0].type == FieldType.FLOAT
+
+    # Test invalid type conversion (string to integer)
+    field_update = SchemaField(
+        field_name="name",
+        description="Name as integer",
+        type=FieldType.INTEGER,
+    )
+    with pytest.raises(InvalidRecordDataError) as exc:
+        validate_field_update(dataset, "name", field_update)
+    assert "Cannot safely convert" in str(exc.value)
+
+    # Test non-existent field
+    field_update = SchemaField(
+        field_name="invalid",
+        description="Invalid field",
+        type=FieldType.STRING,
+    )
+    with pytest.raises(InvalidDatasetSchemaError) as exc:
+        validate_field_update(dataset, "invalid", field_update)
+    assert "not found in schema" in str(exc.value)

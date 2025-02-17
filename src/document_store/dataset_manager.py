@@ -16,11 +16,10 @@ from document_store.exceptions import (
     InvalidRecordDataError,
     RecordNotFoundError,
 )
-from document_store.models import Dataset, Record
+from document_store.models import Dataset, Record, validate_field_update
 from document_store.types import DatasetSchema, FieldType, RecordData, SchemaField, SAFE_TYPE_CONVERSIONS
-from document_store.validators import validate_query_fields, validate_record_data
+from document_store.validators.record import validate_query_fields, validate_record_data
 from document_store.validators.factory import get_validator
-from document_store.validators.schema import validate_schema, validate_field_update
 
 
 class DatasetManager:
@@ -270,7 +269,7 @@ class DatasetManager:
 
             # Start transaction
             async with await self.client.start_session() as session:
-                async with session.start_transaction():
+                async with await session.start_transaction():
                     # Update dataset schema
                     updated = Dataset(
                         id=dataset_id,

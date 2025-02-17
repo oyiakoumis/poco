@@ -6,7 +6,7 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
-from document_store.types import DatasetSchema, PydanticObjectId, RecordData
+from document_store.types import DatasetSchema, PydanticObjectId, RecordData, SchemaField
 
 
 class DatasetArgs(BaseModel):
@@ -61,6 +61,11 @@ class FindRecordsArgs(DatasetArgs):
     query: Optional[Dict] = Field(
         default=None, description="Optional query parameters to filter records in the dataset", example={"rating": {"$gte": 4}, "category": "feature"}
     )
+
+
+class UpdateFieldArgs(DatasetArgs):
+    field_name: str = Field(description="Name of the field to update", min_length=1, max_length=100)
+    field_update: SchemaField = Field(description="New field definition with updated properties")
 
 
 # Base Table Operator
@@ -160,7 +165,7 @@ class CreateRecordOperator(BaseDBOperator):
 
 class UpdateRecordOperator(BaseDBOperator):
     name: str = "update_record"
-    description: str = "Update a record"
+    description: str = f"Update a record: {UpdateRecordArgs.model_json_schema()}"
     args_schema: ClassVar[BaseModel] = UpdateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -202,3 +207,14 @@ class FindRecordsOperator(BaseDBOperator):
         args = FindRecordsArgs(**kwargs)
         result = await self.db.find_records(user_id, args.dataset_id, args.query)
         return [record.model_dump() for record in result]
+
+
+class UpdateFieldOperator(BaseDBOperator):
+    name: str = "update_field"
+    description: str = "Update a field in the dataset schema and convert existing records if needed"
+    args_schema: ClassVar[BaseModel] = UpdateFieldArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> None:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = UpdateFieldArgs(**kwargs)
+        await self.db.update_field(user_id, args.dataset_id, args.field_name, args.field_update)
