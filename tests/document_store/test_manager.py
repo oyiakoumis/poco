@@ -249,16 +249,36 @@ async def manager(mock_client: AsyncMock, sample_dataset: Dataset, sample_record
     }[name]
 
     # Configure session
-    session = AsyncMock()
-    session.start_transaction = MagicMock()
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock()
+    class MockTransaction:
+        def __init__(self, should_raise=False):
+            self.should_raise = should_raise
 
-    session_context = AsyncMock()
-    session_context.__aenter__ = AsyncMock(return_value=session)
-    session_context.__aexit__ = AsyncMock()
+        async def __aenter__(self):
+            if self.should_raise:
+                raise ValueError("Transaction error")
+            return self
 
-    mock_client.start_session = AsyncMock(return_value=session_context)
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            # Propagate any errors
+            return False
+
+    class MockSession:
+        def __init__(self, should_raise=False):
+            self.should_raise = should_raise
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            # Propagate any errors
+            return False
+
+        def start_transaction(self):
+            return MockTransaction(self.should_raise)
+
+    # Create session context
+    mock_session = MockSession()
+    mock_client.start_session = AsyncMock(return_value=mock_session)
 
     return await DatasetManager.setup(mock_client)
 
@@ -533,7 +553,7 @@ class TestFieldOperations:
         mock_cursor = AsyncIterator([sample_record.model_dump(by_alias=True)])
         mock_records = MagicMock()
         mock_records.find.return_value = mock_cursor
-        manager._records.bulk_write = AsyncMock()
+        manager._records.bulk_write = AsyncMock(return_value=result)
 
         # Execute
         await manager.update_field(user_id, dataset_id, "age", field_update)
@@ -591,6 +611,7 @@ class TestFieldOperations:
         result.modified_count = 1
         manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
         manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+        manager._records.update_many = AsyncMock()
 
         # Execute
         await manager.add_field(user_id, dataset_id, new_field)
@@ -630,18 +651,18 @@ class TestFieldOperations:
         # Verify records were not updated (no default value)
         manager._records.update_many.assert_not_called()
 
-    # async def test_add_field_duplicate(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
-    #     """Test adding a duplicate field fails."""
-    #     # Setup duplicate field
-    #     duplicate_field = SchemaField(field_name="age", description="Duplicate age field", type=FieldType.INTEGER)  # Already exists in sample_schema
+    async def test_add_field_duplicate(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
+        """Test adding a duplicate field fails."""
+        # Setup duplicate field
+        duplicate_field = SchemaField(field_name="age", description="Duplicate age field", type=FieldType.INTEGER)  # Already exists in sample_schema
 
-    #     # Configure collection
-    #     manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+        # Configure collection
+        manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
 
-    #     # Execute and verify
-    #     with pytest.raises(InvalidDatasetSchemaError) as exc:
-    #         await manager.add_field(user_id, dataset_id, duplicate_field)
-    #     assert "already exists" in str(exc.value)
+        # Execute and verify
+        with pytest.raises(InvalidDatasetSchemaError) as exc:
+            await manager.add_field(user_id, dataset_id, duplicate_field)
+        assert "Duplicate field names in schema" in str(exc.value)
 
     async def test_delete_field(self, manager: DatasetManager, user_id: str, dataset_id: str, sample_dataset: Dataset) -> None:
         """Test deleting a field from dataset schema."""
@@ -650,6 +671,7 @@ class TestFieldOperations:
         result.modified_count = 1
         manager._datasets.replace_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=result)()
         manager._datasets.find_one.side_effect = lambda *args, **kwargs: AsyncMock(return_value=sample_dataset.model_dump(by_alias=True))()
+        manager._records.update_many = AsyncMock()
 
         # Execute
         await manager.delete_field(user_id, dataset_id, "age")
