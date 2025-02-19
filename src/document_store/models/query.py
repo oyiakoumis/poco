@@ -1,12 +1,12 @@
 """Query models for document store aggregations."""
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 from document_store.exceptions import InvalidRecordDataError
-from document_store.models.types import FieldType
+from document_store.models.types import AggregationType, TypeRegistry
 from document_store.models.schema import DatasetSchema
 
 
@@ -19,29 +19,6 @@ class ComparisonOperator(str, Enum):
     GREATER_THAN_EQUALS = "gte"
     LESS_THAN = "lt"
     LESS_THAN_EQUALS = "lte"
-
-
-class AggregationType(str, Enum):
-    """Supported aggregation operations."""
-
-    SUM = "sum"  # For INTEGER, FLOAT
-    AVG = "avg"  # For INTEGER, FLOAT
-    MIN = "min"  # For INTEGER, FLOAT, DATE, DATETIME
-    MAX = "max"  # For INTEGER, FLOAT, DATE, DATETIME
-    COUNT = "count"  # For any type
-
-
-# Mapping of which aggregations are valid for which field types
-VALID_AGGREGATIONS = {
-    FieldType.INTEGER: {AggregationType.SUM, AggregationType.AVG, AggregationType.MIN, AggregationType.MAX, AggregationType.COUNT},
-    FieldType.FLOAT: {AggregationType.SUM, AggregationType.AVG, AggregationType.MIN, AggregationType.MAX, AggregationType.COUNT},
-    FieldType.STRING: {AggregationType.COUNT},
-    FieldType.BOOLEAN: {AggregationType.COUNT},
-    FieldType.DATE: {AggregationType.MIN, AggregationType.MAX, AggregationType.COUNT},
-    FieldType.DATETIME: {AggregationType.MIN, AggregationType.MAX, AggregationType.COUNT},
-    FieldType.SELECT: {AggregationType.COUNT},
-    FieldType.MULTI_SELECT: {AggregationType.COUNT},
-}
 
 
 class FilterCondition(BaseModel):
@@ -86,8 +63,8 @@ class AggregationField(BaseModel):
         except KeyError as e:
             raise InvalidRecordDataError(str(e))
 
-        valid_ops = VALID_AGGREGATIONS.get(schema_field.type, set())
-        if self.operation not in valid_ops:
+        type_instance = TypeRegistry.get_type(schema_field.type)
+        if not type_instance.can_aggregate(self.operation):
             raise InvalidRecordDataError(f"Operation '{self.operation}' not valid for field type '{schema_field.type}'")
 
         return self

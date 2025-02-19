@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from document_store.exceptions import InvalidDatasetSchemaError
 from document_store.models.types import FieldType
-from document_store.validators.factory import get_validator
+from document_store.models.types import TypeRegistry
 
 
 class SchemaField(BaseModel):
@@ -42,16 +42,16 @@ class SchemaField(BaseModel):
     @model_validator(mode="after")
     def validate_field_options_and_default(self) -> "SchemaField":
         """Validate field options and default value."""
-        validator = get_validator(self.type)
+        type_impl = TypeRegistry.get_type(self.type)
 
         if self.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
             if not self.options:
                 raise InvalidDatasetSchemaError(f"Options not provided for {self.type} field '{self.field_name}'")
-            validator.set_options(self.options)
+            type_impl.set_options(self.options)
 
         if self.default is not None:
             try:
-                self.default = validator.validate_default(self.default)
+                self.default = type_impl.validate_default(self.default)
             except ValueError as e:
                 raise InvalidDatasetSchemaError(f"Invalid default value for field '{self.field_name}': {str(e)}")
 

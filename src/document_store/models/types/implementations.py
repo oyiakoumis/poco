@@ -1,14 +1,14 @@
-"""Concrete validator implementations for different field types."""
+"""Type implementations for different field types."""
 
 from datetime import date, datetime
 from typing import Any, List, Optional, Set
 
-from document_store.models.types import FieldType
-from document_store.validators.base import TypeValidator
+from document_store.models.types.base import BaseType
+from document_store.models.types.constants import FieldType
 
 
-class BooleanValidator(TypeValidator):
-    """Validator for boolean fields."""
+class BooleanType(BaseType):
+    """Boolean type implementation."""
 
     field_type = FieldType.BOOLEAN
 
@@ -30,8 +30,8 @@ class BooleanValidator(TypeValidator):
         return self.validate(value)
 
 
-class IntegerValidator(TypeValidator):
-    """Validator for integer fields."""
+class IntegerType(BaseType):
+    """Integer type implementation."""
 
     field_type = FieldType.INTEGER
 
@@ -48,8 +48,8 @@ class IntegerValidator(TypeValidator):
         return self.validate(value)
 
 
-class FloatValidator(TypeValidator):
-    """Validator for float fields."""
+class FloatType(BaseType):
+    """Float type implementation."""
 
     field_type = FieldType.FLOAT
 
@@ -66,8 +66,8 @@ class FloatValidator(TypeValidator):
         return self.validate(value)
 
 
-class StringValidator(TypeValidator):
-    """Validator for string fields."""
+class StringType(BaseType):
+    """String type implementation."""
 
     field_type = FieldType.STRING
 
@@ -82,8 +82,8 @@ class StringValidator(TypeValidator):
         return self.validate(value)
 
 
-class DateValidator(TypeValidator):
-    """Validator for date fields."""
+class DateType(BaseType):
+    """Date type implementation."""
 
     field_type = FieldType.DATE
 
@@ -115,13 +115,44 @@ class DateValidator(TypeValidator):
         return self.validate(value)
 
 
-class SelectValidator(TypeValidator):
-    """Validator for select fields."""
+class DateTimeType(BaseType):
+    """DateTime type implementation."""
+
+    field_type = FieldType.DATETIME
+
+    def validate(self, value: Any) -> datetime:
+        """Validate and convert to datetime.
+
+        Accepts:
+        - datetime objects
+        - strings in YYYY-MM-DD[T ]HH:MM:SS format
+        """
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S")
+            except ValueError:
+                try:
+                    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    raise ValueError("Invalid datetime format. Expected YYYY-MM-DD[T ]HH:MM:SS")
+        raise ValueError(f"Cannot convert {type(value)} to datetime")
+
+    def validate_default(self, value: Any) -> Optional[datetime]:
+        """Validate and convert default value to datetime."""
+        if value is None:
+            return None
+        return self.validate(value)
+
+
+class SelectType(BaseType):
+    """Select type implementation."""
 
     field_type = FieldType.SELECT
 
     def __init__(self):
-        super().__init__()
+        """Initialize select type."""
         self._options: Optional[Set[str]] = None
 
     def set_options(self, options: List[str]) -> None:
@@ -150,13 +181,13 @@ class SelectValidator(TypeValidator):
         return self.validate(value)
 
 
-class MultiSelectValidator(TypeValidator):
-    """Validator for multi-select fields."""
+class MultiSelectType(BaseType):
+    """MultiSelect type implementation."""
 
     field_type = FieldType.MULTI_SELECT
 
     def __init__(self):
-        super().__init__()
+        """Initialize multi-select type."""
         self._options: Optional[Set[str]] = None
 
     def set_options(self, options: List[str]) -> None:
@@ -192,37 +223,6 @@ class MultiSelectValidator(TypeValidator):
 
     def validate_default(self, value: Any) -> Optional[List[str]]:
         """Validate and convert default value to list of strings."""
-        if value is None:
-            return None
-        return self.validate(value)
-
-
-class DateTimeValidator(TypeValidator):
-    """Validator for datetime fields."""
-
-    field_type = FieldType.DATETIME
-
-    def validate(self, value: Any) -> datetime:
-        """Validate and convert to datetime.
-
-        Accepts:
-        - datetime objects
-        - strings in YYYY-MM-DD[T ]HH:MM:SS format
-        """
-        if isinstance(value, datetime):
-            return value
-        if isinstance(value, str):
-            try:
-                return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S")
-            except ValueError:
-                try:
-                    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-                except ValueError:
-                    raise ValueError("Invalid datetime format. Expected YYYY-MM-DD[T ]HH:MM:SS")
-        raise ValueError(f"Cannot convert {type(value)} to datetime")
-
-    def validate_default(self, value: Any) -> Optional[datetime]:
-        """Validate and convert default value to datetime."""
         if value is None:
             return None
         return self.validate(value)

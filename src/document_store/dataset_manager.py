@@ -27,7 +27,7 @@ from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType
 from document_store.pipeline import build_aggregation_pipeline
-from document_store.validators.factory import get_validator
+from document_store.models.types import TypeRegistry
 from document_store.models.record import validate_query_fields
 
 
@@ -205,10 +205,10 @@ class DatasetManager:
         if old_field.type == field_update.type:
             return []
 
-        # Get validator for new type
-        validator = get_validator(field_update.type)
+        # Get type implementation for new type
+        type_impl = TypeRegistry.get_type(field_update.type)
         if field_update.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
-            validator.set_options(field_update.options)
+            type_impl.set_options(field_update.options)
 
         # Get records with this field using session
         mongo_query = {"user_id": user_id, "dataset_id": dataset_id, f"data.{field_name}": {"$exists": True}}  # Only get records that have this field
@@ -222,7 +222,7 @@ class DatasetManager:
         for record in records:
             try:
                 # Convert and validate value
-                converted_value = validator.validate(record.data[field_name])
+                converted_value = type_impl.validate(record.data[field_name])
 
                 # Create update operation
                 updates.append(

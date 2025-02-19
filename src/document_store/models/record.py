@@ -8,7 +8,7 @@ from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataE
 from document_store.models.base import BaseDocument, PydanticObjectId
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType
-from document_store.validators.factory import get_validator
+from document_store.models.types import TypeRegistry
 
 RecordData = Dict[str, Any]
 
@@ -45,7 +45,7 @@ class Record(BaseDocument):
         # Check required fields and validate types
         for field in schema:
             value = data.get(field.field_name)
-            validator = get_validator(field.type)
+            type_impl = TypeRegistry.get_type(field.type)
 
             # Handle required fields
             if field.required and value is None:
@@ -61,9 +61,9 @@ class Record(BaseDocument):
                     if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
                         if not field.options:
                             raise InvalidFieldValueError(f"Options not provided for {field.type} field '{field.field_name}'")
-                        validator.set_options(field.options)
+                        type_impl.set_options(field.options)
                     try:
-                        validated_data[field.field_name] = validator.validate_default(field.default)
+                        validated_data[field.field_name] = type_impl.validate_default(field.default)
                     except ValueError as e:
                         raise InvalidFieldValueError(f"Invalid default value for field '{field.field_name}': {str(e)}")
                 continue
@@ -72,11 +72,11 @@ class Record(BaseDocument):
             if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
                 if not field.options:
                     raise InvalidFieldValueError(f"Options not provided for {field.type} field '{field.field_name}'")
-                validator.set_options(field.options)
+                type_impl.set_options(field.options)
 
             # Validate and convert field value
             try:
-                validated_data[field.field_name] = validator.validate(value)
+                validated_data[field.field_name] = type_impl.validate(value)
             except ValueError as e:
                 raise InvalidFieldValueError(f"Invalid value for field '{field.field_name}': {str(e)}")
 
