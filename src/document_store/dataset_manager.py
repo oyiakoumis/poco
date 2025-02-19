@@ -27,10 +27,8 @@ from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType
 from document_store.pipeline import build_aggregation_pipeline
-from document_store.validators.factory import get_validator
-from document_store.validators.field import validate_field_update
-from document_store.validators.query import validate_aggregation_query
-from document_store.validators.record import validate_query_fields, validate_record_data
+from document_store.type_validators.factory import get_validator
+from document_store.type_validators.record import validate_query_fields
 
 
 class DatasetManager:
@@ -402,7 +400,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate field update
-            old_field, new_schema = validate_field_update(dataset, field_name, field_update)
+            old_field, new_schema = dataset.dataset_schema.validate_field_update(field_name, field_update)
             if not old_field:
                 # No changes needed
                 return
@@ -454,7 +452,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate and convert data
-            validated_data = validate_record_data(data, dataset.dataset_schema)
+            validated_data = Record.validate_data(data, dataset.dataset_schema)
 
             # Create record
             record = Record(
@@ -478,7 +476,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate and convert data
-            validated_data = validate_record_data(data, dataset.dataset_schema)
+            validated_data = Record.validate_data(data, dataset.dataset_schema)
 
             # Update record
             result = await self._records.update_one(
@@ -612,7 +610,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Validate query against schema
-            validate_aggregation_query(query, dataset.dataset_schema)
+            query.validate_with_schema(dataset.dataset_schema)
 
             # Build aggregation pipeline
             pipeline = build_aggregation_pipeline(user_id, dataset_id, query)

@@ -2,9 +2,11 @@
 
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from document_store.exceptions import InvalidDatasetSchemaError
 from document_store.models.types import FieldType
+from document_store.type_validators.factory import get_validator
 
 
 class SchemaField(BaseModel):
@@ -19,9 +21,42 @@ class SchemaField(BaseModel):
     )
     type: FieldType = Field(description="Data type of the field", json_schema_extra={"examples": [FieldType.INTEGER]})
     required: bool = Field(default=False, description="Whether this field must be present in all records", json_schema_extra={"examples": [True]})
-    default: Optional[Any] = Field(default=None, description="Default value for the field if not provided", json_schema_extra={"examples": [0]})
+    default: Optional[Any] = Field(default=None, description="Default value for the field", json_schema_extra={"examples": [0]})
     options: Optional[List[str]] = Field(
         default=None, description="List of allowed values for select/multi-select fields", json_schema_extra={"examples": [["option1", "option2"]]}
     )
 
     model_config = {"arbitrary_types_allowed": True, "populate_by_name": True, "from_attributes": True}
+
+    @field_validator('type')
+    @classmethod
+    def validate_field_type(cls, v: Any) -> FieldType:
+        """Validate and convert field type."""
+        if not isinstance(v, FieldType):
+            try:
+                return FieldType(v)
+            except ValueError:
+                raise InvalidDatasetSchemaError(f"Invalid field type: {v}")
+        return v
+
+    @model_validator(mode='after')
+    def validate_field_options_and_default(self) -> 'SchemaField':
+        """Validate field options and default value."""
+        validator = get_validator(self.type)
+        
+        if self.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
+            if not self.options:
+                raise InvalidDatasetSchemaError(
+                    f"Options not provided for {self.type} field '{self.field_name}'"
+                )
+            validator.set_options(self.options)
+
+        if self.default is not None:
+            try:
+                self.default = validator.validate_default(self.default)
+            except ValueError as e:
+                raise InvalidDatasetSchemaError(
+                    f"Invalid default value for field '{self.field_name}': {str(e)}"
+                )
+
+        return self

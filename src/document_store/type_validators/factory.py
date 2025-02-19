@@ -3,8 +3,8 @@
 from typing import Dict, Type
 
 from document_store.models.types import FieldType
-from document_store.validators.base import TypeValidator
-from document_store.validators.validators import (
+from document_store.type_validators.base import TypeValidator
+from document_store.type_validators.type_validators import (
     BooleanValidator,
     DateTimeValidator,
     DateValidator,

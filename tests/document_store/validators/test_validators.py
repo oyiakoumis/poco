@@ -5,7 +5,7 @@ from datetime import date, datetime
 import pytest
 
 from document_store.types import FieldType
-from document_store.validators.validators import (
+from document_store.type_validators.type_validators import (
     BooleanValidator,
     DateTimeValidator,
     DateValidator,
