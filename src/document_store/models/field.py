@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from document_store.exceptions import InvalidDatasetSchemaError
 from document_store.models.types import FieldType
-from document_store.type_validators.factory import get_validator
+from document_store.validators.factory import get_validator
 
 
 class SchemaField(BaseModel):

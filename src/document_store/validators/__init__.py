@@ -1,9 +1,9 @@
 """Type validation system for document store."""
 
 from document_store.models.record import validate_query_fields
-from document_store.type_validators.factory import get_validator
-from document_store.type_validators.record import validate_record_data
-from document_store.type_validators.type_validators import (
+from document_store.validators.factory import get_validator
+from document_store.validators.record import validate_record_data
+from document_store.validators.validators import (
     BooleanValidator,
     DateTimeValidator,
     DateValidator,

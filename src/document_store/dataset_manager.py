@@ -27,7 +27,7 @@ from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType
 from document_store.pipeline import build_aggregation_pipeline
-from document_store.type_validators.factory import get_validator
+from document_store.validators.factory import get_validator
 from document_store.models.record import validate_query_fields
 
 

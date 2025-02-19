@@ -3,9 +3,9 @@
 import pytest
 
 from document_store.types import FieldType
-from document_store.type_validators.base import TypeValidator
-from document_store.type_validators.factory import ValidatorFactory, get_validator
-from document_store.type_validators.type_validators import (
+from document_store.validators.base import TypeValidator
+from document_store.validators.factory import ValidatorFactory, get_validator
+from document_store.validators.validators import (
     BooleanValidator,
     DateTimeValidator,
     DateValidator,

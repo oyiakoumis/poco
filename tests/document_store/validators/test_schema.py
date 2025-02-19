@@ -8,7 +8,7 @@ from document_store.exceptions import (
 from document_store.models import Dataset, validate_schema
 from document_store.models.field import SchemaField
 from document_store.models.types import FieldType
-from document_store.type_validators.field import validate_field_update
+from document_store.validators.field import validate_field_update
 
 
 def test_validate_schema():

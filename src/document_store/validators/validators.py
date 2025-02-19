@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Any, List, Optional, Set
 
 from document_store.models.types import FieldType
-from document_store.type_validators.base import TypeValidator
+from document_store.validators.base import TypeValidator
 
 
 class BooleanValidator(TypeValidator):
