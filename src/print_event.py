@@ -11,7 +11,7 @@ def format_namespace(namespace):
     return namespace[-1].split(":")[0] + " subgraph" if len(namespace) > 0 else "parent graph"
 
 
-def print_event(namespace: Tuple[str], event: Dict[str, Any], max_length: int = 1500) -> None:
+def print_event(namespace: Tuple[str], event: Dict[str, Any], max_length: int = 3000) -> None:
     node_name = list(event.keys())[0]
 
     message: AnyMessage = event[node_name]["messages"]
@@ -25,7 +25,7 @@ def print_event(namespace: Tuple[str], event: Dict[str, Any], max_length: int = 
     print_message(message, node_name, namespace_str, max_length)
 
 
-def print_message(message: AnyMessage, origin: str, namespace: Optional[str] = None, max_length: int = 1500):
+def print_message(message: AnyMessage, origin: str, namespace: Optional[str] = None, max_length: int = 3000):
     msg_repr = message.pretty_repr(html=True)
     if len(msg_repr) > max_length:
         truncated_indicator = f" ... (truncated {len(msg_repr) - max_length} characters)"

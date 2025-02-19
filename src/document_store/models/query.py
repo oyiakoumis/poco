@@ -3,11 +3,18 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from document_store.exceptions import InvalidRecordDataError
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import AggregationType, TypeRegistry
+
+
+class SortOrder(str, Enum):
+    """Sort order options."""
+
+    ASC = "asc"
+    DESC = "desc"
 
 
 class ComparisonOperator(str, Enum):
@@ -72,7 +79,7 @@ class RecordQuery(BaseModel):
     group_by: Optional[List[str]] = Field(default=None, description="Fields to group by")
     aggregations: Optional[List[AggregationField]] = Field(default=None, description="Optional aggregation operations to perform")
     filter: Optional[FilterExpression] = Field(default=None, description="Filter conditions to apply")
-    sort: Optional[Dict[str, bool]] = Field(default=None, description="Sorting configuration (field -> ascending)")
+    sort: Optional[Dict[str, SortOrder]] = Field(default=None, description="Sorting configuration (field -> sort order)")
     limit: Optional[int] = Field(default=None, description="Maximum number of results to return")
 
     def validate_with_schema(self, schema: DatasetSchema) -> None:
@@ -108,22 +115,24 @@ class RecordQuery(BaseModel):
     class Config:
         arbitrary_types_allowed = True
         json_schema_extra = {
-            "examples": {
-                "simple_query": {
+            "examples": [
+                # Simple query example
+                {
                     "filter": {"field": "status", "condition": {"operator": "eq", "value": "active"}},
-                    "sort": {"created_at": False},  # Sort by created_at descending
-                    "limit": 10,
+                    "sort": {"created_at": "desc"},
+                    "limit": 10
                 },
-                "aggregation_query": {
+                # Aggregation query example
+                {
                     "group_by": ["category"],
                     "aggregations": [
                         {"field": "amount", "operation": "sum"},
                         {"field": "amount", "operation": "avg", "alias": "average_amount"},
-                        {"field": "id", "operation": "count", "alias": "total_records"},
+                        {"field": "id", "operation": "count", "alias": "total_records"}
                     ],
                     "filter": {"field": "status", "condition": {"operator": "eq", "value": "completed"}},
-                    "sort": {"amount_sum": False},  # Sort by sum descending
-                    "limit": 10,
-                },
-            }
+                    "sort": {"amount_sum": "desc"},
+                    "limit": 10
+                }
+            ]
         }

@@ -62,6 +62,12 @@ async def main():
                 SchemaField(
                     field_name="unit", description="Unit of the quantity", type=FieldType.SELECT, required=True, options=["pieces", "kg", "g", "l", "ml"]
                 ),
+                SchemaField(
+                    field_name="expiry_date",
+                    description="Expiration date of the item",
+                    type=FieldType.DATE,
+                    required=False,
+                ),
             ]
         )
 
@@ -118,8 +124,15 @@ async def main():
         record1_id = await manager.create_record(user_id=user_id, dataset_id=dataset_id, data={"item": "Milk", "quantity": 2, "unit": "l", "category": "dairy"})
         print(f"Created record 1: {record1_id}")
 
+        # Create record with expiry date
         record2_id = await manager.create_record(
-            user_id=user_id, dataset_id=dataset_id, data={"item": "Apples", "quantity": 1, "unit": "kg", "category": "fruits"}
+            user_id=user_id, dataset_id=dataset_id, data={
+                "item": "Yogurt",
+                "quantity": 4,
+                "unit": "pieces",
+                "category": "dairy",
+                "expiry_date": "2025-02-27"  # Date in YYYY-MM-DD format
+            }
         )
         print(f"Created record 2: {record2_id}")
 
