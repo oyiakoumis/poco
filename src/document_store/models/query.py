@@ -64,25 +64,23 @@ class AggregationField(BaseModel):
     field: str
     operation: AggregationType
     alias: Optional[str] = None
-    
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+
+    model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self, **data):
         super().__init__(**data)
         if self.alias is None:
             self.alias = f"{self.field}_{self.operation}"
-    
-    @model_validator(mode='after')
-    def validate_field_operation(self) -> 'AggregationField':
+
+    @model_validator(mode="after")
+    def validate_field_operation(self) -> "AggregationField":
         """Validate the field and operation against the schema."""
         # Note: This will be called during AggregationQuery validation
         # where schema will be available in the context
-        schema: DatasetSchema = self.model_extra.get('schema')
+        schema: DatasetSchema = self.model_extra.get("schema")
         if not schema:
             return self
-            
+
         try:
             schema_field = schema.get_field(self.field)
         except KeyError as e:
@@ -90,10 +88,8 @@ class AggregationField(BaseModel):
 
         valid_ops = VALID_AGGREGATIONS.get(schema_field.type, set())
         if self.operation not in valid_ops:
-            raise InvalidRecordDataError(
-                f"Operation '{self.operation}' not valid for field type '{schema_field.type}'"
-            )
-        
+            raise InvalidRecordDataError(f"Operation '{self.operation}' not valid for field type '{schema_field.type}'")
+
         return self
 
 
@@ -105,40 +101,36 @@ class AggregationQuery(BaseModel):
     filter: Optional[FilterExpression] = Field(default=None, description="Filter conditions to apply before aggregation")
     sort: Optional[Dict[str, bool]] = Field(default=None, description="Sorting configuration (field -> ascending)")
     limit: Optional[int] = Field(default=None, description="Maximum number of results to return")
-    
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+
+    model_config = {"arbitrary_types_allowed": True}
 
     def validate_with_schema(self, schema: DatasetSchema) -> None:
         """Validate the query against a schema."""
         # Store schema in context for child validators
-        self.model_extra = {'schema': schema}
-        
+        self.model_extra = {"schema": schema}
+
         # Validate group by fields
         if self.group_by:
             schema_fields = set(schema.get_field_names())
             invalid_fields = [f for f in self.group_by if f not in schema_fields]
             if invalid_fields:
                 raise InvalidRecordDataError(f"Invalid group by fields: {invalid_fields}")
-        
+
         # Validate aggregations
         for agg in self.aggregations:
-            agg.model_extra = {'schema': schema}
+            agg.model_extra = {"schema": schema}
             agg.validate_field_operation()
-        
+
         # Validate filter field
         if self.filter and not schema.has_field(self.filter.field):
-            raise InvalidRecordDataError(
-                f"Filter field '{self.filter.field}' not found in schema"
-            )
-        
+            raise InvalidRecordDataError(f"Filter field '{self.filter.field}' not found in schema")
+
         # Validate sort fields
         if self.sort:
             schema_fields = set(schema.get_field_names())
             agg_fields = {agg.alias for agg in self.aggregations}
             valid_sort_fields = schema_fields | agg_fields
-            
+
             invalid_sort_fields = [f for f in self.sort.keys() if f not in valid_sort_fields]
             if invalid_sort_fields:
                 raise InvalidRecordDataError(f"Invalid sort fields: {invalid_sort_fields}")

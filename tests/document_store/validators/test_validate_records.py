@@ -3,8 +3,9 @@
 import pytest
 
 from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
+from document_store.models.record import validate_query_fields
 from document_store.types import FieldType, SchemaField
-from document_store.type_validators import validate_query_fields, validate_record_data
+from document_store.type_validators import validate_record_data
 
 
 @pytest.fixture

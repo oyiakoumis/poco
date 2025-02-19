@@ -28,7 +28,7 @@ class SchemaField(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True, "populate_by_name": True, "from_attributes": True}
 
-    @field_validator('type')
+    @field_validator("type")
     @classmethod
     def validate_field_type(cls, v: Any) -> FieldType:
         """Validate and convert field type."""
@@ -39,24 +39,20 @@ class SchemaField(BaseModel):
                 raise InvalidDatasetSchemaError(f"Invalid field type: {v}")
         return v
 
-    @model_validator(mode='after')
-    def validate_field_options_and_default(self) -> 'SchemaField':
+    @model_validator(mode="after")
+    def validate_field_options_and_default(self) -> "SchemaField":
         """Validate field options and default value."""
         validator = get_validator(self.type)
-        
+
         if self.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
             if not self.options:
-                raise InvalidDatasetSchemaError(
-                    f"Options not provided for {self.type} field '{self.field_name}'"
-                )
+                raise InvalidDatasetSchemaError(f"Options not provided for {self.type} field '{self.field_name}'")
             validator.set_options(self.options)
 
         if self.default is not None:
             try:
                 self.default = validator.validate_default(self.default)
             except ValueError as e:
-                raise InvalidDatasetSchemaError(
-                    f"Invalid default value for field '{self.field_name}': {str(e)}"
-                )
+                raise InvalidDatasetSchemaError(f"Invalid default value for field '{self.field_name}': {str(e)}")
 
         return self
