@@ -8,7 +8,13 @@ from document_store.dataset_manager import DatasetManager
 from document_store.models.schema import DatasetSchema
 from document_store.models.field import SchemaField
 from document_store.models.types import FieldType
-from document_store.models.query import AggregationField, AggregationQuery
+from document_store.models.query import (
+    AggregationField,
+    RecordQuery,
+    FilterExpression,
+    FilterCondition,
+    ComparisonOperator,
+)
 from document_store.models.types import AggregationType
 
 
@@ -130,23 +136,29 @@ async def main():
         )
         print("Updated record 1")
 
-        # Find records
-        records = await manager.find_records(user_id=user_id, dataset_id=dataset_id, query={"category": "dairy"})
+        # Query records with filter
+        filter_query = RecordQuery(
+            filter=FilterExpression(
+                field="category",
+                condition=FilterCondition(operator=ComparisonOperator.EQUALS, value="dairy")
+            )
+        )
+        records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=filter_query)
         print(f"Found {len(records)} dairy items")
 
         # 4. Aggregation
         print("\n=== Aggregation Operations ===")
 
-        # Create aggregation query
-        agg_query = AggregationQuery(
+        # Create query with aggregation
+        agg_query = RecordQuery(
             group_by=["category"],
             aggregations=[
                 AggregationField(field="quantity", operation=AggregationType.SUM, alias="total_quantity"),
                 AggregationField(field="quantity", operation=AggregationType.COUNT, alias="total_items"),
-            ],
+            ]
         )
 
-        results = await manager.aggregate_records(user_id, dataset_id, agg_query)
+        results = await manager.query_records(user_id, dataset_id, agg_query)
         print("Aggregation results:", results)
 
         # Delete category field (demonstrating field removal)

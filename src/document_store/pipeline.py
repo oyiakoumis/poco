@@ -3,7 +3,7 @@
 from typing import Any, Dict, List
 
 from document_store.models.query import (
-    AggregationQuery,
+    RecordQuery,
     AggregationType,
     ComparisonOperator,
     FilterExpression,
@@ -28,7 +28,7 @@ def _build_match_stage(filter_expr: FilterExpression) -> Dict:
     return {"$match": {f"data.{filter_expr.field}": _build_comparison(filter_expr.condition.operator, filter_expr.condition.value)}}
 
 
-def _build_group_stage(query: AggregationQuery) -> Dict:
+def _build_group_stage(query: RecordQuery) -> Dict:
     """Build MongoDB $group stage from aggregation query."""
     group_stage: Dict[str, Any] = {"$group": {"_id": None if not query.group_by else {field: f"$data.{field}" for field in query.group_by}}}
 
@@ -52,7 +52,7 @@ def _build_sort_stage(sort_config: Dict[str, bool]) -> Dict:
     return {"$sort": {field: 1 if ascending else -1 for field, ascending in sort_config.items()}}
 
 
-def build_aggregation_pipeline(user_id: str, dataset_id: str, query: AggregationQuery) -> List[Dict]:
+def build_aggregation_pipeline(user_id: str, dataset_id: str, query: RecordQuery) -> List[Dict]:
     """Build MongoDB aggregation pipeline from query.
 
     Args:
@@ -72,8 +72,9 @@ def build_aggregation_pipeline(user_id: str, dataset_id: str, query: Aggregation
     if query.filter:
         pipeline.append(_build_match_stage(query.filter))
 
-    # Add group stage for aggregations
-    pipeline.append(_build_group_stage(query))
+    # Add group stage only if we have aggregations or group_by
+    if query.aggregations is not None or query.group_by is not None:
+        pipeline.append(_build_group_stage(query))
 
     # Add sort stage if specified
     if query.sort:

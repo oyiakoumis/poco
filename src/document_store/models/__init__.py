@@ -6,7 +6,7 @@ from document_store.models.dataset import (
 )
 from document_store.models.query import (
     AggregationField,
-    AggregationQuery,
+    RecordQuery,
     AggregationType,
     ComparisonOperator,
     FilterCondition,
@@ -19,7 +19,7 @@ __all__ = [
     "Dataset",
     "Record",
     "AggregationField",
-    "AggregationQuery",
+    "RecordQuery",
     "AggregationType",
     "ComparisonOperator",
     "FilterCondition",

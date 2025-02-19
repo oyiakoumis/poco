@@ -1,7 +1,7 @@
 """Dataset manager for MongoDB operations."""
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import pymongo
 from bson import ObjectId
@@ -22,13 +22,12 @@ from document_store.exceptions import (
 )
 from document_store.models import Dataset, Record
 from document_store.models.field import SchemaField
-from document_store.models.query import AggregationQuery
+from document_store.models.query import RecordQuery
 from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType
 from document_store.pipeline import build_aggregation_pipeline
 from document_store.models.types import TypeRegistry
-from document_store.models.record import validate_query_fields
 
 
 class DatasetManager:
@@ -265,9 +264,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Create new schema without the field
-            new_schema = DatasetSchema(
-                fields=[field for field in dataset.dataset_schema if field.field_name != field_name]
-            )
+            new_schema = DatasetSchema(fields=[field for field in dataset.dataset_schema if field.field_name != field_name])
 
             # Validate schema - will raise InvalidDatasetSchemaError if field doesn't exist
             if len(new_schema) == len(dataset.dataset_schema):
@@ -560,47 +557,19 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to get record: {str(e)}")
 
-    async def find_records(self, user_id: str, dataset_id: ObjectId, query: Optional[Dict] = None) -> List[Record]:
-        """Finds records in the specified dataset."""
-        try:
-            # Verify dataset exists and get schema for query validation
-            dataset = await self.get_dataset(user_id, dataset_id)
+    async def query_records(self, user_id: str, dataset_id: ObjectId, query: Optional[RecordQuery] = None) -> Union[List[Record], List[Dict]]:
+        """Query records in the specified dataset.
 
-            # Build query
-            mongo_query = {
-                "user_id": user_id,
-                "dataset_id": dataset_id,
-            }
-
-            if query:
-                # Validate query fields exist in schema
-                validate_query_fields(query, dataset.dataset_schema)
-                # Add data field conditions
-                for field, value in query.items():
-                    mongo_query[f"data.{field}"] = value
-
-            # Execute query
-            records = []
-            cursor = self._records.find(mongo_query)
-            async for doc in cursor:
-                records.append(Record.model_validate(doc))
-            return records
-
-        except (DatasetNotFoundError, InvalidRecordDataError):
-            raise
-        except Exception as e:
-            raise DatabaseError(f"Failed to find records: {str(e)}")
-
-    async def aggregate_records(self, user_id: str, dataset_id: ObjectId, query: AggregationQuery) -> List[Dict]:
-        """Perform aggregation operations on records.
+        Supports both simple queries and aggregations through the RecordQuery model.
 
         Args:
             user_id: User ID
             dataset_id: Dataset ID
-            query: Aggregation query
+            query: Optional RecordQuery for filtering, sorting, and/or aggregating
 
         Returns:
-            List of aggregation results
+            List[Record] for simple queries (no aggregations)
+            List[Dict] for queries with aggregations
 
         Raises:
             DatasetNotFoundError: If dataset not found
@@ -611,25 +580,38 @@ class DatasetManager:
             # Verify dataset exists and get schema for validation
             dataset = await self.get_dataset(user_id, dataset_id)
 
+            # Create default query if none provided
+            if query is None:
+                query = RecordQuery()
+
             # Validate query against schema
             query.validate_with_schema(dataset.dataset_schema)
 
-            # Build aggregation pipeline
+            # Build pipeline
             pipeline = build_aggregation_pipeline(user_id, dataset_id, query)
 
-            # Execute aggregation
-            results = []
+            # Execute pipeline
             cursor = self._records.aggregate(pipeline)
-            async for doc in cursor:
-                # If group by was used, move _id contents to top level
-                if doc["_id"] and isinstance(doc["_id"], dict):
-                    doc.update(doc["_id"])
-                doc.pop("_id")
-                results.append(doc)
 
-            return results
+            # Handle results based on query type
+            if query.aggregations:
+                # Aggregation query - return Dict results
+                results = []
+                async for doc in cursor:
+                    # If group by was used, move _id contents to top level
+                    if doc["_id"] and isinstance(doc["_id"], dict):
+                        doc.update(doc["_id"])
+                    doc.pop("_id")
+                    results.append(doc)
+                return results
+            else:
+                # Simple query - return Record objects
+                records = []
+                async for doc in cursor:
+                    records.append(Record.model_validate(doc))
+                return records
 
         except (DatasetNotFoundError, InvalidRecordDataError):
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to aggregate records: {str(e)}")
+            raise DatabaseError(f"Failed to query records: {str(e)}")

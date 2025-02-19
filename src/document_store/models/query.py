@@ -61,12 +61,17 @@ class AggregationField(BaseModel):
             raise InvalidRecordDataError(f"Operation '{self.operation}' not valid for field type '{schema_field.type}'")
 
 
-class AggregationQuery(BaseModel):
-    """Query model for aggregation operations."""
+class RecordQuery(BaseModel):
+    """Query model for record operations.
+    
+    Supports both simple queries and aggregations:
+    - Simple query: Use filter, sort, limit
+    - Aggregation: Use group_by, aggregations, filter, sort, limit
+    """
 
     group_by: Optional[List[str]] = Field(default=None, description="Fields to group by")
-    aggregations: List[AggregationField] = Field(..., description="Aggregation operations to perform")  # Required
-    filter: Optional[FilterExpression] = Field(default=None, description="Filter conditions to apply before aggregation")
+    aggregations: Optional[List[AggregationField]] = Field(default=None, description="Optional aggregation operations to perform")
+    filter: Optional[FilterExpression] = Field(default=None, description="Filter conditions to apply")
     sort: Optional[Dict[str, bool]] = Field(default=None, description="Sorting configuration (field -> ascending)")
     limit: Optional[int] = Field(default=None, description="Maximum number of results to return")
 
@@ -79,9 +84,10 @@ class AggregationQuery(BaseModel):
             if invalid_fields:
                 raise InvalidRecordDataError(f"Invalid group by fields: {invalid_fields}")
 
-        # Validate aggregations
-        for agg in self.aggregations:
-            agg.validate_with_schema(schema)
+        # Validate aggregations if present
+        if self.aggregations:
+            for agg in self.aggregations:
+                agg.validate_with_schema(schema)
 
         # Validate filter field
         if self.filter and not schema.has_field(self.filter.field):
@@ -90,7 +96,9 @@ class AggregationQuery(BaseModel):
         # Validate sort fields
         if self.sort:
             schema_fields = set(schema.get_field_names())
-            agg_fields = {agg.alias for agg in self.aggregations}
+            agg_fields = set()
+            if self.aggregations:
+                agg_fields = {agg.alias for agg in self.aggregations}
             valid_sort_fields = schema_fields | agg_fields
 
             invalid_sort_fields = [f for f in self.sort.keys() if f not in valid_sort_fields]
@@ -100,15 +108,22 @@ class AggregationQuery(BaseModel):
     class Config:
         arbitrary_types_allowed = True
         json_schema_extra = {
-            "example": {
-                "group_by": ["category"],
-                "aggregations": [
-                    {"field": "amount", "operation": "sum"},
-                    {"field": "amount", "operation": "avg", "alias": "average_amount"},
-                    {"field": "id", "operation": "count", "alias": "total_records"},
-                ],
-                "filter": {"field": "status", "condition": {"operator": "eq", "value": "completed"}},
-                "sort": {"amount_sum": False},  # Sort by sum descending
-                "limit": 10,
+            "examples": {
+                "simple_query": {
+                    "filter": {"field": "status", "condition": {"operator": "eq", "value": "active"}},
+                    "sort": {"created_at": False},  # Sort by created_at descending
+                    "limit": 10
+                },
+                "aggregation_query": {
+                    "group_by": ["category"],
+                    "aggregations": [
+                        {"field": "amount", "operation": "sum"},
+                        {"field": "amount", "operation": "avg", "alias": "average_amount"},
+                        {"field": "id", "operation": "count", "alias": "total_records"},
+                    ],
+                    "filter": {"field": "status", "condition": {"operator": "eq", "value": "completed"}},
+                    "sort": {"amount_sum": False},  # Sort by sum descending
+                    "limit": 10
+                }
             }
         }

@@ -6,12 +6,11 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
-from document_store.types import (
-    DatasetSchema,
-    PydanticObjectId,
-    RecordData,
-    SchemaField,
-)
+from document_store.models.base import PydanticObjectId
+from document_store.models.field import SchemaField
+from document_store.models.query import RecordQuery
+from document_store.models.record import RecordData
+from document_store.models.schema import DatasetSchema
 
 
 class DatasetArgs(BaseModel):
@@ -63,8 +62,13 @@ class UpdateRecordArgs(RecordArgs):
 
 
 class FindRecordsArgs(DatasetArgs):
-    query: Optional[Dict] = Field(
-        default=None, description="Optional query parameters to filter records in the dataset", example={"rating": {"$gte": 4}, "category": "feature"}
+    query: Optional[RecordQuery] = Field(
+        default=None,
+        description="Optional query parameters to filter, sort, or aggregate records",
+        example={
+            "filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}},
+            "sort": {"created_at": False}
+        }
     )
 
 
@@ -160,7 +164,7 @@ class GetAllRecordsOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         user_id = config.get("configurable", {}).get("user_id")
         args = DatasetArgs(**kwargs)
-        records = await self.db.find_records(user_id, args.dataset_id)
+        records = await self.db.query_records(user_id, args.dataset_id)
         return [record.model_dump() for record in records]
 
 
@@ -210,15 +214,17 @@ class GetRecordOperator(BaseDBOperator):
         return record.model_dump()
 
 
-class FindRecordsOperator(BaseDBOperator):
-    name: str = "find_records"
-    description: str = "Find records"
+class QueryRecordsOperator(BaseDBOperator):
+    name: str = "query_records"
+    description: str = "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations."
     args_schema: ClassVar[BaseModel] = FindRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         user_id = config.get("configurable", {}).get("user_id")
         args = FindRecordsArgs(**kwargs)
-        result = await self.db.find_records(user_id, args.dataset_id, args.query)
+        result = await self.db.query_records(user_id, args.dataset_id, args.query)
+        if isinstance(result[0], dict):
+            return result
         return [record.model_dump() for record in result]
 
 

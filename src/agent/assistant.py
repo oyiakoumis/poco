@@ -9,9 +9,7 @@ from agent.tools.database_operator import (
     DeleteDatasetOperator,
     DeleteFieldOperator,
     DeleteRecordOperator,
-    FindRecordsOperator,
-    GetDatasetOperator,
-    GetRecordOperator,
+    QueryRecordsOperator,
     ListDatasetsOperator,
     UpdateDatasetOperator,
     UpdateFieldOperator,
@@ -19,7 +17,6 @@ from agent.tools.database_operator import (
 )
 from agent.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
-from document_store.types import FieldType
 from state import State
 
 ASSISTANT_SYSTEM_MESSAGE = f"""
@@ -62,7 +59,7 @@ Tool Usage Protocol:
 2. Record Operations:
 - get_all_records: Use to retrieve *all* records from a specified dataset.
 - create_record, update_record, delete_record: Manage individual records
-- find_records: Search for records matching criteria
+- query_records: Search for records with optional filtering, sorting, and aggregation
 
 3. Temporal Processing:
 - Always use temporal_reference_resolver for any time-related expressions
@@ -92,16 +89,14 @@ class Assistant:
     def __init__(self, db: DatasetManager):
         self.tools = [
             TemporalReferenceTool(),
-            # GetDatasetOperator(db),
             CreateDatasetOperator(db),
             UpdateDatasetOperator(db),
             DeleteDatasetOperator(db),
             ListDatasetsOperator(db),
-            # GetRecordOperator(db),
             CreateRecordOperator(db),
             UpdateRecordOperator(db),
             DeleteRecordOperator(db),
-            FindRecordsOperator(db),
+            QueryRecordsOperator(db),
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
