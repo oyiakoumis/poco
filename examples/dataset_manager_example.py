@@ -137,12 +137,7 @@ async def main():
         print("Updated record 1")
 
         # Query records with filter
-        filter_query = RecordQuery(
-            filter=FilterExpression(
-                field="category",
-                condition=FilterCondition(operator=ComparisonOperator.EQUALS, value="dairy")
-            )
-        )
+        filter_query = RecordQuery(filter=FilterExpression(field="category", condition=FilterCondition(operator=ComparisonOperator.EQUALS, value="dairy")))
         records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=filter_query)
         print(f"Found {len(records)} dairy items")
 
@@ -155,12 +150,23 @@ async def main():
             aggregations=[
                 AggregationField(field="quantity", operation=AggregationType.SUM, alias="total_quantity"),
                 AggregationField(field="quantity", operation=AggregationType.COUNT, alias="total_items"),
-            ]
+            ],
         )
 
         results = await manager.query_records(user_id, dataset_id, agg_query)
         print("Aggregation results:", results)
 
+        # Group by unit to see distribution of items by measurement unit
+        unit_query = RecordQuery(
+            group_by=["unit"],
+            aggregations=[
+                AggregationField(field="quantity", operation=AggregationType.SUM, alias="total_quantity"),
+            ],
+        )
+        unit_results = await manager.query_records(user_id, dataset_id, unit_query)
+        print("Items by unit:", unit_results)
+
+        print("\n=== Delete Operations ===")
         # Delete category field (demonstrating field removal)
         await manager.delete_field(user_id, dataset_id, "category")
         print("Deleted category field")
