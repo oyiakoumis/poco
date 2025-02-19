@@ -61,14 +61,11 @@ class UpdateRecordArgs(RecordArgs):
     )
 
 
-class FindRecordsArgs(DatasetArgs):
+class QueryRecordsArgs(DatasetArgs):
     query: Optional[RecordQuery] = Field(
         default=None,
         description="Optional query parameters to filter, sort, or aggregate records",
-        example={
-            "filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}},
-            "sort": {"created_at": False}
-        }
+        example={"filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}}, "sort": {"created_at": False}},
     )
 
 
@@ -143,31 +140,6 @@ class DeleteDatasetOperator(BaseDBOperator):
         await self.db.delete_dataset(user_id, args.dataset_id)
 
 
-class GetDatasetOperator(BaseDBOperator):
-    name: str = "get_dataset"
-    description: str = "Get a dataset"
-    args_schema: ClassVar[BaseModel] = DatasetArgs
-
-    async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = DatasetArgs(**kwargs)
-        dataset = await self.db.get_dataset(user_id, args.dataset_id)
-        return dataset.model_dump()
-
-
-# Get All Records Operator
-class GetAllRecordsOperator(BaseDBOperator):
-    name: str = "get_all_records"
-    description: str = "Get all records"
-    args_schema: ClassVar[BaseModel] = DatasetArgs
-
-    async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = DatasetArgs(**kwargs)
-        records = await self.db.query_records(user_id, args.dataset_id)
-        return [record.model_dump() for record in records]
-
-
 class CreateRecordOperator(BaseDBOperator):
     name: str = "create_record"
     description: str = f"Create a new record: {CreateRecordArgs.model_json_schema()}"
@@ -217,11 +189,11 @@ class GetRecordOperator(BaseDBOperator):
 class QueryRecordsOperator(BaseDBOperator):
     name: str = "query_records"
     description: str = "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations."
-    args_schema: ClassVar[BaseModel] = FindRecordsArgs
+    args_schema: ClassVar[BaseModel] = QueryRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         user_id = config.get("configurable", {}).get("user_id")
-        args = FindRecordsArgs(**kwargs)
+        args = QueryRecordsArgs(**kwargs)
         result = await self.db.query_records(user_id, args.dataset_id, args.query)
         if isinstance(result[0], dict):
             return result

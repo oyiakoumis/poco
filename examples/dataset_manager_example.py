@@ -1,21 +1,21 @@
 """Example usage of DatasetManager class demonstrating integration with LangChain workflow."""
 
 import asyncio
+
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from constants import DATABASE_CONNECTION_STRING
 from document_store.dataset_manager import DatasetManager
-from document_store.models.schema import DatasetSchema
 from document_store.models.field import SchemaField
-from document_store.models.types import FieldType
 from document_store.models.query import (
     AggregationField,
-    RecordQuery,
-    FilterExpression,
-    FilterCondition,
     ComparisonOperator,
+    FilterCondition,
+    FilterExpression,
+    RecordQuery,
 )
-from document_store.models.types import AggregationType
+from document_store.models.schema import DatasetSchema
+from document_store.models.types import AggregationType, FieldType
 
 
 class ExampleDatasetManager(DatasetManager):

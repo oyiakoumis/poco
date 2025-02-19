@@ -5,8 +5,7 @@ from typing import Any, Dict
 from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
 from document_store.models.base import BaseDocument, PydanticObjectId
 from document_store.models.schema import DatasetSchema
-from document_store.models.types import FieldType
-from document_store.models.types import TypeRegistry
+from document_store.models.types import FieldType, TypeRegistry
 
 RecordData = Dict[str, Any]
 

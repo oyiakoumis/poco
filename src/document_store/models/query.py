@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from document_store.exceptions import InvalidRecordDataError
-from document_store.models.types import AggregationType, TypeRegistry
 from document_store.models.schema import DatasetSchema
+from document_store.models.types import AggregationType, TypeRegistry
 
 
 class ComparisonOperator(str, Enum):
@@ -63,7 +63,7 @@ class AggregationField(BaseModel):
 
 class RecordQuery(BaseModel):
     """Query model for record operations.
-    
+
     Supports both simple queries and aggregations:
     - Simple query: Use filter, sort, limit
     - Aggregation: Use group_by, aggregations, filter, sort, limit
@@ -112,7 +112,7 @@ class RecordQuery(BaseModel):
                 "simple_query": {
                     "filter": {"field": "status", "condition": {"operator": "eq", "value": "active"}},
                     "sort": {"created_at": False},  # Sort by created_at descending
-                    "limit": 10
+                    "limit": 10,
                 },
                 "aggregation_query": {
                     "group_by": ["category"],
@@ -123,7 +123,7 @@ class RecordQuery(BaseModel):
                     ],
                     "filter": {"field": "status", "condition": {"operator": "eq", "value": "completed"}},
                     "sort": {"amount_sum": False},  # Sort by sum descending
-                    "limit": 10
-                }
+                    "limit": 10,
+                },
             }
         }

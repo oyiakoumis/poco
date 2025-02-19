@@ -3,10 +3,10 @@
 from typing import Any, Dict, List
 
 from document_store.models.query import (
-    RecordQuery,
     AggregationType,
     ComparisonOperator,
     FilterExpression,
+    RecordQuery,
 )
 
 

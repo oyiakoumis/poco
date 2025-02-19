@@ -6,11 +6,11 @@ from document_store.models.dataset import (
 )
 from document_store.models.query import (
     AggregationField,
-    RecordQuery,
     AggregationType,
     ComparisonOperator,
     FilterCondition,
     FilterExpression,
+    RecordQuery,
 )
 from document_store.models.record import Record
 

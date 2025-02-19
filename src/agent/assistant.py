@@ -9,8 +9,8 @@ from agent.tools.database_operator import (
     DeleteDatasetOperator,
     DeleteFieldOperator,
     DeleteRecordOperator,
-    QueryRecordsOperator,
     ListDatasetsOperator,
+    QueryRecordsOperator,
     UpdateDatasetOperator,
     UpdateFieldOperator,
     UpdateRecordOperator,
@@ -57,7 +57,6 @@ Tool Usage Protocol:
 - delete_field: Remove a field from the dataset schema
 
 2. Record Operations:
-- get_all_records: Use to retrieve *all* records from a specified dataset.
 - create_record, update_record, delete_record: Manage individual records
 - query_records: Search for records with optional filtering, sorting, and aggregation
 

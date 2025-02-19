@@ -25,9 +25,8 @@ from document_store.models.field import SchemaField
 from document_store.models.query import RecordQuery
 from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
-from document_store.models.types import FieldType
+from document_store.models.types import FieldType, TypeRegistry
 from document_store.pipeline import build_aggregation_pipeline
-from document_store.models.types import TypeRegistry
 
 
 class DatasetManager:
