@@ -14,8 +14,8 @@ from agent.tools.database_operator import (
     GetRecordOperator,
     ListDatasetsOperator,
     UpdateDatasetOperator,
-    UpdateRecordOperator,
     UpdateFieldOperator,
+    UpdateRecordOperator,
 )
 from agent.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager

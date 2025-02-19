@@ -12,6 +12,7 @@
     "ainvoke",
     "arun",
     "astream",
+    "initlist",
     "relativedelta"
   ]
 }

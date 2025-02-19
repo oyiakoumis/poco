@@ -4,9 +4,13 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import pymongo
-from pymongo.errors import BulkWriteError
 from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorCollection,
+    AsyncIOMotorDatabase,
+)
+from pymongo.errors import BulkWriteError
 
 from document_store.exceptions import (
     DatabaseError,
@@ -16,10 +20,17 @@ from document_store.exceptions import (
     InvalidRecordDataError,
     RecordNotFoundError,
 )
-from document_store.models import Dataset, Record, validate_field_update
-from document_store.types import DatasetSchema, FieldType, RecordData, SchemaField, SAFE_TYPE_CONVERSIONS
-from document_store.validators.record import validate_query_fields, validate_record_data
+from document_store.models import Dataset, Record
+from document_store.models.field import SchemaField
+from document_store.models.query import AggregationQuery
+from document_store.models.record import RecordData
+from document_store.models.schema import DatasetSchema
+from document_store.models.types import FieldType
+from document_store.pipeline import build_aggregation_pipeline
 from document_store.validators.factory import get_validator
+from document_store.validators.field import validate_field_update
+from document_store.validators.query import validate_aggregation_query
+from document_store.validators.record import validate_query_fields, validate_record_data
 
 
 class DatasetManager:
@@ -124,23 +135,27 @@ class DatasetManager:
             # Verify dataset exists and belongs to user
             await self.get_dataset(user_id, dataset_id)
 
-            # Delete dataset and its records
-            await self._records.delete_many(
-                {
-                    "user_id": user_id,
-                    "dataset_id": dataset_id,
-                }
-            )
+            async with await self.client.start_session() as session:
+                async with session.start_transaction():
+                    # Delete dataset and its records
+                    await self._records.delete_many(
+                        {
+                            "user_id": user_id,
+                            "dataset_id": dataset_id,
+                        },
+                        session=session,
+                    )
 
-            result = await self._datasets.delete_one(
-                {
-                    "_id": dataset_id,
-                    "user_id": user_id,
-                }
-            )
+                    result = await self._datasets.delete_one(
+                        {
+                            "_id": dataset_id,
+                            "user_id": user_id,
+                        },
+                        session=session,
+                    )
 
-            if result.deleted_count == 0:
-                raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
+                    if result.deleted_count == 0:
+                        raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
 
         except DatasetNotFoundError:
             raise
@@ -575,3 +590,46 @@ class DatasetManager:
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to find records: {str(e)}")
+
+    async def aggregate_records(self, user_id: str, dataset_id: ObjectId, query: AggregationQuery) -> List[Dict]:
+        """Perform aggregation operations on records.
+
+        Args:
+            user_id: User ID
+            dataset_id: Dataset ID
+            query: Aggregation query
+
+        Returns:
+            List of aggregation results
+
+        Raises:
+            DatasetNotFoundError: If dataset not found
+            InvalidRecordDataError: If query is invalid
+            DatabaseError: For other database errors
+        """
+        try:
+            # Verify dataset exists and get schema for validation
+            dataset = await self.get_dataset(user_id, dataset_id)
+
+            # Validate query against schema
+            validate_aggregation_query(query, dataset.dataset_schema)
+
+            # Build aggregation pipeline
+            pipeline = build_aggregation_pipeline(user_id, dataset_id, query)
+
+            # Execute aggregation
+            results = []
+            cursor = self._records.aggregate(pipeline)
+            async for doc in cursor:
+                # If group by was used, move _id contents to top level
+                if doc["_id"] and isinstance(doc["_id"], dict):
+                    doc.update(doc["_id"])
+                doc.pop("_id")
+                results.append(doc)
+
+            return results
+
+        except (DatasetNotFoundError, InvalidRecordDataError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to aggregate records: {str(e)}")

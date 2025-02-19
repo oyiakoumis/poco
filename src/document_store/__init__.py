@@ -14,7 +14,12 @@ from document_store.exceptions import (
     TypeConversionError,
 )
 from document_store.models import Dataset, Record
-from document_store.types import SAFE_TYPE_CONVERSIONS, DatasetSchema, FieldType, SchemaField
+from document_store.types import (
+    SAFE_TYPE_CONVERSIONS,
+    DatasetSchema,
+    FieldType,
+    SchemaField,
+)
 
 __all__ = [
     # Main class

@@ -3,7 +3,8 @@
 from typing import Any, Dict
 
 from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
-from document_store.types import DatasetSchema, FieldType
+from document_store.models.schema import DatasetSchema
+from document_store.models.types import FieldType
 from document_store.validators.factory import get_validator
 
 

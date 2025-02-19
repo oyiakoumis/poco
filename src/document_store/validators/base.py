@@ -1,9 +1,9 @@
 """Base validator class for type validation."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
-from document_store.types import FieldType
+from document_store.models.types import FieldType
 
 
 class TypeValidator(ABC):

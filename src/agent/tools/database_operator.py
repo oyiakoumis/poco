@@ -6,7 +6,12 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
-from document_store.types import DatasetSchema, PydanticObjectId, RecordData, SchemaField
+from document_store.types import (
+    DatasetSchema,
+    PydanticObjectId,
+    RecordData,
+    SchemaField,
+)
 
 
 class DatasetArgs(BaseModel):

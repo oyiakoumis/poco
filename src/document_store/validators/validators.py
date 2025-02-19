@@ -1,9 +1,9 @@
 """Concrete validator implementations for different field types."""
 
 from datetime import date, datetime
-from typing import Any, List, Optional, Set, Union
+from typing import Any, List, Optional, Set
 
-from document_store.types import FieldType
+from document_store.models.types import FieldType
 from document_store.validators.base import TypeValidator
 
 
