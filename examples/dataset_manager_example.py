@@ -154,6 +154,18 @@ async def main():
         records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=filter_query)
         print(f"Found {len(records)} dairy items")
 
+        # Query records by expiry date
+        date_query = RecordQuery(
+            filter=FilterExpression(
+                field="expiry_date",
+                condition=FilterCondition(operator=ComparisonOperator.LESS_THAN, value="2025-03-01")
+            )
+        )
+        expiring_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=date_query)
+        print(f"\nFound {len(expiring_records)} items expiring before March 2025:")
+        for record in expiring_records:
+            print(f"- {record.data['item']} expires on {record.data['expiry_date']}")
+
         # 4. Aggregation
         print("\n=== Aggregation Operations ===")
 
