@@ -28,7 +28,7 @@ async def main():
         config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123"}, recursion_limit=10)
 
         for message in [
-            HumanMessage(content="Add a record in my Sales records. put anything you want in it."),
+            HumanMessage(content="Try some aggregation/groupby query on any dataset you want. I just want to test the app"),
         ]:
             print_message(message, "Human")
             # Process and print each event

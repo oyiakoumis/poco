@@ -126,13 +126,9 @@ async def main():
 
         # Create record with expiry date
         record2_id = await manager.create_record(
-            user_id=user_id, dataset_id=dataset_id, data={
-                "item": "Yogurt",
-                "quantity": 4,
-                "unit": "pieces",
-                "category": "dairy",
-                "expiry_date": "2025-02-27"  # Date in YYYY-MM-DD format
-            }
+            user_id=user_id,
+            dataset_id=dataset_id,
+            data={"item": "Yogurt", "quantity": 4, "unit": "pieces", "category": "dairy", "expiry_date": "2025-02-27"},  # Date in YYYY-MM-DD format
         )
         print(f"Created record 2: {record2_id}")
 
@@ -156,10 +152,7 @@ async def main():
 
         # Query records by expiry date
         date_query = RecordQuery(
-            filter=FilterExpression(
-                field="expiry_date",
-                condition=FilterCondition(operator=ComparisonOperator.LESS_THAN, value="2025-03-01")
-            )
+            filter=FilterExpression(field="expiry_date", condition=FilterCondition(operator=ComparisonOperator.LESS_THAN, value="2025-03-01"))
         )
         expiring_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=date_query)
         print(f"\nFound {len(expiring_records)} items expiring before March 2025:")

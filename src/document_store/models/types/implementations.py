@@ -87,28 +87,29 @@ class DateType(BaseType):
 
     field_type = FieldType.DATE
 
-    def validate(self, value: Any) -> date:
-        """Validate and convert to date.
+    def validate(self, value: Any) -> datetime:
+        """Validate and convert to datetime at midnight UTC.
 
         Accepts:
         - date objects
-        - datetime objects (date part only)
+        - datetime objects
         - strings in YYYY-MM-DD format
         """
         if isinstance(value, datetime):
-            return value.date()
+            return value.replace(hour=0, minute=0, second=0, microsecond=0)
         if isinstance(value, date):
             if isinstance(value, datetime):  # Handle datetime subclass
-                return value.date()
-            return value
+                return value.replace(hour=0, minute=0, second=0, microsecond=0)
+            return datetime(value.year, value.month, value.day)
         if isinstance(value, str):
             try:
-                return datetime.strptime(value, "%Y-%m-%d").date()
+                parsed_date = datetime.strptime(value, "%Y-%m-%d")
+                return parsed_date.replace(hour=0, minute=0, second=0, microsecond=0)
             except ValueError:
                 raise ValueError(f"Invalid date format. Expected YYYY-MM-DD, got: {value}")
         raise ValueError(f"Cannot convert {type(value)} to date")
 
-    def validate_default(self, value: Any) -> Optional[date]:
+    def validate_default(self, value: Any) -> Optional[datetime]:
         """Validate and convert default value to date."""
         if value is None:
             return None

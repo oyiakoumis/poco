@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from document_store.exceptions import InvalidRecordDataError
 from document_store.models.schema import DatasetSchema
-from document_store.models.types import AggregationType, TypeRegistry
+from document_store.models.types import AggregationType, FieldType, TypeRegistry
 
 
 class SortOrder(str, Enum):
@@ -96,9 +96,26 @@ class RecordQuery(BaseModel):
             for agg in self.aggregations:
                 agg.validate_with_schema(schema)
 
-        # Validate filter field
-        if self.filter and not schema.has_field(self.filter.field):
-            raise InvalidRecordDataError(f"Filter field '{self.filter.field}' not found in schema")
+        # Validate filter field and value
+        if self.filter:
+            if not schema.has_field(self.filter.field):
+                raise InvalidRecordDataError(f"Filter field '{self.filter.field}' not found in schema")
+            
+            # Validate filter value against field type
+            field = schema.get_field(self.filter.field)
+            type_impl = TypeRegistry.get_type(field.type)
+
+            # Set options for select/multi-select fields before validation
+            if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
+                if not field.options:
+                    raise InvalidRecordDataError(f"Options not provided for {field.type} field '{field.field_name}'")
+                type_impl.set_options(field.options)
+
+            try:
+                # Convert the filter value using the field's type implementation
+                self.filter.condition.value = type_impl.validate(self.filter.condition.value)
+            except ValueError as e:
+                raise InvalidRecordDataError(f"Invalid filter value for field '{self.filter.field}': {str(e)}")
 
         # Validate sort fields
         if self.sort:
