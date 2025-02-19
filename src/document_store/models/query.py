@@ -49,15 +49,8 @@ class AggregationField(BaseModel):
         if self.alias is None:
             self.alias = f"{self.field}_{self.operation}"
 
-    @model_validator(mode="after")
-    def validate_field_operation(self) -> "AggregationField":
+    def validate_with_schema(self, schema: DatasetSchema) -> None:
         """Validate the field and operation against the schema."""
-        # Note: This will be called during AggregationQuery validation
-        # where schema will be available in the context
-        schema: DatasetSchema = self.model_extra.get("schema")
-        if not schema:
-            return self
-
         try:
             schema_field = schema.get_field(self.field)
         except KeyError as e:
@@ -66,8 +59,6 @@ class AggregationField(BaseModel):
         type_instance = TypeRegistry.get_type(schema_field.type)
         if not type_instance.can_aggregate(self.operation):
             raise InvalidRecordDataError(f"Operation '{self.operation}' not valid for field type '{schema_field.type}'")
-
-        return self
 
 
 class AggregationQuery(BaseModel):
@@ -81,9 +72,6 @@ class AggregationQuery(BaseModel):
 
     def validate_with_schema(self, schema: DatasetSchema) -> None:
         """Validate the query against a schema."""
-        # Store schema in context for child validators
-        self.model_extra = {"schema": schema}
-
         # Validate group by fields
         if self.group_by:
             schema_fields = set(schema.get_field_names())
@@ -93,8 +81,7 @@ class AggregationQuery(BaseModel):
 
         # Validate aggregations
         for agg in self.aggregations:
-            agg.model_extra = {"schema": schema}
-            agg.validate_field_operation()
+            agg.validate_with_schema(schema)
 
         # Validate filter field
         if self.filter and not schema.has_field(self.filter.field):

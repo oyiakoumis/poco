@@ -265,7 +265,9 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Create new schema without the field
-            new_schema = [field for field in dataset.dataset_schema if field.field_name != field_name]
+            new_schema = DatasetSchema(
+                fields=[field for field in dataset.dataset_schema if field.field_name != field_name]
+            )
 
             # Validate schema - will raise InvalidDatasetSchemaError if field doesn't exist
             if len(new_schema) == len(dataset.dataset_schema):
@@ -332,7 +334,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Create new schema with the added field
-            new_schema = [*dataset.dataset_schema, field]
+            new_schema = DatasetSchema(fields=[*dataset.dataset_schema.fields, field])
 
             # Start transaction
             async with await self.client.start_session() as session:
