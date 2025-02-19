@@ -9,10 +9,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Debug document_store_demo.py",
+            "name": "Debug dataset_manager_example.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/document_store_demo.py",
+            "program": "${workspaceFolder}/examples/dataset_manager_example.py",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src"

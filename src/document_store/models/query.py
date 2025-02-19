@@ -79,8 +79,6 @@ class AggregationQuery(BaseModel):
     sort: Optional[Dict[str, bool]] = Field(default=None, description="Sorting configuration (field -> ascending)")
     limit: Optional[int] = Field(default=None, description="Maximum number of results to return")
 
-    model_config = {"arbitrary_types_allowed": True}
-
     def validate_with_schema(self, schema: DatasetSchema) -> None:
         """Validate the query against a schema."""
         # Store schema in context for child validators
@@ -113,6 +111,7 @@ class AggregationQuery(BaseModel):
                 raise InvalidRecordDataError(f"Invalid sort fields: {invalid_sort_fields}")
 
     class Config:
+        arbitrary_types_allowed = True
         json_schema_extra = {
             "example": {
                 "group_by": ["category"],

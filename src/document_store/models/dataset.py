@@ -1,7 +1,4 @@
 """Dataset model and related utilities."""
-
-from pydantic import field_validator
-
 from document_store.models.base import BaseDocument
 from document_store.models.schema import DatasetSchema
 

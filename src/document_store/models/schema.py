@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from document_store.exceptions import InvalidDatasetSchemaError, InvalidRecordDataError
 from document_store.models.field import SchemaField
-from document_store.models.types import SAFE_TYPE_CONVERSIONS
+from document_store.models.types import TypeRegistry
 
 
 class DatasetSchema(BaseModel):
@@ -122,8 +122,8 @@ class DatasetSchema(BaseModel):
 
                 # Validate type conversion if type is changing
                 if field.type != field_update.type:
-                    safe_conversions = SAFE_TYPE_CONVERSIONS.get(field.type, set())
-                    if field_update.type not in safe_conversions:
+                    type_impl = TypeRegistry.get_type(field_update.type)
+                    if not type_impl.can_convert_from(field.type):
                         raise InvalidRecordDataError(f"Cannot safely convert field '{field_name}' from {field.type} " f"to {field_update.type}")
                 new_schema.append(field_update)
             else:
