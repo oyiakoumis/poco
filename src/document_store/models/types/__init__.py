@@ -7,7 +7,7 @@ from document_store.models.types.constants import (
     AggregationType,
     FieldType,
 )
-from document_store.models.types.implementations import (
+from document_store.models.types.types import (
     BooleanType,
     DateTimeType,
     DateType,

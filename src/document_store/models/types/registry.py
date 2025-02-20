@@ -4,7 +4,7 @@ from typing import Dict, Type
 
 from document_store.models.types.base import BaseType
 from document_store.models.types.constants import FieldType
-from document_store.models.types.implementations import (
+from document_store.models.types.types import (
     BooleanType,
     DateTimeType,
     DateType,
