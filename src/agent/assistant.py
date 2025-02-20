@@ -1,6 +1,6 @@
-from langchain.schema import SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import SystemMessage, trim_messages
 
 from agent.tools.database_operator import (
     AddFieldOperator,
@@ -85,6 +85,9 @@ When uncertain, ask for clarification while showing that you understand the cont
 
 
 class Assistant:
+    MODEL_NAME = "gpt-4o-mini"
+    TOKEN_LIMIT = 128000
+
     def __init__(self, db: DatasetManager):
         self.tools = [
             TemporalReferenceTool(),
@@ -103,10 +106,21 @@ class Assistant:
 
     async def __call__(self, state: State):
         # Initialize the language model
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        llm = ChatOpenAI(model=self.MODEL_NAME, temperature=0)
 
+        messages = [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages
+        trimmed_messages = trim_messages(
+            messages,
+            strategy="last",
+            token_counter=llm,
+            max_tokens=self.TOKEN_LIMIT,
+            start_on="human",
+            end_on=("human", "tool"),
+            include_system=True,
+            allow_partial=False,
+        )
         runnable = create_react_agent(llm, self.tools)
 
-        response = await runnable.ainvoke({"messages": [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages})
+        response = await runnable.ainvoke({"messages": trimmed_messages})
 
         return {"messages": response["messages"]}
