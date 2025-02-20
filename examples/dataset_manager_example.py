@@ -12,6 +12,7 @@ from document_store.models.query import (
     ComparisonOperator,
     FilterCondition,
     FilterExpression,
+    LogicalOperator,
     RecordQuery,
 )
 from document_store.models.schema import DatasetSchema
@@ -145,19 +146,60 @@ async def main():
         )
         print("Updated record 1")
 
-        # Query records with filter
-        filter_query = RecordQuery(filter=FilterExpression(field="category", condition=FilterCondition(operator=ComparisonOperator.EQUALS, value="dairy")))
+        # Query records with simple filter
+        simple_filter = FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy")
+        filter_query = RecordQuery(filter=simple_filter)
         records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=filter_query)
         print(f"Found {len(records)} dairy items")
 
-        # Query records by expiry date
-        date_query = RecordQuery(
-            filter=FilterExpression(field="expiry_date", condition=FilterCondition(operator=ComparisonOperator.LESS_THAN, value="2025-03-01"))
+        # Query with AND condition: dairy items with quantity > 2
+        and_filter = FilterExpression(
+            operator=LogicalOperator.AND,
+            expressions=[
+                FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy"),
+                FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=2)
+            ]
         )
-        expiring_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=date_query)
-        print(f"\nFound {len(expiring_records)} items expiring before March 2025:")
-        for record in expiring_records:
-            print(f"- {record.data['item']} expires on {record.data['expiry_date']}")
+        and_query = RecordQuery(filter=and_filter)
+        and_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=and_query)
+        print(f"Found {len(and_records)} dairy items with quantity > 2")
+
+        # Query with OR condition: dairy items or items with quantity > 3
+        or_filter = FilterExpression(
+            operator=LogicalOperator.OR,
+            expressions=[
+                FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy"),
+                FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=3)
+            ]
+        )
+        or_query = RecordQuery(filter=or_filter)
+        or_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=or_query)
+        print(f"Found {len(or_records)} items that are either dairy or have quantity > 3")
+
+        # Complex nested query: (dairy AND quantity > 2) OR (expiry_date < 2025-03-01)
+        nested_filter = FilterExpression(
+            operator=LogicalOperator.OR,
+            expressions=[
+                FilterExpression(
+                    operator=LogicalOperator.AND,
+                    expressions=[
+                        FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy"),
+                        FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=2)
+                    ]
+                ),
+                FilterCondition(field="expiry_date", operator=ComparisonOperator.LESS_THAN, value="2025-03-01")
+            ]
+        )
+        nested_query = RecordQuery(filter=nested_filter)
+        nested_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=nested_query)
+        print("\nComplex query results:")
+        print(f"Found {len(nested_records)} items that are either:")
+        print("- dairy items with quantity > 2")
+        print("- items expiring before March 2025")
+        for record in nested_records:
+            print(f"- {record.data['item']}: quantity={record.data.get('quantity')}, "
+                  f"category={record.data.get('category')}, "
+                  f"expiry_date={record.data.get('expiry_date', 'N/A')}")
 
         # 4. Aggregation
         print("\n=== Aggregation Operations ===")

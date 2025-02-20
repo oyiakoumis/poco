@@ -61,7 +61,7 @@ Tool Usage Protocol:
 - query_records: Search for records with optional filtering, sorting, and aggregation
 
 3. Temporal Processing:
-- Always use temporal_reference_resolver for any time-related expressions
+- Always use temporal_reference_resolver for any time-related expressions.
 - Convert natural language time references to proper datetime format
 - Handle both specific moments and time ranges
 

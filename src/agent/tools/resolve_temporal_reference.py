@@ -4,6 +4,7 @@ from typing import Dict, Literal, Optional, Union
 
 from dateutil.relativedelta import relativedelta
 from langchain.tools import BaseTool
+from langchain_core.runnables.config import RunnableConfig
 from pydantic import BaseModel, Field
 from pytz import timezone
 
@@ -25,19 +26,19 @@ class TemporalReferenceInput(BaseModel):
     start: Optional[DateConfig] = Field(default=None, description="Configuration for start datetime calculations")
     end: Optional[DateConfig] = Field(default=None, description="Configuration for end datetime calculations")
     single_day_mode: bool = Field(default=False, description="If True, ensures start and end fall on same day and returns date string")
-    tz: str = Field(default="UTC", description="Timezone name (e.g., 'UTC', 'America/New_York')")
-    first_day_of_week: int = Field(default=0, description="First day of week (0=Monday, 6=Sunday) for week-based calculations")
 
 
 class TemporalReferenceTool(BaseTool):
     name: str = "temporal_reference_resolver"
     description: str = """
     Resolves temporal references into concrete datetime ranges based on a reference time.
-    Useful for converting relative time expressions (e.g., 'next week', 'last month') 
-    into specific datetime ranges. Can handle various time adjustments including:
-    - Offsets (days, weeks, months, years)
-    - Boundaries (start/end of day, week, month, year)
-    - Snapping to specific weekdays or months
+    Useful for converting relative time expressions (e.g., 'next week', 'last month') into specific datetime ranges.
+
+    Examples:
+    {"start": {"offset": {"weeks": -1}, "boundary": "start_of_week"}, "end": {"offset": {"weeks": -1}, "boundary": "end_of_week"}},  # last week
+    {"start": {"snap": {"type": "weekday", "target": 0, "modifier": "next"}, "boundary": "start_of_day"}, "end": {"snap": {"type": "weekday", "target": 0, "modifier": "next"}, "boundary": "end_of_day"}},  # next Monday
+    {"start": {"boundary": "start_of_day"}, "end": {"offset": {"days": 3}, "boundary": "end_of_day"}},  # next 3 days
+    {"start": {"offset": {"days": 3}, "boundary": "start_of_day"}, "end": {"offset": {"days": 3}, "boundary": "end_of_day"}, "single_day_mode": True}]  # in 3 days
     """
     args_schema: type[BaseModel] = TemporalReferenceInput
 
@@ -100,16 +101,20 @@ class TemporalReferenceTool(BaseTool):
 
     def _run(
         self,
+        config: RunnableConfig,
         reference: Optional[datetime] = None,
         start: Optional[DateConfig] = None,
         end: Optional[DateConfig] = None,
         single_day_mode: bool = False,
-        tz: str = "UTC",
-        first_day_of_week: int = 0,
     ) -> Union[tuple[str, None], tuple[datetime, datetime]]:
         """
         Core implementation of the temporal reference resolution tool.
         """
+        # Extract configuration values
+        configurable = config.get("configurable", {})
+        tz = configurable.get("time_zone", "UTC")
+        first_day_of_week = configurable.get("first_day_of_the_week", 0)
+
         tz_obj = timezone(tz)
         # Localize the reference datetime (or use now)
         if reference:
@@ -154,17 +159,4 @@ class TemporalReferenceTool(BaseTool):
                 raise ValueError("single_day_mode is True, but start and end dates differ.")
             return (start_dt.strftime("%Y-%m-%d"), None)
 
-        return (start_dt, end_dt)
-
-
-# Example usage:
-if __name__ == "__main__":
-    # Create the tool
-    tool = TemporalReferenceTool()
-
-    # Example: Get next week's range
-    result = tool._run(start=DateConfig(offset={"weeks": 1}, boundary="start_of_week"), end=DateConfig(offset={"weeks": 1}, boundary="end_of_week"))
-
-    print("Next week's range:")
-    print(f"Start: {result[0]}")
-    print(f"End: {result[1]}")
+        return (start_dt.strftime("%Y-%m-%d %H:%M:%S"), end_dt.strftime("%Y-%m-%d %H:%M:%S"))

@@ -195,6 +195,8 @@ class QueryRecordsOperator(BaseDBOperator):
         user_id = config.get("configurable", {}).get("user_id")
         args = QueryRecordsArgs(**kwargs)
         result = await self.db.query_records(user_id, args.dataset_id, args.query)
+        if not result:
+            return []
         if isinstance(result[0], dict):
             return result
         return [record.model_dump() for record in result]

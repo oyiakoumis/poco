@@ -25,10 +25,10 @@ async def main():
         graph = graph.compile(checkpointer=MemorySaver())
 
         # Configuration for the graph
-        config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123"}, recursion_limit=10)
+        config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=10)
 
         for message in [
-            HumanMessage(content="Try some aggregation/groupby query on any dataset you want. I just want to test the app"),
+            HumanMessage(content="Which feedback was created last week?"),
         ]:
             print_message(message, "Human")
             # Process and print each event

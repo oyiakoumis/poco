@@ -1,11 +1,13 @@
 """MongoDB pipeline builder for aggregation queries."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from document_store.models.query import (
     AggregationType,
     ComparisonOperator,
+    FilterCondition,
     FilterExpression,
+    LogicalOperator,
     RecordQuery,
 )
 
@@ -23,9 +25,22 @@ def _build_comparison(operator: ComparisonOperator, value: Any) -> Dict:
     return {operator_map[operator]: value}
 
 
-def _build_match_stage(filter_expr: FilterExpression) -> Dict:
-    """Build MongoDB $match stage from filter expression."""
-    return {"$match": {f"data.{filter_expr.field}": _build_comparison(filter_expr.condition.operator, filter_expr.condition.value)}}
+def _build_filter_expression(node: Union[FilterCondition, FilterExpression]) -> Dict:
+    """Recursively build MongoDB filter expression."""
+    if isinstance(node, FilterCondition):
+        return {f"data.{node.field}": _build_comparison(node.operator, node.value)}
+    else:
+        # Map logical operators to MongoDB operators
+        operator_map = {
+            LogicalOperator.AND: "$and",
+            LogicalOperator.OR: "$or",
+        }
+        return {operator_map[node.operator]: [_build_filter_expression(expr) for expr in node.expressions]}
+
+
+def _build_match_stage(filter_node: Union[FilterCondition, FilterExpression]) -> Dict:
+    """Build MongoDB $match stage from filter node."""
+    return {"$match": _build_filter_expression(filter_node)}
 
 
 def _build_group_stage(query: RecordQuery) -> Dict:

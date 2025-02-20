@@ -1,7 +1,7 @@
 """Query models for document store aggregations."""
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -28,18 +28,26 @@ class ComparisonOperator(str, Enum):
     LESS_THAN_EQUALS = "lte"
 
 
-class FilterCondition(BaseModel):
-    """Single filter condition."""
+class LogicalOperator(str, Enum):
+    """Logical operators for combining filter conditions."""
 
+    AND = "and"
+    OR = "or"
+
+
+class FilterCondition(BaseModel):
+    """Single field condition."""
+
+    field: str = Field(description="Field name to filter on")
     operator: ComparisonOperator
-    value: Any
+    value: Any = Field(description="Value to compare against")
 
 
 class FilterExpression(BaseModel):
-    """Filter expression for a single field."""
+    """Logical combination of conditions or other expressions."""
 
-    field: str
-    condition: FilterCondition
+    operator: LogicalOperator
+    expressions: List[Union[FilterCondition, "FilterExpression"]]
 
 
 class AggregationField(BaseModel):
@@ -78,7 +86,7 @@ class RecordQuery(BaseModel):
 
     group_by: Optional[List[str]] = Field(default=None, description="Fields to group by")
     aggregations: Optional[List[AggregationField]] = Field(default=None, description="Optional aggregation operations to perform")
-    filter: Optional[FilterExpression] = Field(default=None, description="Filter conditions to apply")
+    filter: Optional[Union[FilterCondition, FilterExpression]] = Field(default=None, description="Filter conditions to apply")
     sort: Optional[Dict[str, SortOrder]] = Field(default=None, description="Sorting configuration (field -> sort order)")
     limit: Optional[int] = Field(default=None, description="Maximum number of results to return")
 
@@ -96,13 +104,19 @@ class RecordQuery(BaseModel):
             for agg in self.aggregations:
                 agg.validate_with_schema(schema)
 
-        # Validate filter field and value
+        # Validate filter conditions
         if self.filter:
-            if not schema.has_field(self.filter.field):
-                raise InvalidRecordDataError(f"Filter field '{self.filter.field}' not found in schema")
-            
+            self._validate_filter_node(self.filter, schema)
+
+    def _validate_filter_node(self, node: Union[FilterCondition, FilterExpression], schema: DatasetSchema) -> None:
+        """Recursively validate filter nodes against schema."""
+        if isinstance(node, FilterCondition):
+            # Validate single condition
+            if not schema.has_field(node.field):
+                raise InvalidRecordDataError(f"Filter field '{node.field}' not found in schema")
+
             # Validate filter value against field type
-            field = schema.get_field(self.filter.field)
+            field = schema.get_field(node.field)
             type_impl = TypeRegistry.get_type(field.type)
 
             # Set options for select/multi-select fields before validation
@@ -113,9 +127,15 @@ class RecordQuery(BaseModel):
 
             try:
                 # Convert the filter value using the field's type implementation
-                self.filter.condition.value = type_impl.validate(self.filter.condition.value)
+                node.value = type_impl.validate(node.value)
             except ValueError as e:
-                raise InvalidRecordDataError(f"Invalid filter value for field '{self.filter.field}': {str(e)}")
+                raise InvalidRecordDataError(f"Invalid filter value for field '{node.field}': {str(e)}")
+        else:
+            # Validate nested expressions
+            if not node.expressions:
+                raise InvalidRecordDataError("Filter expression must contain at least one condition")
+            for expr in node.expressions:
+                self._validate_filter_node(expr, schema)
 
         # Validate sort fields
         if self.sort:
@@ -133,9 +153,15 @@ class RecordQuery(BaseModel):
         arbitrary_types_allowed = True
         json_schema_extra = {
             "examples": [
-                # Simple query example
+                # Simple query example with multiple conditions
                 {
-                    "filter": {"field": "status", "condition": {"operator": "eq", "value": "active"}},
+                    "filter": {
+                        "operator": "and",
+                        "expressions": [
+                            {"field": "status", "operator": "eq", "value": "active"},
+                            {"field": "age", "operator": "gte", "value": 18}
+                        ]
+                    },
                     "sort": {"created_at": "desc"},
                     "limit": 10
                 },
@@ -145,11 +171,11 @@ class RecordQuery(BaseModel):
                     "aggregations": [
                         {"field": "amount", "operation": "sum"},
                         {"field": "amount", "operation": "avg", "alias": "average_amount"},
-                        {"field": "id", "operation": "count", "alias": "total_records"}
+                        {"field": "id", "operation": "count", "alias": "total_records"},
                     ],
-                    "filter": {"field": "status", "condition": {"operator": "eq", "value": "completed"}},
+                    "filter": {"field": "status", "operator": "eq", "value": "completed"},
                     "sort": {"amount_sum": "desc"},
-                    "limit": 10
-                }
+                    "limit": 10,
+                },
             ]
         }
