@@ -157,8 +157,8 @@ async def main():
             operator=LogicalOperator.AND,
             expressions=[
                 FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy"),
-                FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=2)
-            ]
+                FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=2),
+            ],
         )
         and_query = RecordQuery(filter=and_filter)
         and_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=and_query)
@@ -169,37 +169,43 @@ async def main():
             operator=LogicalOperator.OR,
             expressions=[
                 FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy"),
-                FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=3)
-            ]
+                FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=3),
+            ],
         )
         or_query = RecordQuery(filter=or_filter)
         or_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=or_query)
         print(f"Found {len(or_records)} items that are either dairy or have quantity > 3")
 
-        # Complex nested query: (dairy AND quantity > 2) OR (expiry_date < 2025-03-01)
+        # Complex nested query: (category=dairy OR category=meat) AND (quantity=2 OR quantity=4)
         nested_filter = FilterExpression(
-            operator=LogicalOperator.OR,
+            operator=LogicalOperator.AND,
             expressions=[
                 FilterExpression(
-                    operator=LogicalOperator.AND,
+                    operator=LogicalOperator.OR,
                     expressions=[
                         FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy"),
-                        FilterCondition(field="quantity", operator=ComparisonOperator.GREATER_THAN, value=2)
-                    ]
+                        FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="meat"),
+                    ],
                 ),
-                FilterCondition(field="expiry_date", operator=ComparisonOperator.LESS_THAN, value="2025-03-01")
-            ]
+                FilterExpression(
+                    operator=LogicalOperator.OR,
+                    expressions=[
+                        FilterCondition(field="quantity", operator=ComparisonOperator.EQUALS, value=2),
+                        FilterCondition(field="quantity", operator=ComparisonOperator.EQUALS, value=4),
+                    ],
+                ),
+            ],
         )
         nested_query = RecordQuery(filter=nested_filter)
         nested_records = await manager.query_records(user_id=user_id, dataset_id=dataset_id, query=nested_query)
-        print("\nComplex query results:")
-        print(f"Found {len(nested_records)} items that are either:")
-        print("- dairy items with quantity > 2")
-        print("- items expiring before March 2025")
+        print("\nComplex nested query results:")
+        print(f"Found {len(nested_records)} items that match:")
+        print("- (category is dairy OR meat) AND")
+        print("- (quantity is 2 OR 4)")
         for record in nested_records:
-            print(f"- {record.data['item']}: quantity={record.data.get('quantity')}, "
-                  f"category={record.data.get('category')}, "
-                  f"expiry_date={record.data.get('expiry_date', 'N/A')}")
+            print(
+                f"- {record.data['item']}: category={record.data.get('category')}, quantity={record.data['quantity']}"
+            )
 
         # 4. Aggregation
         print("\n=== Aggregation Operations ===")

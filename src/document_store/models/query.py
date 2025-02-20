@@ -157,13 +157,10 @@ class RecordQuery(BaseModel):
                 {
                     "filter": {
                         "operator": "and",
-                        "expressions": [
-                            {"field": "status", "operator": "eq", "value": "active"},
-                            {"field": "age", "operator": "gte", "value": 18}
-                        ]
+                        "expressions": [{"field": "status", "operator": "eq", "value": "active"}, {"field": "age", "operator": "gte", "value": 18}],
                     },
                     "sort": {"created_at": "desc"},
-                    "limit": 10
+                    "limit": 10,
                 },
                 # Aggregation query example
                 {
