@@ -34,12 +34,15 @@ from document_store.pipeline import build_aggregation_pipeline
 
 
 class IndexStatus(Enum):
-    """MongoDB Atlas vector search index status."""
+    """MongoDB Atlas Search index status."""
 
-    IN_PROGRESS = "IN_PROGRESS"  # Building or re-building
-    STEADY = "STEADY"  # Ready to use
-    FAILED = "FAILED"  # Build failed
-    MIGRATING = "MIGRATING"  # Cluster tier upgrade
+    BUILDING = "BUILDING"  # Building or re-building index
+    DOES_NOT_EXIST = "DOES_NOT_EXIST"  # Index does not exist
+    DELETING = "DELETING"  # Index is being deleted
+    FAILED = "FAILED"  # Index build failed
+    PENDING = "PENDING"  # Not yet started building
+    READY = "READY"  # Index is ready and queryable
+    STALE = "STALE"  # Queryable but out of date
 
 
 class DatasetManager:
@@ -68,9 +71,31 @@ class DatasetManager:
         self.embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
 
     async def _create_vector_search_index(self) -> None:
-        """Create vector search index and wait for it to be ready."""
+        """Create vector search index if it doesn't exist and ensure it's ready."""
         try:
-            # Define index
+            # Check current index status
+            status = await self._get_index_status()
+
+            if status == IndexStatus.READY:
+                return  # Index exists and is ready
+            elif status == IndexStatus.FAILED:
+                # Drop failed index to recreate it
+                print("Dropping failed index...")
+                await self._delete_vector_search_index()
+            elif status == IndexStatus.STALE:
+                print("Warning: Index is stale, dropping to recreate...")
+                await self._delete_vector_search_index()
+            elif status in (IndexStatus.BUILDING, IndexStatus.PENDING):
+                # Wait for existing index to be ready
+                print("Waiting for existing index to be ready...")
+                await self._wait_for_index_ready()
+                return
+            elif status == IndexStatus.DELETING:
+                print("Waiting for index deletion to complete...")
+                await sleep(5)  # Wait a bit before creating new index
+
+            # Create new index if it doesn't exist or was dropped
+            print("Creating vector search index...")
             index_definition = {
                 "mappings": {
                     "dynamic": True,
@@ -89,27 +114,51 @@ class DatasetManager:
             await self._datasets.create_search_index(search_index)
 
             # Wait for index to be ready
+            print("Waiting for new index to be ready...")
             await self._wait_for_index_ready()
 
         except Exception as e:
             raise DatabaseError(f"Failed to create vector search index: {str(e)}")
 
+    async def _delete_vector_search_index(self) -> None:
+        """Delete vector search index and wait until it's confirmed to be deleted."""
+        try:
+            # Start deletion
+            await self._datasets.drop_search_index(self.VECTOR_SEARCH_CONFIG["INDEX_NAME"])
+
+            # Wait for deletion to complete
+            MAX_POLL_ATTEMPTS = 30  # 1 minute total
+            POLL_INTERVAL_SECONDS = 2
+
+            attempts = 0
+            while attempts < MAX_POLL_ATTEMPTS:
+                status = await self._get_index_status()
+                if status == IndexStatus.DOES_NOT_EXIST:
+                    return
+                elif status == IndexStatus.DELETING:
+                    await sleep(POLL_INTERVAL_SECONDS)
+                else:
+                    raise DatabaseError(f"Unexpected index status during deletion: {status}")
+                attempts += 1
+
+            raise DatabaseError(f"Index deletion not complete after {MAX_POLL_ATTEMPTS} attempts")
+
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete vector search index: {str(e)}")
+
     async def _get_index_status(self) -> IndexStatus:
         """Get current status of the vector search index."""
         try:
-            indexes = await self._datasets.list_search_indexes()
+            indexes = await self._datasets.list_search_indexes().to_list(None)
             for index in indexes:
                 if index["name"] == self.VECTOR_SEARCH_CONFIG["INDEX_NAME"]:
                     status = index.get("status", "")
-                    if status == IndexStatus.STEADY.value:
-                        return IndexStatus.STEADY
-                    elif status == IndexStatus.FAILED.value:
+                    try:
+                        return IndexStatus(status)
+                    except ValueError:
+                        print(f"Warning: Unknown index status: {status}")
                         return IndexStatus.FAILED
-                    elif status == IndexStatus.MIGRATING.value:
-                        return IndexStatus.MIGRATING
-                    else:
-                        return IndexStatus.IN_PROGRESS
-            return IndexStatus.FAILED
+            return IndexStatus.DOES_NOT_EXIST
         except Exception as e:
             raise DatabaseError(f"Failed to get index status: {str(e)}")
 
@@ -122,15 +171,19 @@ class DatasetManager:
         while attempts < MAX_POLL_ATTEMPTS:
             status = await self._get_index_status()
 
-            if status == IndexStatus.STEADY:
+            if status == IndexStatus.READY:
                 return
             elif status == IndexStatus.FAILED:
                 raise DatabaseError("Vector search index creation failed")
-            elif status == IndexStatus.MIGRATING:
-                # Wait longer for migration
-                await sleep(POLL_INTERVAL_SECONDS * 2)
-            else:
+            elif status == IndexStatus.STALE:
+                print("Warning: Index is stale, may return out-of-date results")
+                return
+            elif status == IndexStatus.DELETING:
+                await sleep(POLL_INTERVAL_SECONDS * 2)  # Wait longer for deletion
+            elif status == IndexStatus.BUILDING or status == IndexStatus.PENDING:
                 await sleep(POLL_INTERVAL_SECONDS)
+            else:
+                raise DatabaseError(f"Unexpected index status: {status}")
 
             attempts += 1
 
@@ -152,7 +205,7 @@ class DatasetManager:
         Schema Fields:
         {chr(10).join(f'- {desc}' for desc in schema_desc)}
         """
-        return await self.embeddings_model.embed_query(text_to_embed)
+        return await self.embeddings_model.aembed_query(text_to_embed)
 
     @classmethod
     async def setup(cls, mongodb_client: AsyncIOMotorClient) -> "DatasetManager":
@@ -729,11 +782,6 @@ class DatasetManager:
             DatabaseError: If vector search fails
         """
         try:
-            # Check if index is ready
-            status = await self._get_index_status()
-            if status != IndexStatus.STEADY:
-                raise DatabaseError("Vector search index not ready")
-
             # Generate embedding from dataset
             query_embedding = await self._generate_dataset_embedding(dataset)
 

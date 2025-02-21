@@ -241,12 +241,114 @@ async def main():
         await manager.delete_record(user_id, dataset_id, record2_id)
         print("Deleted record 2")
 
-        # Delete dataset
+        # 5. Test Similar Datasets Search
+        print("\n=== Similar Datasets Search ===")
+
+        # Create additional datasets with different schemas for testing similarity
+        # Recipe dataset
+        recipe_schema = DatasetSchema(
+            fields=[
+                SchemaField(
+                    field_name="name",
+                    description="Name of the recipe",
+                    type=FieldType.STRING,
+                    required=True,
+                ),
+                SchemaField(
+                    field_name="ingredients",
+                    description="List of ingredients",
+                    type=FieldType.STRING,
+                    required=True,
+                ),
+                SchemaField(
+                    field_name="servings",
+                    description="Number of servings",
+                    type=FieldType.INTEGER,
+                    required=True,
+                ),
+                SchemaField(
+                    field_name="cooking_time",
+                    description="Cooking time in minutes",
+                    type=FieldType.INTEGER,
+                    required=True,
+                ),
+            ]
+        )
+        recipe_dataset_id = await manager.create_dataset(
+            user_id=user_id,
+            name="Recipe Book",
+            description="Collection of favorite recipes",
+            schema=recipe_schema,
+        )
+        print(f"Created recipe dataset: {recipe_dataset_id}")
+
+        # Shopping list dataset (similar to grocery list)
+        shopping_schema = DatasetSchema(
+            fields=[
+                SchemaField(
+                    field_name="item",
+                    description="Name of the item to buy",
+                    type=FieldType.STRING,
+                    required=True,
+                ),
+                SchemaField(
+                    field_name="quantity",
+                    description="Quantity needed",
+                    type=FieldType.INTEGER,
+                    required=True,
+                ),
+                SchemaField(
+                    field_name="store",
+                    description="Store to buy from",
+                    type=FieldType.STRING,
+                    required=True,
+                ),
+                SchemaField(
+                    field_name="priority",
+                    description="Shopping priority",
+                    type=FieldType.SELECT,
+                    required=False,
+                    options=["low", "medium", "high"],
+                ),
+            ]
+        )
+        shopping_dataset_id = await manager.create_dataset(
+            user_id=user_id,
+            name="Shopping List",
+            description="General shopping list for household items",
+            schema=shopping_schema,
+        )
+        print(f"Created shopping dataset: {shopping_dataset_id}")
+
+        # Test similar datasets search
+        # Get the grocery list dataset to use as reference
+        grocery_dataset = await manager.get_dataset(user_id, dataset_id)
+        
+        print("\nSearching for datasets similar to grocery list...")
+        similar_datasets = await manager.search_similar_datasets(
+            dataset=grocery_dataset,
+            limit=5,
+            min_score=0.7
+        )
+        
+        print(f"\nFound {len(similar_datasets)} similar datasets:")
+        for ds in similar_datasets:
+            if ds.id != dataset_id:  # Skip the reference dataset itself
+                print(f"- {ds.name}: {ds.description}")
+                print("  Fields:")
+                for field in ds.dataset_schema.fields:
+                    print(f"    - {field.field_name} ({field.type.value})")
+                print()
+
+        # Cleanup
+        print("\n=== Cleanup ===")
         await manager.delete_dataset(user_id, dataset_id)
-        print("Deleted dataset")
+        await manager.delete_dataset(user_id, recipe_dataset_id)
+        await manager.delete_dataset(user_id, shopping_dataset_id)
+        print("Deleted all datasets")
 
     finally:
-        # Cleanup
+        # Cleanup database
         await client.drop_database(ExampleDatasetManager.DATABASE)
         client.close()
 

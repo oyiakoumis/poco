@@ -9,6 +9,7 @@
     "${workspaceFolder}/src"
   ],
   "cSpell.words": [
+    "aembed",
     "ainvoke",
     "arun",
     "astream",

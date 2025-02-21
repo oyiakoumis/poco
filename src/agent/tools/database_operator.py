@@ -233,3 +233,18 @@ class AddFieldOperator(BaseDBOperator):
         user_id = config.get("configurable", {}).get("user_id")
         args = AddFieldArgs(**kwargs)
         await self.db.add_field(user_id, args.dataset_id, args.field)
+
+
+class SearchSimilarDatasetsArgs(BaseModel):
+    dataset: Dataset = Field(description="Dataset to find similar datasets to")
+
+
+class SearchSimilarDatasetsOperator(BaseDBOperator):
+    name: str = "search_similar_datasets"
+    description: str = "Find similar datasets using vector search"
+    args_schema: ClassVar[BaseModel] = SearchSimilarDatasetsArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
+        args = SearchSimilarDatasetsArgs(**kwargs)
+        results = await self.db.search_similar_datasets(args.dataset)
+        return [dataset.model_dump() for dataset in results]
