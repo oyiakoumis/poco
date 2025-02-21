@@ -1,16 +1,20 @@
 """Dataset manager for MongoDB operations."""
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Dict, List, Optional, Union
+from asyncio import sleep
 
 import pymongo
 from bson import ObjectId
+from langchain_openai import OpenAIEmbeddings
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
     AsyncIOMotorCollection,
     AsyncIOMotorDatabase,
 )
 from pymongo.errors import BulkWriteError
+from pymongo.operations import SearchIndexModel
 
 from document_store.exceptions import (
     DatabaseError,
@@ -29,12 +33,30 @@ from document_store.models.types import FieldType, TypeRegistry
 from document_store.pipeline import build_aggregation_pipeline
 
 
+class IndexStatus(Enum):
+    """MongoDB Atlas vector search index status."""
+
+    IN_PROGRESS = "IN_PROGRESS"  # Building or re-building
+    STEADY = "STEADY"  # Ready to use
+    FAILED = "FAILED"  # Build failed
+    MIGRATING = "MIGRATING"  # Cluster tier upgrade
+
+
 class DatasetManager:
     """Manager for dataset and record operations."""
 
     DATABASE: str = "document_store"
     COLLECTION_DATASETS: str = "datasets"
     COLLECTION_RECORDS: str = "records"
+
+    # Vector search configuration
+    VECTOR_SEARCH_CONFIG = {
+        "INDEX_NAME": "vector_search_datasets",
+        "FIELD_NAME": "embedding",
+        "DIMENSION": 1536,  # text-embedding-3-small dimension
+        "NUM_CANDIDATES_MULTIPLIER": 10,
+        "MIN_SCORE": 0.7,
+    }
 
     def __init__(self, mongodb_client: AsyncIOMotorClient) -> None:
         """Initialize manager with MongoDB client.
@@ -43,6 +65,94 @@ class DatasetManager:
         self._db: AsyncIOMotorDatabase = self.client.get_database(self.DATABASE)
         self._datasets: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_DATASETS)
         self._records: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_RECORDS)
+        self.embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+
+    async def _create_vector_search_index(self) -> None:
+        """Create vector search index and wait for it to be ready."""
+        try:
+            # Define index
+            index_definition = {
+                "mappings": {
+                    "dynamic": True,
+                    "fields": {
+                        self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: {
+                            "type": "knnVector",
+                            "dimensions": self.VECTOR_SEARCH_CONFIG["DIMENSION"],
+                            "similarity": "cosine",
+                        }
+                    },
+                }
+            }
+
+            # Create index
+            search_index = SearchIndexModel(definition=index_definition, name=self.VECTOR_SEARCH_CONFIG["INDEX_NAME"])
+            await self._datasets.create_search_index(search_index)
+
+            # Wait for index to be ready
+            await self._wait_for_index_ready()
+
+        except Exception as e:
+            raise DatabaseError(f"Failed to create vector search index: {str(e)}")
+
+    async def _get_index_status(self) -> IndexStatus:
+        """Get current status of the vector search index."""
+        try:
+            indexes = await self._datasets.list_search_indexes()
+            for index in indexes:
+                if index["name"] == self.VECTOR_SEARCH_CONFIG["INDEX_NAME"]:
+                    status = index.get("status", "")
+                    if status == IndexStatus.STEADY.value:
+                        return IndexStatus.STEADY
+                    elif status == IndexStatus.FAILED.value:
+                        return IndexStatus.FAILED
+                    elif status == IndexStatus.MIGRATING.value:
+                        return IndexStatus.MIGRATING
+                    else:
+                        return IndexStatus.IN_PROGRESS
+            return IndexStatus.FAILED
+        except Exception as e:
+            raise DatabaseError(f"Failed to get index status: {str(e)}")
+
+    async def _wait_for_index_ready(self) -> None:
+        """Poll index status until ready or max attempts reached."""
+        MAX_POLL_ATTEMPTS = 30  # 1 minute total
+        POLL_INTERVAL_SECONDS = 2
+
+        attempts = 0
+        while attempts < MAX_POLL_ATTEMPTS:
+            status = await self._get_index_status()
+
+            if status == IndexStatus.STEADY:
+                return
+            elif status == IndexStatus.FAILED:
+                raise DatabaseError("Vector search index creation failed")
+            elif status == IndexStatus.MIGRATING:
+                # Wait longer for migration
+                await sleep(POLL_INTERVAL_SECONDS * 2)
+            else:
+                await sleep(POLL_INTERVAL_SECONDS)
+
+            attempts += 1
+
+        raise DatabaseError(f"Index not ready after {MAX_POLL_ATTEMPTS} attempts")
+
+    async def _generate_dataset_embedding(self, dataset: Dataset) -> List[float]:
+        """Generate embedding from dataset metadata and schema."""
+        # Build schema description including field descriptions
+        schema_desc = []
+        for field in dataset.dataset_schema.fields:
+            desc = f"{field.field_name}"
+            if field.description:
+                desc += f" ({field.description})"
+            schema_desc.append(desc)
+
+        text_to_embed = f"""
+        Name: {dataset.name}
+        Description: {dataset.description}
+        Schema Fields:
+        {chr(10).join(f'- {desc}' for desc in schema_desc)}
+        """
+        return await self.embeddings_model.embed_query(text_to_embed)
 
     @classmethod
     async def setup(cls, mongodb_client: AsyncIOMotorClient) -> "DatasetManager":
@@ -71,21 +181,34 @@ class DatasetManager:
                 ]
             )
 
+            # Setup vector search index
+            await manager._create_vector_search_index()
+
             return manager
 
         except Exception as e:
             raise DatabaseError(f"Failed to setup indexes: {str(e)}")
 
     async def create_dataset(self, user_id: str, name: str, description: str, schema: DatasetSchema) -> ObjectId:
-        """Creates a new dataset with the given schema."""
+        """Creates a new dataset with the given schema and generates its embedding."""
         try:
+            # Create dataset model
             dataset = Dataset(
                 user_id=user_id,
                 name=name,
                 description=description,
                 dataset_schema=schema,
             )
-            result = await self._datasets.insert_one(dataset.model_dump(by_alias=True))
+
+            # Generate embedding
+            embedding = await self._generate_dataset_embedding(dataset)
+
+            # Add embedding to dataset dict
+            dataset_dict = dataset.model_dump(by_alias=True)
+            dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
+
+            # Insert into database
+            result = await self._datasets.insert_one(dataset_dict)
             return result.inserted_id
         except Exception as e:
             if "duplicate key error" in str(e).lower():
@@ -93,7 +216,7 @@ class DatasetManager:
             raise DatabaseError(f"Failed to create dataset: {str(e)}")
 
     async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str) -> None:
-        """Updates dataset metadata (name and description)."""
+        """Updates dataset metadata (name and description) and regenerates its embedding."""
         try:
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
@@ -109,10 +232,17 @@ class DatasetManager:
                 updated_at=datetime.now(timezone.utc),
             )
 
+            # Generate new embedding
+            embedding = await self._generate_dataset_embedding(updated)
+
+            # Add embedding to dataset dict
+            dataset_dict = updated.model_dump(by_alias=True)
+            dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
+
             # Update in database
             result = await self._datasets.replace_one(
                 {"_id": dataset_id, "user_id": user_id},
-                updated.model_dump(by_alias=True),
+                dataset_dict,
             )
 
             if result.modified_count == 0:
@@ -272,7 +402,7 @@ class DatasetManager:
             # Start transaction
             async with await self.client.start_session() as session:
                 async with session.start_transaction():
-                    # Update dataset schema
+                    # Update dataset schema and regenerate embedding
                     updated = Dataset(
                         id=dataset_id,
                         user_id=user_id,
@@ -283,9 +413,16 @@ class DatasetManager:
                         updated_at=datetime.now(timezone.utc),
                     )
 
+                    # Generate new embedding
+                    embedding = await self._generate_dataset_embedding(updated)
+
+                    # Add embedding to dataset dict
+                    dataset_dict = updated.model_dump(by_alias=True)
+                    dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
+
                     result = await self._datasets.replace_one(
                         {"_id": dataset_id, "user_id": user_id},
-                        updated.model_dump(by_alias=True),
+                        dataset_dict,
                         session=session,
                     )
 
@@ -335,7 +472,7 @@ class DatasetManager:
             # Start transaction
             async with await self.client.start_session() as session:
                 async with session.start_transaction():
-                    # Update dataset schema
+                    # Update dataset schema and regenerate embedding
                     updated = Dataset(
                         id=dataset_id,
                         user_id=user_id,
@@ -346,9 +483,16 @@ class DatasetManager:
                         updated_at=datetime.now(timezone.utc),
                     )
 
+                    # Generate new embedding
+                    embedding = await self._generate_dataset_embedding(updated)
+
+                    # Add embedding to dataset dict
+                    dataset_dict = updated.model_dump(by_alias=True)
+                    dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
+
                     result = await self._datasets.replace_one(
                         {"_id": dataset_id, "user_id": user_id},
-                        updated.model_dump(by_alias=True),
+                        dataset_dict,
                         session=session,
                     )
 
@@ -406,7 +550,7 @@ class DatasetManager:
             # Start transaction
             async with await self.client.start_session() as session:
                 async with session.start_transaction():
-                    # Update dataset schema
+                    # Update dataset schema and regenerate embedding
                     updated = Dataset(
                         id=dataset_id,
                         user_id=user_id,
@@ -417,9 +561,16 @@ class DatasetManager:
                         updated_at=datetime.now(timezone.utc),
                     )
 
+                    # Generate new embedding
+                    embedding = await self._generate_dataset_embedding(updated)
+
+                    # Add embedding to dataset dict
+                    dataset_dict = updated.model_dump(by_alias=True)
+                    dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
+
                     result = await self._datasets.replace_one(
                         {"_id": dataset_id, "user_id": user_id},
-                        updated.model_dump(by_alias=True),
+                        dataset_dict,
                         session=session,
                     )
 
@@ -555,6 +706,75 @@ class DatasetManager:
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to get record: {str(e)}")
+
+    async def search_similar_datasets(
+        self,
+        dataset: Dataset,
+        limit: int = 10,
+        min_score: Optional[float] = None,
+        filter_dict: Optional[Dict] = None,
+    ) -> List[Dataset]:
+        """Find similar datasets using vector search.
+
+        Args:
+            dataset: A Dataset object to find similar datasets to
+            limit: Maximum number of results to return
+            min_score: Minimum similarity score (0-1), defaults to VECTOR_SEARCH_CONFIG["MIN_SCORE"]
+            filter_dict: Optional MongoDB filter to apply after vector search
+
+        Returns:
+            List of Dataset objects ordered by similarity
+
+        Raises:
+            DatabaseError: If vector search fails
+        """
+        try:
+            # Check if index is ready
+            status = await self._get_index_status()
+            if status != IndexStatus.STEADY:
+                raise DatabaseError("Vector search index not ready")
+
+            # Generate embedding from dataset
+            query_embedding = await self._generate_dataset_embedding(dataset)
+
+            # Build search pipeline
+            pipeline = [
+                {
+                    "$vectorSearch": {
+                        "index": self.VECTOR_SEARCH_CONFIG["INDEX_NAME"],
+                        "path": self.VECTOR_SEARCH_CONFIG["FIELD_NAME"],
+                        "queryVector": query_embedding,
+                        "numCandidates": limit * self.VECTOR_SEARCH_CONFIG["NUM_CANDIDATES_MULTIPLIER"],
+                        "limit": limit,
+                        "exact": False,
+                    }
+                },
+                {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+            ]
+
+            # Add score filter if provided
+            if min_score is not None:
+                pipeline.append({"$match": {"score": {"$gte": min_score}}})
+            elif self.VECTOR_SEARCH_CONFIG["MIN_SCORE"] > 0:
+                pipeline.append({"$match": {"score": {"$gte": self.VECTOR_SEARCH_CONFIG["MIN_SCORE"]}}})
+
+            # Add optional filter
+            if filter_dict:
+                pipeline.append({"$match": filter_dict})
+
+            # Remove score from final results
+            pipeline.append({"$project": {"score": 0}})
+
+            # Execute search
+            results = []
+            async for doc in self._datasets.aggregate(pipeline):
+                dataset = Dataset.model_validate(doc)
+                results.append(dataset)
+
+            return results
+
+        except Exception as e:
+            raise DatabaseError(f"Failed to perform vector search: {str(e)}")
 
     async def query_records(self, user_id: str, dataset_id: ObjectId, query: Optional[RecordQuery] = None) -> Union[List[Record], List[Dict]]:
         """Query records in the specified dataset.
