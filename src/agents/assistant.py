@@ -15,7 +15,7 @@ from agents.tools.database_operator import (
     UpdateFieldOperator,
     UpdateRecordOperator,
 )
-from agents.tools.output_formatter import OutputFormatterTool
+from agents.tools.output_formatter import output_formatter
 from agents.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
 from state import State
@@ -68,30 +68,52 @@ Tool Usage Protocol:
 - Convert natural language time references to proper datetime format
 - Handle both specific moments and time ranges
 
-4. Output Processing:
-- CRITICAL: ALWAYS use output_formatter as the FINAL step before responding to the user
-- First gather all data needed to answer the user's query
-- Extract only the relevant information needed for the response
-- Pass this relevant data to output_formatter using the 'content' argument
-- Include the original user query in the 'user_query' argument
-- Never return raw operation results directly to the user
-- The output_formatter will return a structured JSON response for the UI
-- CRITICAL: Return the output_formatter's response EXACTLY as-is, without any modifications
-- Do not add any text, formatting, or explanations to the output_formatter's response
-- The UI depends on receiving the exact JSON structure from output_formatter
+4. Response Formatting:
+- ALWAYS use output_formatter as the final step
+- Choose the right components for the data type:
+  * Table: PRIMARY choice for:
+    - Multiple records or entries
+    - Data with multiple fields/columns
+    - Comparing information across records
+    - Structured data that needs clear organization
+  * Chart: PRIMARY choice for:
+    - Numerical trends and patterns
+    - Comparing quantities or distributions
+    - Time-based data analysis
+    - Understanding relationships in data
+  * Checkbox: PRIMARY choice for:
+    - Status tracking
+    - Task or item completion
+    - Binary state information
+    - Interactive lists
+  * Markdown: SUPPORT choice for:
+    - Brief introductions or context
+    - Explanations when needed
+    - Highlighting key insights
+    - Connecting multiple components
+
+Component Combination Strategy:
+1. Start with data-focused components (Table/Chart/Checkbox)
+2. Add minimal Markdown only when needed for clarity
+3. Example combinations:
+   - Records query: Table for data + Chart for trends
+   - Task tracking: Checkbox for status + Chart for progress
+   - Financial data: Chart for visualization + Table for details
+   - Time-based data: Chart for patterns + Table for specifics
 
 Interaction Flow:
 1. Start with list_datasets for schema understanding
-2. Infer relevant dataset and locate specific records if needed
-3. Process any temporal references
-4. Execute necessary operations to gather required data
-5. Extract the relevant information needed for the response
-6. As the FINAL step, pass this relevant data to output_formatter
-7. Return output_formatter's response EXACTLY as-is to the user
+2. Process temporal references if needed
+3. Execute necessary data operations
+4. Choose appropriate components based on data type
+5. Format response using output_formatter with multiple components
+6. Return the formatted response unmodified
 
-Remember: NEVER return raw results directly - ALWAYS use output_formatter as the FINAL step, passing only the data needed for the response. Return output_formatter's response EXACTLY as-is.
-
-When uncertain, gather the relevant context first, then use output_formatter as the final step and return its response unmodified.
+Remember:
+- Prefer Tables and Charts over Markdown for structured data
+- Use multiple components to show different aspects of the data
+- Keep Markdown minimal and focused on essential context
+- Let the data guide component selection
 """
 
 
@@ -113,7 +135,7 @@ class Assistant:
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
-            OutputFormatterTool(),
+            output_formatter,
         ]
 
     async def __call__(self, state: State):

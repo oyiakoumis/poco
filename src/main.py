@@ -25,28 +25,15 @@ async def main():
         graph = graph.compile(checkpointer=MemorySaver())
 
         # Configuration for the graph
-        config = RunnableConfig(
-            configurable={
-                "thread_id": "1",
-                "user_id": "user_123",
-                "time_zone": "UTC",
-                "first_day_of_the_week": 0
-            },
-            recursion_limit=10
-        )
+        config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25)
 
-        messages = [HumanMessage(content="Show me my datasets")]
-        
+        messages = [HumanMessage(content="What is in my todo list?")]
+
         # Print human message using print_event
         print_event((), {"Human": {"messages": messages}})
-        
+
         # Process and print each event
-        async for namespace, event in graph.astream(
-            {"messages": messages},
-            config,
-            stream_mode="updates",
-            subgraphs=True
-        ):
+        async for namespace, event in graph.astream({"messages": messages}, config, stream_mode="updates", subgraphs=True):
             print_event(namespace, event)
     finally:
         client.close()
