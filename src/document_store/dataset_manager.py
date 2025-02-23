@@ -762,6 +762,7 @@ class DatasetManager:
 
     async def search_similar_datasets(
         self,
+        user_id: str,
         dataset: Dataset,
         limit: int = 10,
         min_score: Optional[float] = None,
@@ -770,6 +771,7 @@ class DatasetManager:
         """Find similar datasets using vector search.
 
         Args:
+            user_id: ID of the user to search datasets for
             dataset: A Dataset object to find similar datasets to
             limit: Maximum number of results to return
             min_score: Minimum similarity score (0-1), defaults to VECTOR_SEARCH_CONFIG["MIN_SCORE"]
@@ -806,9 +808,12 @@ class DatasetManager:
             elif self.VECTOR_SEARCH_CONFIG["MIN_SCORE"] > 0:
                 pipeline.append({"$match": {"score": {"$gte": self.VECTOR_SEARCH_CONFIG["MIN_SCORE"]}}})
 
-            # Add optional filter
+            # Add any additional filters first
             if filter_dict:
                 pipeline.append({"$match": filter_dict})
+                
+            # Add user_id filter in a separate stage to ensure it cannot be overridden
+            pipeline.append({"$match": {"user_id": user_id}})
 
             # Remove score from final results
             pipeline.append({"$project": {"score": 0}})

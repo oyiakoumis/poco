@@ -326,6 +326,7 @@ async def main():
         
         print("\nSearching for datasets similar to grocery list...")
         similar_datasets = await manager.search_similar_datasets(
+            user_id=user_id,
             dataset=grocery_dataset,
             limit=5,
             min_score=0.7

@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, Type, Dict, List, Optional
 
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -109,7 +109,7 @@ class ListDatasetsOperator(BaseDBOperator):
 class CreateDatasetOperator(BaseDBOperator):
     name: str = "create_dataset"
     description: str = "Create a new dataset"
-    args_schema: ClassVar[BaseModel] = CreateDatasetArgs
+    args_schema: Type[BaseModel] = CreateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
         user_id = config.get("configurable", {}).get("user_id")
@@ -122,7 +122,7 @@ class CreateDatasetOperator(BaseDBOperator):
 class UpdateDatasetOperator(BaseDBOperator):
     name: str = "update_dataset"
     description: str = "Update a dataset"
-    args_schema: ClassVar[BaseModel] = UpdateDatasetArgs
+    args_schema: Type[BaseModel] = UpdateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
@@ -133,7 +133,7 @@ class UpdateDatasetOperator(BaseDBOperator):
 class DeleteDatasetOperator(BaseDBOperator):
     name: str = "delete_dataset"
     description: str = "Delete a dataset"
-    args_schema: ClassVar[BaseModel] = DatasetArgs
+    args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
@@ -144,7 +144,7 @@ class DeleteDatasetOperator(BaseDBOperator):
 class CreateRecordOperator(BaseDBOperator):
     name: str = "create_record"
     description: str = f"Create a new record: {CreateRecordArgs.model_json_schema()}"
-    args_schema: ClassVar[BaseModel] = CreateRecordArgs
+    args_schema: Type[BaseModel] = CreateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
         user_id = config.get("configurable", {}).get("user_id")
@@ -156,7 +156,7 @@ class CreateRecordOperator(BaseDBOperator):
 class UpdateRecordOperator(BaseDBOperator):
     name: str = "update_record"
     description: str = f"Update a record: {UpdateRecordArgs.model_json_schema()}"
-    args_schema: ClassVar[BaseModel] = UpdateRecordArgs
+    args_schema: Type[BaseModel] = UpdateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
@@ -167,7 +167,7 @@ class UpdateRecordOperator(BaseDBOperator):
 class DeleteRecordOperator(BaseDBOperator):
     name: str = "delete_record"
     description: str = "Delete record"
-    args_schema: ClassVar[BaseModel] = RecordArgs
+    args_schema: Type[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
@@ -178,7 +178,7 @@ class DeleteRecordOperator(BaseDBOperator):
 class GetRecordOperator(BaseDBOperator):
     name: str = "get_record"
     description: str = "Get record"
-    args_schema: ClassVar[BaseModel] = RecordArgs
+    args_schema: Type[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
         user_id = config.get("configurable", {}).get("user_id")
@@ -190,7 +190,7 @@ class GetRecordOperator(BaseDBOperator):
 class QueryRecordsOperator(BaseDBOperator):
     name: str = "query_records"
     description: str = "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations."
-    args_schema: ClassVar[BaseModel] = QueryRecordsArgs
+    args_schema: Type[BaseModel] = QueryRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         user_id = config.get("configurable", {}).get("user_id")
@@ -206,7 +206,7 @@ class QueryRecordsOperator(BaseDBOperator):
 class UpdateFieldOperator(BaseDBOperator):
     name: str = "update_field"
     description: str = "Update a field in the dataset schema and convert existing records if needed"
-    args_schema: ClassVar[BaseModel] = UpdateFieldArgs
+    args_schema: Type[BaseModel] = UpdateFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
@@ -217,7 +217,7 @@ class UpdateFieldOperator(BaseDBOperator):
 class DeleteFieldOperator(BaseDBOperator):
     name: str = "delete_field"
     description: str = "Delete a field from the dataset schema"
-    args_schema: ClassVar[BaseModel] = DeleteFieldArgs
+    args_schema: Type[BaseModel] = DeleteFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
@@ -228,7 +228,7 @@ class DeleteFieldOperator(BaseDBOperator):
 class AddFieldOperator(BaseDBOperator):
     name: str = "add_field"
     description: str = "Add a new field to the dataset schema"
-    args_schema: ClassVar[BaseModel] = AddFieldArgs
+    args_schema: Type[BaseModel] = AddFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
@@ -243,9 +243,10 @@ class SearchSimilarDatasetsArgs(BaseModel):
 class SearchSimilarDatasetsOperator(BaseDBOperator):
     name: str = "search_similar_datasets"
     description: str = "Find similar datasets using vector search"
-    args_schema: ClassVar[BaseModel] = SearchSimilarDatasetsArgs
+    args_schema: Type[BaseModel] = SearchSimilarDatasetsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
+        user_id = config.get("configurable", {}).get("user_id")
         args = SearchSimilarDatasetsArgs(**kwargs)
-        results = await self.db.search_similar_datasets(args.dataset)
+        results = await self.db.search_similar_datasets(user_id, args.dataset)
         return [dataset.model_dump() for dataset in results]
