@@ -13,5 +13,6 @@ def get_graph(db: DatasetManager) -> StateGraph:
 
     # Add Edges
     graph.set_entry_point("assistant")
+    graph.set_finish_point("assistant")
 
     return graph

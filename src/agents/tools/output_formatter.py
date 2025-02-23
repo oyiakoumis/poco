@@ -1,113 +1,116 @@
 import asyncio
-import json
-from typing import Any
+from typing import Annotated, Any, List
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.tools import BaseTool
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessage
+from langchain_core.tools import BaseTool, tool, InjectedToolCallId
+from langgraph.types import Command
+from langgraph.graph import END
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from agents.models.components import FormattedResponse
+from agents.models.components import Component, FormattedResponse
 
 FORMATTER_SYSTEM_MESSAGE = """
-You are a specialized formatter that converts raw data into structured UI-friendly responses using the FormattedResponse tool ONCE with all components together. Your role is to analyze the content and user's original query to determine the most appropriate UI components for presenting the information.
+You are an AI formatter that transforms data into engaging, conversational responses. Your mission is to create clear, structured answers that directly address user queries while maintaining natural flow. Components will be displayed sequentially, building a coherent narrative.
 
-IMPORTANT: You must create a SINGLE FormattedResponse that includes ALL necessary components at once. DO NOT try to create separate FormattedResponse objects for each component. If the response is not correctly formatted, you should fix the entire response and try again, not attempt to handle components individually.
+What Makes a Great Response:
+1. Immediacy: Lead with the most relevant answer
+2. Context: Provide essential background that adds meaning
+3. Flow: Present information in natural, digestible layers
+4. Clarity: Use visuals and formatting effectively
+5. Precision: Every component should serve a clear purpose
 
-The FormattedResponse tool allows you to create a response with an array of UI components. Each component in the response array must be one of these types:
+Available Components (displayed sequentially):
 
 1. Markdown Component
-   {
-     "type": "markdown",
-     "content": "string with markdown syntax"
-   }
-   - Use for formatted text content
-   - Supports standard markdown syntax
-   - Great for descriptions, explanations, and text-heavy content
+   Purpose: Direct communication and context
+   Best Practices:
+   - Start with the most relevant information
+   - Use headers to create clear sections
+   - Keep paragraphs focused and concise
+   - Highlight key points with formatting
+   - Use bullet points for easy scanning
 
 2. Checkbox Component
-   {
-     "type": "checkbox",
-     "items": [
-       {"label": "Task 1", "checked": true},
-       {"label": "Task 2", "checked": false}
-     ]
-   }
-   - Use for interactive lists with checked/unchecked states
-   - Ideal for todo lists, multi-select options, or status tracking
+   Purpose: Interactive lists and status tracking
+   Best Practices:
+   - Group related items logically
+   - Keep labels concise but descriptive
+   - Order by relevance or chronology
+   - Use for actionable items or completion status
+   - Present a clear status overview
 
 3. Table Component
-   {
-     "type": "table",
-     "headers": ["Column 1", "Column 2"],
-     "rows": [
-       ["Data 1", "Data 2"],
-       ["Data 3", "Data 4"]
-     ]
-   }
-   - Use for structured data with clear rows and columns
-   - Perfect for displaying multiple records with consistent fields
+   Purpose: Structured data comparison
+   Best Practices:
+   - Focus on essential columns
+   - Order rows by relevance
+   - Keep cell content concise
+   - Use for comparing multiple data points
+   - Ensure clear data relationships
 
 4. Chart Component
-   {
-     "type": "chart",
-     "chart_type": "bar" | "line" | "pie",
-     "labels": ["Label 1", "Label 2"],
-     "datasets": [
-       {
-         "label": "Dataset 1",
-         "data": [1, 2]
-       }
-     ]
-   }
-   - Use for data visualization
-   - Supports bar, line, and pie charts
+   Purpose: Visual data insights
+   Best Practices:
+   - Choose the simplest effective visualization
+   - Focus on one key insight
+   - Keep labels minimal but clear
+   - Show clear data relationships
+   - Use when patterns matter more than exact values
 
-Your response must be a valid FormattedResponse object with this structure:
-{
-  "response": [
-    {component1},
-    {component2},
-    ...
-  ]
-}
+Response Construction:
+1. Direct Answer Layer
+   - Immediately address the user's question
+   - Use the most appropriate component
+   - Keep it concise and clear
 
-Guidelines:
-1. Choose components based on data structure and user intent:
-   - Markdown for text explanations and formatting
-   - Checkbox for interactive lists and selections
-   - Table for structured, tabular data
-   - Chart for numerical data that benefits from visualization
+2. Context Layer
+   - Add relevant background or explanation
+   - Connect information meaningfully
+   - Use components that enhance understanding
 
-2. Component Combinations:
-   - Combine components when needed (e.g., Markdown for explanation + Table for data)
-   - Order components logically (e.g., explanation before visualization)
-   - Use the most appropriate chart type for the data relationship
+3. Insight Layer (when relevant)
+   - Highlight patterns or trends
+   - Present related information
+   - Provide actionable insights
 
-3. Data Formatting:
-   - Format dates consistently
-   - Use appropriate number formatting
-   - Ensure proper escaping of special characters in markdown
-   - Structure table data for clear readability
+Instructions:
+1. Analyze the query to identify the core information need
+2. Structure a response that flows naturally
+3. Choose components that enhance understanding
+4. Call format_output ONCE with your complete component array
+5. Ensure each component adds unique value
 
 Remember:
-- Create ONE FormattedResponse containing ALL components needed
-- DO NOT create separate FormattedResponse objects for individual components
-- Each component must strictly follow its type's schema
-- The response must be a valid FormattedResponse with a list of components
-- Consider the user's query context when choosing components
-- Format data appropriately for each component type
-- If the response is not valid, fix the entire response and try again
-- DO NOT loop through components individually
-- ONLY use the FormattedResponse tool ONCE to structure your complete response
+- Components display sequentially, building the narrative
+- Focus on natural conversation flow
+- Prioritize clarity and directness
+- Make every component count
+- Keep responses focused and purposeful
 """
+
+
+@tool
+def format_output(components: List[Component], tool_call_id: Annotated[str, InjectedToolCallId]):
+    """Tool used to format the content into a structured response with UI components."""
+
+    return Command(
+        graph=Command.PARENT,
+        goto=END,
+        update={
+            "messages": [
+                ToolMessage("Successfully formatted data output to a structured response.", tool_call_id=tool_call_id),
+                AIMessage(FormattedResponse(response=components).model_dump_json()),
+            ]
+        },
+    )
 
 
 class OutputFormatterArgs(BaseModel):
     user_query: str = Field(description="Original user query that generated these results")
     content: Any = Field(description="Raw query results to format")
+    tool_call_id: Annotated[str, InjectedToolCallId]
 
 
 class OutputFormatterTool(BaseTool):
@@ -117,10 +120,10 @@ class OutputFormatterTool(BaseTool):
     description: str = "Format query results into UI-friendly JSON responses with appropriate UI components"
     args_schema: type[BaseModel] = OutputFormatterArgs
 
-    def _run(self, user_query: str, content: Any) -> FormattedResponse:
-        return asyncio.run(self._arun(user_query, content))
+    def _run(self, user_query: str, content: Any, tool_call_id: Annotated[str, InjectedToolCallId]) -> FormattedResponse:
+        return asyncio.run(self._arun(user_query, content, tool_call_id))
 
-    async def _arun(self, user_query: str, content: Any) -> FormattedResponse:
+    async def _arun(self, user_query: str, content: Any, tool_call_id: Annotated[str, InjectedToolCallId]) -> FormattedResponse:
         """
         Format the content into a UI-friendly response structure.
 
@@ -133,7 +136,7 @@ class OutputFormatterTool(BaseTool):
         """
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-        runnable = create_react_agent(llm, [FormattedResponse], response_format=FormattedResponse.model_json_schema())
+        runnable = create_react_agent(llm, [format_output])
         response = await runnable.ainvoke(
             {
                 "messages": [
@@ -143,4 +146,8 @@ class OutputFormatterTool(BaseTool):
             }
         )
 
-        return json.loads(response["messages"][-1].content)
+        return Command(
+            graph=Command.PARENT,
+            goto=END,
+            update={"messages": response["messages"][-2:]},
+        )
