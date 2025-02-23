@@ -6,9 +6,14 @@
   ],
   "python.envFile": "${workspaceFolder}/.venv",
   "python.analysis.extraPaths": [
-    "./src"
+    "${workspaceFolder}/src"
   ],
   "cSpell.words": [
+    "aembed",
+    "ainvoke",
+    "arun",
+    "astream",
+    "initlist",
     "relativedelta"
   ]
 }

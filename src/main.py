@@ -1,42 +1,42 @@
 import asyncio
+
 from langchain.schema import HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import OpenAIEmbeddings
 from langgraph.checkpoint.memory import MemorySaver
+from motor.motor_asyncio import AsyncIOMotorClient
 
+from agent.workflow import get_graph
 from constants import DATABASE_CONNECTION_STRING
-from database_manager.collection_definition import CollectionDefinition
-from database_manager.embedding_wrapper import EmbeddingConfig, EmbeddingWrapper
-from database_manager.schema_field import FieldType, SchemaField
+from document_store.dataset_manager import DatasetManager
 from print_event import print_event, print_message
 
 
-async def main() -> None:
-    from database_manager.connection import Connection
-    from database_manager.database import Database
+async def main():
+    # Connect to the database
+    client = AsyncIOMotorClient(DATABASE_CONNECTION_STRING)
+    client.get_io_loop = asyncio.get_running_loop
 
-    connection = Connection(DATABASE_CONNECTION_STRING)
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    try:
+        db = await DatasetManager.setup(client)
 
-    embedding_config = EmbeddingConfig()
-    embeddings_wrapper = EmbeddingWrapper(embeddings, embedding_config)
+        # Get the graph
+        graph = get_graph(db)
 
-    database = Database("task_manager", connection, embeddings_wrapper)
-    await database.connect(refresh=True)
+        graph = graph.compile(checkpointer=MemorySaver())
 
-    schema = {
-        "title": SchemaField("title", "the title of the task", FieldType.STRING, required=True),
-        "description": SchemaField("description", "the description of the task", FieldType.STRING, required=False),
-    }
+        # Configuration for the graph
+        config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=10)
 
-    collection = await database.create_collection("tasks", schema, description="A collection of tasks")
-    definition = CollectionDefinition("tasks", database.registry, "A collection of tasks", schema)
-    retrieved_collections = await database.registry.search_similar_collections(definition)
-
-    document = await database.insert_document(collection, {"title": "Task 1", "description": "Description 1"})
-    retrieved_document = await collection.search_similar(document)
+        for message in [
+            HumanMessage(content="Which feedback was created this week?"),
+        ]:
+            print_message(message, "Human")
+            # Process and print each event
+            async for namespace, event in graph.astream({"messages": [message]}, config, stream_mode="updates", subgraphs=True):
+                print_event(namespace, event)
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":
-    # Run the async main function
     asyncio.run(main())
