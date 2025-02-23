@@ -1,8 +1,8 @@
+from langchain_core.messages import SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import SystemMessage, trim_messages
 
-from agent.tools.database_operator import (
+from agents.tools.database_operator import (
     AddFieldOperator,
     CreateDatasetOperator,
     CreateRecordOperator,
@@ -15,7 +15,8 @@ from agent.tools.database_operator import (
     UpdateFieldOperator,
     UpdateRecordOperator,
 )
-from agent.tools.resolve_temporal_reference import TemporalReferenceTool
+from agents.tools.output_formatter import OutputFormatterTool
+from agents.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
 from state import State
 
@@ -29,6 +30,7 @@ Core Responsibilities:
 4. Process temporal expressions into proper datetime formats
 5. Guide users proactively through data operations
 6. Choose the most appropriate field type when creating or updating schemas
+7. ALWAYS use output_formatter for any operation results
 
 Field Type Selection Guidelines:
 When creating or updating fields, proactively choose the most appropriate type:
@@ -46,6 +48,7 @@ Remember to:
 - Consider data validation needs when choosing types
 - Use specific types (SELECT, MULTI_SELECT, BOOLEAN, DATE) instead of STRING when possible
 - Follow the schema field structure with proper descriptions and required flags
+- NEVER return raw results directly to the user - always use output_formatter
 
 Tool Usage Protocol:
 
@@ -61,26 +64,34 @@ Tool Usage Protocol:
 - query_records: Search for records with optional filtering, sorting, and aggregation
 
 3. Temporal Processing:
-- Always use temporal_reference_resolver for any time-related expressions.
+- Always use temporal_reference_resolver for any time-related expressions
 - Convert natural language time references to proper datetime format
 - Handle both specific moments and time ranges
 
-Interaction Guidelines:
-- Be proactive in guiding users through their data needs
-- Ask for clarification when user intent is ambiguous
-- Provide helpful context about the data being managed
-- Use natural conversation while handling technical operations
-- Suggest relevant data operations based on context
+4. Output Processing:
+- CRITICAL: ALWAYS use output_formatter as the FINAL step before responding to the user
+- First gather all data needed to answer the user's query
+- Extract only the relevant information needed for the response
+- Pass this relevant data to output_formatter using the 'content' argument
+- Include the original user query in the 'user_query' argument
+- Never return raw operation results directly to the user
+- The output_formatter will return a structured JSON response for the UI
+- CRITICAL: Return the output_formatter's response EXACTLY as-is, without any modifications
+- Do not add any text, formatting, or explanations to the output_formatter's response
+- The UI depends on receiving the exact JSON structure from output_formatter
 
-For all interactions:
-1. First understand the data schema (list_datasets)
-2. Infer the relevant dataset
-3. If needed, locate specific records
-4. Process any temporal references
-5. Execute the requested operation
-6. Provide clear feedback to the user
+Interaction Flow:
+1. Start with list_datasets for schema understanding
+2. Infer relevant dataset and locate specific records if needed
+3. Process any temporal references
+4. Execute necessary operations to gather required data
+5. Extract the relevant information needed for the response
+6. As the FINAL step, pass this relevant data to output_formatter
+7. Return output_formatter's response EXACTLY as-is to the user
 
-When uncertain, ask for clarification while showing that you understand the context so far.
+Remember: NEVER return raw results directly - ALWAYS use output_formatter as the FINAL step, passing only the data needed for the response. Return output_formatter's response EXACTLY as-is.
+
+When uncertain, gather the relevant context first, then use output_formatter as the final step and return its response unmodified.
 """
 
 
@@ -102,6 +113,7 @@ class Assistant:
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
+            OutputFormatterTool(),
         ]
 
     async def __call__(self, state: State):

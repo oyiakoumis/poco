@@ -1,9 +1,9 @@
 """Dataset manager for MongoDB operations."""
 
+from asyncio import sleep
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Union
-from asyncio import sleep
 
 import pymongo
 from bson import ObjectId
@@ -811,7 +811,7 @@ class DatasetManager:
             # Add any additional filters first
             if filter_dict:
                 pipeline.append({"$match": filter_dict})
-                
+
             # Add user_id filter in a separate stage to ensure it cannot be overridden
             pipeline.append({"$match": {"user_id": user_id}})
 

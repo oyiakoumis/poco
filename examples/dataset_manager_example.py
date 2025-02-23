@@ -203,9 +203,7 @@ async def main():
         print("- (category is dairy OR meat) AND")
         print("- (quantity is 2 OR 4)")
         for record in nested_records:
-            print(
-                f"- {record.data['item']}: category={record.data.get('category')}, quantity={record.data['quantity']}"
-            )
+            print(f"- {record.data['item']}: category={record.data.get('category')}, quantity={record.data['quantity']}")
 
         # 4. Aggregation
         print("\n=== Aggregation Operations ===")
@@ -323,15 +321,10 @@ async def main():
         # Test similar datasets search
         # Get the grocery list dataset to use as reference
         grocery_dataset = await manager.get_dataset(user_id, dataset_id)
-        
+
         print("\nSearching for datasets similar to grocery list...")
-        similar_datasets = await manager.search_similar_datasets(
-            user_id=user_id,
-            dataset=grocery_dataset,
-            limit=5,
-            min_score=0.7
-        )
-        
+        similar_datasets = await manager.search_similar_datasets(user_id=user_id, dataset=grocery_dataset, limit=5, min_score=0.7)
+
         print(f"\nFound {len(similar_datasets)} similar datasets:")
         for ds in similar_datasets:
             if ds.id != dataset_id:  # Skip the reference dataset itself

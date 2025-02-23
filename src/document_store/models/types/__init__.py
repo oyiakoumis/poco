@@ -7,6 +7,7 @@ from document_store.models.types.constants import (
     AggregationType,
     FieldType,
 )
+from document_store.models.types.registry import TypeRegistry
 from document_store.models.types.types import (
     BooleanType,
     DateTimeType,
@@ -17,7 +18,6 @@ from document_store.models.types.types import (
     SelectType,
     StringType,
 )
-from document_store.models.types.registry import TypeRegistry
 
 __all__ = [
     "AggregationType",

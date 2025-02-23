@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph
 
-from agent.assistant import Assistant
+from agents.assistant import Assistant
 from document_store.dataset_manager import DatasetManager
 from state import State
 

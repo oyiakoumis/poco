@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Type, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
