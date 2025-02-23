@@ -28,7 +28,7 @@ async def main():
         config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=10)
 
         for message in [
-            HumanMessage(content="Which feedback was created last week?"),
+            HumanMessage(content="Which feedback was created this week?"),
         ]:
             print_message(message, "Human")
             # Process and print each event
