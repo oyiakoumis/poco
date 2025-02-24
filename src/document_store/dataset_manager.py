@@ -5,8 +5,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Union
 
-from utils.logging import logger
-
 import pymongo
 from bson import ObjectId
 from langchain_openai import OpenAIEmbeddings
@@ -33,6 +31,7 @@ from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType, TypeRegistry
 from document_store.pipeline import build_aggregation_pipeline
+from utils.logging import logger
 
 
 class IndexStatus(Enum):

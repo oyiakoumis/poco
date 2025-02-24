@@ -1,7 +1,6 @@
 from langchain_core.messages import SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
-from utils.logging import logger
 
 from agents.tools.database_operator import (
     AddFieldOperator,
@@ -20,6 +19,7 @@ from agents.tools.output_formatter import output_formatter
 from agents.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
 from state import State
+from utils.logging import logger
 
 ASSISTANT_SYSTEM_MESSAGE = f"""
 You are a helpful assistant that manages structured data through natural conversations. Your role is to help users store and retrieve information seamlessly while handling all the technical complexities behind the scenes.
@@ -170,6 +170,6 @@ class Assistant:
 
         logger.debug("Invoking LLM with trimmed messages")
         response = await runnable.ainvoke({"messages": trimmed_messages})
-        
+
         logger.debug("LLM response received")
         return {"messages": response["messages"]}

@@ -1,4 +1,5 @@
 """Main FastAPI application."""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,11 +9,7 @@ from api.routers import chat
 
 def create_app() -> FastAPI:
     """Create FastAPI application."""
-    app = FastAPI(
-        title=settings.api_title,
-        version=settings.api_version,
-        description=settings.api_description
-    )
+    app = FastAPI(title=settings.api_title, version=settings.api_version, description=settings.api_description)
 
     # Add CORS middleware
     app.add_middleware(

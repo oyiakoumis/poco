@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional, Type
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from utils.logging import logger
 
 from document_store import DatasetManager
 from document_store.models.base import PydanticObjectId
@@ -13,6 +12,7 @@ from document_store.models.field import SchemaField
 from document_store.models.query import RecordQuery
 from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
+from utils.logging import logger
 
 
 class DatasetArgs(BaseModel):
