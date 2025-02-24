@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage
+from utils.logging import logger
 
 from agents.workflow import get_graph
 from api.dependencies import get_db
@@ -18,6 +19,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.post("/", response_model=ChatResponse)
 async def process_message(request: ChatRequest, db: DatasetManager = Depends(get_db)) -> ChatResponse:
     """Process a chat message."""
+    logger.info(f"Starting message processing - Thread: {request.thread_id}, User: {request.user_id}")
+
     # Get the graph
     graph = get_graph(db)
     graph = graph.compile(checkpointer=MemorySaver())
@@ -41,6 +44,9 @@ async def process_message(request: ChatRequest, db: DatasetManager = Depends(get
 
     # Process all events from the graph
     async for event in graph.astream({"messages": messages}, config, stream_mode="updates"):
+        # Log stream event
+        logger.debug(f"Stream event received.")
+
         # Get only assistant messages (filter out tool messages)
         if isinstance(event, dict) and "assistant" in event:
             assistant_data = event["assistant"]
@@ -48,8 +54,11 @@ async def process_message(request: ChatRequest, db: DatasetManager = Depends(get
                 messages = assistant_data["messages"]
                 if messages and len(messages) > 0 and isinstance(messages[-1], AIMessage):
                     assistant_message = messages[-1].content
+                    logger.info("Assistant response generated")
 
     if not assistant_message:
+        logger.warning("No assistant message generated, using fallback response")
         assistant_message = "I apologize, but I couldn't process your request."
 
+    logger.info("Message processing completed")
     return ChatResponse(message=assistant_message)

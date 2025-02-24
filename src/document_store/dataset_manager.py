@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Union
 
+from utils.logging import logger
+
 import pymongo
 from bson import ObjectId
 from langchain_openai import OpenAIEmbeddings
@@ -73,29 +75,31 @@ class DatasetManager:
     async def _create_vector_search_index(self) -> None:
         """Create vector search index if it doesn't exist and ensure it's ready."""
         try:
+            logger.info("Checking vector search index status")
             # Check current index status
             status = await self._get_index_status()
 
             if status == IndexStatus.READY:
+                logger.info("Vector search index is ready")
                 return  # Index exists and is ready
             elif status == IndexStatus.FAILED:
                 # Drop failed index to recreate it
-                print("Dropping failed index...")
+                logger.warning("Vector search index failed, dropping to recreate")
                 await self._delete_vector_search_index()
             elif status == IndexStatus.STALE:
-                print("Warning: Index is stale, dropping to recreate...")
+                logger.warning("Vector search index is stale, dropping to recreate")
                 await self._delete_vector_search_index()
             elif status in (IndexStatus.BUILDING, IndexStatus.PENDING):
                 # Wait for existing index to be ready
-                print("Waiting for existing index to be ready...")
+                logger.info("Waiting for existing vector search index to be ready")
                 await self._wait_for_index_ready()
                 return
             elif status == IndexStatus.DELETING:
-                print("Waiting for index deletion to complete...")
+                logger.info("Waiting for vector search index deletion to complete")
                 await sleep(5)  # Wait a bit before creating new index
 
             # Create new index if it doesn't exist or was dropped
-            print("Creating vector search index...")
+            logger.info("Creating new vector search index")
             index_definition = {
                 "mappings": {
                     "dynamic": True,
@@ -114,8 +118,9 @@ class DatasetManager:
             await self._datasets.create_search_index(search_index)
 
             # Wait for index to be ready
-            print("Waiting for new index to be ready...")
+            logger.info("Waiting for new vector search index to be ready")
             await self._wait_for_index_ready()
+            logger.info("Vector search index is ready")
 
         except Exception as e:
             raise DatabaseError(f"Failed to create vector search index: {str(e)}")
@@ -245,6 +250,7 @@ class DatasetManager:
     async def create_dataset(self, user_id: str, name: str, description: str, schema: DatasetSchema) -> ObjectId:
         """Creates a new dataset with the given schema and generates its embedding."""
         try:
+            logger.info(f"Creating dataset '{name}' for user {user_id}")
             # Create dataset model
             dataset = Dataset(
                 user_id=user_id,
@@ -254,6 +260,7 @@ class DatasetManager:
             )
 
             # Generate embedding
+            logger.debug("Generating dataset embedding")
             embedding = await self._generate_dataset_embedding(dataset)
 
             # Add embedding to dataset dict
@@ -262,6 +269,7 @@ class DatasetManager:
 
             # Insert into database
             result = await self._datasets.insert_one(dataset_dict)
+            logger.info(f"Dataset created with ID: {result.inserted_id}")
             return result.inserted_id
         except Exception as e:
             if "duplicate key error" in str(e).lower():
@@ -271,6 +279,7 @@ class DatasetManager:
     async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str) -> None:
         """Updates dataset metadata (name and description) and regenerates its embedding."""
         try:
+            logger.info(f"Updating dataset {dataset_id} for user {user_id}")
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
 
@@ -286,6 +295,7 @@ class DatasetManager:
             )
 
             # Generate new embedding
+            logger.debug("Regenerating dataset embedding")
             embedding = await self._generate_dataset_embedding(updated)
 
             # Add embedding to dataset dict
@@ -297,6 +307,7 @@ class DatasetManager:
                 {"_id": dataset_id, "user_id": user_id},
                 dataset_dict,
             )
+            logger.info("Dataset updated successfully")
 
             if result.modified_count == 0:
                 raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
@@ -311,6 +322,7 @@ class DatasetManager:
     async def delete_dataset(self, user_id: str, dataset_id: ObjectId) -> None:
         """Deletes a dataset and all its records."""
         try:
+            logger.info(f"Deleting dataset {dataset_id} and its records for user {user_id}")
             # Verify dataset exists and belongs to user
             await self.get_dataset(user_id, dataset_id)
 
@@ -335,6 +347,7 @@ class DatasetManager:
 
                     if result.deleted_count == 0:
                         raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
+                    logger.info("Dataset and records deleted successfully")
 
         except DatasetNotFoundError:
             raise
@@ -344,6 +357,7 @@ class DatasetManager:
     async def list_datasets(self, user_id: str) -> List[Dataset]:
         """Lists all datasets belonging to the user."""
         try:
+            logger.info(f"Listing datasets for user {user_id}")
             datasets = []
             cursor = self._datasets.find({"user_id": user_id})
             async for doc in cursor:
@@ -355,6 +369,7 @@ class DatasetManager:
     async def get_dataset(self, user_id: str, dataset_id: ObjectId) -> Dataset:
         """Retrieves a specific dataset."""
         try:
+            logger.debug(f"Getting dataset {dataset_id} for user {user_id}")
             doc = await self._datasets.find_one({"_id": dataset_id, "user_id": user_id})
             if not doc:
                 raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
@@ -650,6 +665,7 @@ class DatasetManager:
     async def create_record(self, user_id: str, dataset_id: ObjectId, data: RecordData) -> ObjectId:
         """Creates a new record in the specified dataset."""
         try:
+            logger.info(f"Creating record in dataset {dataset_id} for user {user_id}")
             # Get dataset to validate against schema
             dataset = await self.get_dataset(user_id, dataset_id)
 
@@ -664,6 +680,7 @@ class DatasetManager:
             )
 
             result = await self._records.insert_one(record.model_dump(by_alias=True))
+            logger.info(f"Record created with ID: {result.inserted_id}")
             return result.inserted_id
 
         except (DatasetNotFoundError, InvalidRecordDataError):
@@ -674,6 +691,7 @@ class DatasetManager:
     async def update_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId, data: RecordData) -> None:
         """Updates an existing record."""
         try:
+            logger.info(f"Updating record {record_id} in dataset {dataset_id}")
             # Get dataset to validate against schema
             dataset = await self.get_dataset(user_id, dataset_id)
 
@@ -706,6 +724,9 @@ class DatasetManager:
                 )
                 if not record:
                     raise RecordNotFoundError(f"Record {record_id} not found")
+                logger.debug("Record exists but no changes were made")
+            else:
+                logger.info("Record updated successfully")
 
         except (DatasetNotFoundError, RecordNotFoundError, InvalidRecordDataError):
             raise
@@ -715,6 +736,7 @@ class DatasetManager:
     async def delete_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId) -> None:
         """Deletes a record."""
         try:
+            logger.info(f"Deleting record {record_id} from dataset {dataset_id}")
             # Verify dataset exists
             await self.get_dataset(user_id, dataset_id)
 
@@ -729,6 +751,7 @@ class DatasetManager:
 
             if result.deleted_count == 0:
                 raise RecordNotFoundError(f"Record {record_id} not found")
+            logger.info("Record deleted successfully")
 
         except (DatasetNotFoundError, RecordNotFoundError):
             raise
@@ -738,6 +761,7 @@ class DatasetManager:
     async def get_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId) -> Record:
         """Retrieves a specific record."""
         try:
+            logger.debug(f"Getting record {record_id} from dataset {dataset_id}")
             # Verify dataset exists
             await self.get_dataset(user_id, dataset_id)
 
@@ -784,6 +808,8 @@ class DatasetManager:
             DatabaseError: If vector search fails
         """
         try:
+            logger.info(f"Searching similar datasets for user {user_id}")
+            logger.debug("Generating embedding for similarity search")
             # Generate embedding from dataset
             query_embedding = await self._generate_dataset_embedding(dataset)
 
@@ -824,6 +850,7 @@ class DatasetManager:
                 dataset = Dataset.model_validate(doc)
                 results.append(dataset)
 
+            logger.info(f"Found {len(results)} similar datasets")
             return results
 
         except Exception as e:
@@ -849,6 +876,7 @@ class DatasetManager:
             DatabaseError: For other database errors
         """
         try:
+            logger.info(f"Querying records in dataset {dataset_id} for user {user_id}")
             # Verify dataset exists and get schema for validation
             dataset = await self.get_dataset(user_id, dataset_id)
 
@@ -862,6 +890,7 @@ class DatasetManager:
             # Build pipeline
             pipeline = build_aggregation_pipeline(user_id, dataset_id, query)
 
+            logger.debug("Executing aggregation pipeline")
             # Execute pipeline
             cursor = self._records.aggregate(pipeline)
 
@@ -875,12 +904,14 @@ class DatasetManager:
                         doc.update(doc["_id"])
                     doc.pop("_id")
                     results.append(doc)
+                logger.info(f"Query returned {len(results)} aggregated results")
                 return results
             else:
                 # Simple query - return Record objects
                 records = []
                 async for doc in cursor:
                     records.append(Record.model_validate(doc))
+                logger.info(f"Query returned {len(records)} records")
                 return records
 
         except (DatasetNotFoundError, InvalidRecordDataError):

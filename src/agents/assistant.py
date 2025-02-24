@@ -1,6 +1,7 @@
 from langchain_core.messages import SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
+from utils.logging import logger
 
 from agents.tools.database_operator import (
     AddFieldOperator,
@@ -131,6 +132,7 @@ class Assistant:
     TOKEN_LIMIT = 128000
 
     def __init__(self, db: DatasetManager):
+        logger.info("Initializing Assistant with tools")
         self.tools = [
             TemporalReferenceTool(),
             CreateDatasetOperator(db),
@@ -148,9 +150,11 @@ class Assistant:
         ]
 
     async def __call__(self, state: State):
+        logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=0)
 
+        logger.debug("Trimming messages to token limit")
         messages = [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages
         trimmed_messages = trim_messages(
             messages,
@@ -164,6 +168,8 @@ class Assistant:
         )
         runnable = create_react_agent(llm, self.tools)
 
+        logger.debug("Invoking LLM with trimmed messages")
         response = await runnable.ainvoke({"messages": trimmed_messages})
-
+        
+        logger.debug("LLM response received")
         return {"messages": response["messages"]}
