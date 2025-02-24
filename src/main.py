@@ -5,10 +5,10 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from agent.workflow import get_graph
+from agents.workflow import get_graph
 from constants import DATABASE_CONNECTION_STRING
 from document_store.dataset_manager import DatasetManager
-from print_event import print_event, print_message
+from print_event import print_event
 
 
 async def main():
@@ -25,15 +25,16 @@ async def main():
         graph = graph.compile(checkpointer=MemorySaver())
 
         # Configuration for the graph
-        config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=10)
+        config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25)
 
-        for message in [
-            HumanMessage(content="Which feedback was created this week?"),
-        ]:
-            print_message(message, "Human")
-            # Process and print each event
-            async for namespace, event in graph.astream({"messages": [message]}, config, stream_mode="updates", subgraphs=True):
-                print_event(namespace, event)
+        messages = [HumanMessage(content="What do I need to do today?")]
+
+        # Print human message using print_event
+        print_event((), {"Human": {"messages": messages}})
+
+        # Process and print each event
+        async for namespace, event in graph.astream({"messages": messages}, config, stream_mode="updates", subgraphs=True):
+            print_event(namespace, event)
     finally:
         client.close()
 
