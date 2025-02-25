@@ -1,0 +1,6 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "chat": "./src/graph.py:get_compiled_graph"
+  }
+}

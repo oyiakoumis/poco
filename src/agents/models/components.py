@@ -97,9 +97,3 @@ class Chart(BaseModel):
 
 # Union of all components
 Component = Union[Markdown, Checkbox, Table, Chart]
-
-
-class FormattedResponse(BaseModel):
-    """Model for the formatted response containing UI components."""
-
-    response: List[Component] = Field(description="List of UI components to display")

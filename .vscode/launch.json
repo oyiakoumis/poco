@@ -2,6 +2,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Langgraph Dev",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "bash",
+            "runtimeArgs": [
+                "-c",
+                "PYTHONPATH=$PYTHONPATH:\"src\" langgraph dev"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Debug main.py",
             "type": "debugpy",
             "request": "launch",
@@ -17,6 +28,17 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src"
             }
+        },
+        {
+            "name": "Debug API",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/run.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            },
+            "justMyCode": false
         }
     ]
 }

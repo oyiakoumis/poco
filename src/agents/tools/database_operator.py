@@ -12,6 +12,7 @@ from document_store.models.field import SchemaField
 from document_store.models.query import RecordQuery
 from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
+from utils.logging import logger
 
 
 class DatasetArgs(BaseModel):
@@ -101,7 +102,9 @@ class ListDatasetsOperator(BaseDBOperator):
 
     async def _arun(self, config: RunnableConfig) -> List[Dict[str, Any]]:
         user_id = config.get("configurable", {}).get("user_id")
+        logger.debug(f"Listing datasets for user: {user_id}")
         datasets = await self.db.list_datasets(user_id)
+        logger.debug(f"Found {len(datasets)} datasets")
         return [dataset.model_dump() for dataset in datasets]
 
 
@@ -114,7 +117,9 @@ class CreateDatasetOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
         user_id = config.get("configurable", {}).get("user_id")
         args = CreateDatasetArgs(**kwargs)
+        logger.info(f"Creating dataset '{args.name}' for user: {user_id}")
         result = await self.db.create_dataset(user_id, args.name, args.description, args.dataset_schema)
+        logger.info(f"Dataset created with ID: {result}")
         return {"dataset_id": result}
 
 
@@ -127,7 +132,9 @@ class UpdateDatasetOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateDatasetArgs(**kwargs)
+        logger.info(f"Updating dataset {args.dataset_id} for user: {user_id}")
         await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description)
+        logger.info("Dataset updated successfully")
 
 
 class DeleteDatasetOperator(BaseDBOperator):
@@ -138,7 +145,9 @@ class DeleteDatasetOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = DatasetArgs(**kwargs)
+        logger.info(f"Deleting dataset {args.dataset_id} for user: {user_id}")
         await self.db.delete_dataset(user_id, args.dataset_id)
+        logger.info("Dataset deleted successfully")
 
 
 class CreateRecordOperator(BaseDBOperator):
@@ -149,7 +158,9 @@ class CreateRecordOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
         user_id = config.get("configurable", {}).get("user_id")
         args = CreateRecordArgs(**kwargs)
+        logger.info(f"Creating record in dataset {args.dataset_id} for user: {user_id}")
         result = await self.db.create_record(user_id, args.dataset_id, args.data)
+        logger.info(f"Record created with ID: {result}")
         return {"record_id": result}
 
 
@@ -161,7 +172,9 @@ class UpdateRecordOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateRecordArgs(**kwargs)
+        logger.info(f"Updating record {args.record_id} in dataset {args.dataset_id}")
         await self.db.update_record(user_id, args.dataset_id, args.record_id, args.data)
+        logger.info("Record updated successfully")
 
 
 class DeleteRecordOperator(BaseDBOperator):
@@ -172,7 +185,9 @@ class DeleteRecordOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = RecordArgs(**kwargs)
+        logger.info(f"Deleting record {args.record_id} from dataset {args.dataset_id}")
         await self.db.delete_record(user_id, args.dataset_id, args.record_id)
+        logger.info("Record deleted successfully")
 
 
 class GetRecordOperator(BaseDBOperator):
@@ -195,7 +210,9 @@ class QueryRecordsOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         user_id = config.get("configurable", {}).get("user_id")
         args = QueryRecordsArgs(**kwargs)
+        logger.info(f"Querying records in dataset {args.dataset_id}")
         result = await self.db.query_records(user_id, args.dataset_id, args.query)
+        logger.info(f"Query returned {len(result) if result else 0} records")
         if not result:
             return []
         if isinstance(result[0], dict):
@@ -211,7 +228,9 @@ class UpdateFieldOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = UpdateFieldArgs(**kwargs)
+        logger.info(f"Updating field {args.field_name} in dataset {args.dataset_id}")
         await self.db.update_field(user_id, args.dataset_id, args.field_name, args.field_update)
+        logger.info("Field updated successfully")
 
 
 class DeleteFieldOperator(BaseDBOperator):
@@ -222,7 +241,9 @@ class DeleteFieldOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = DeleteFieldArgs(**kwargs)
+        logger.info(f"Deleting field {args.field_name} from dataset {args.dataset_id}")
         await self.db.delete_field(user_id, args.dataset_id, args.field_name)
+        logger.info("Field deleted successfully")
 
 
 class AddFieldOperator(BaseDBOperator):
@@ -233,7 +254,9 @@ class AddFieldOperator(BaseDBOperator):
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         user_id = config.get("configurable", {}).get("user_id")
         args = AddFieldArgs(**kwargs)
+        logger.info(f"Adding new field to dataset {args.dataset_id}")
         await self.db.add_field(user_id, args.dataset_id, args.field)
+        logger.info("Field added successfully")
 
 
 class SearchSimilarDatasetsArgs(BaseModel):

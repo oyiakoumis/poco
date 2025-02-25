@@ -12,8 +12,11 @@
     "aembed",
     "ainvoke",
     "arun",
+    "ASGI",
     "astream",
     "initlist",
+    "levelname",
+    "levelno",
     "relativedelta"
   ]
 }

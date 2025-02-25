@@ -19,6 +19,7 @@ from agents.tools.output_formatter import output_formatter
 from agents.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
 from state import State
+from utils.logging import logger
 
 ASSISTANT_SYSTEM_MESSAGE = f"""
 You are a helpful assistant that manages structured data through natural conversations. Your role is to help users store and retrieve information seamlessly while handling all the technical complexities behind the scenes.
@@ -131,6 +132,7 @@ class Assistant:
     TOKEN_LIMIT = 128000
 
     def __init__(self, db: DatasetManager):
+        logger.info("Initializing Assistant with tools")
         self.tools = [
             TemporalReferenceTool(),
             CreateDatasetOperator(db),
@@ -148,9 +150,11 @@ class Assistant:
         ]
 
     async def __call__(self, state: State):
+        logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=0)
 
+        logger.debug("Trimming messages to token limit")
         messages = [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages
         trimmed_messages = trim_messages(
             messages,
@@ -164,6 +168,8 @@ class Assistant:
         )
         runnable = create_react_agent(llm, self.tools)
 
+        logger.debug("Invoking LLM with trimmed messages")
         response = await runnable.ainvoke({"messages": trimmed_messages})
 
+        logger.debug("LLM response received")
         return {"messages": response["messages"]}
