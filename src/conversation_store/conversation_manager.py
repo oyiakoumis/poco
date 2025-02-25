@@ -1,11 +1,15 @@
 """Manager for conversation and message operations."""
 
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
-from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 import pymongo
+from bson import ObjectId
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorCollection,
+    AsyncIOMotorDatabase,
+)
 
 from conversation_store.exceptions import (
     ConversationNotFoundError,
@@ -30,12 +34,8 @@ class ConversationManager:
         Note: Use ConversationManager.setup() to create a properly initialized instance."""
         self.client = mongodb_client
         self._db: AsyncIOMotorDatabase = self.client.get_database(self.DATABASE)
-        self._conversations: AsyncIOMotorCollection = self._db.get_collection(
-            self.COLLECTION_CONVERSATIONS
-        )
-        self._messages: AsyncIOMotorCollection = self._db.get_collection(
-            self.COLLECTION_MESSAGES
-        )
+        self._conversations: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_CONVERSATIONS)
+        self._messages: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_MESSAGES)
 
     @classmethod
     async def setup(cls, mongodb_client: AsyncIOMotorClient) -> "ConversationManager":
@@ -50,9 +50,7 @@ class ConversationManager:
                     # Index for listing user's conversations
                     pymongo.IndexModel([("user_id", 1)], background=True),
                     # Index for conversation lookups
-                    pymongo.IndexModel(
-                        [("user_id", 1), ("_id", 1)], background=True
-                    ),
+                    pymongo.IndexModel([("user_id", 1), ("_id", 1)], background=True),
                     # Index for title search
                     pymongo.IndexModel([("title", "text")], background=True),
                 ]
@@ -79,13 +77,11 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to setup indexes: {str(e)}")
 
-    async def create_conversation(
-        self, user_id: str, title: str, first_message: str
-    ) -> ObjectId:
+    async def create_conversation(self, user_id: str, title: str, first_message: str) -> ObjectId:
         """Creates a new conversation with an initial message."""
         try:
             logger.info(f"Creating conversation '{title}' for user {user_id}")
-            
+
             # Start a transaction to create both conversation and message
             async with await self.client.start_session() as session:
                 async with session.start_transaction():
@@ -94,13 +90,10 @@ class ConversationManager:
                         user_id=user_id,
                         title=title,
                     )
-                    
-                    result = await self._conversations.insert_one(
-                        conversation.model_dump(by_alias=True),
-                        session=session
-                    )
+
+                    result = await self._conversations.insert_one(conversation.model_dump(by_alias=True), session=session)
                     conversation_id = result.inserted_id
-                    
+
                     # Create initial message
                     message = Message(
                         user_id=user_id,
@@ -108,56 +101,42 @@ class ConversationManager:
                         content=first_message,
                         role=MessageRole.USER,
                     )
-                    
-                    await self._messages.insert_one(
-                        message.model_dump(by_alias=True),
-                        session=session
-                    )
-                    
+
+                    await self._messages.insert_one(message.model_dump(by_alias=True), session=session)
+
             logger.info(f"Conversation created with ID: {conversation_id} and initial message")
             return conversation_id
 
         except Exception as e:
             raise InvalidConversationError(f"Failed to create conversation: {str(e)}")
 
-    async def get_conversation(
-        self, user_id: str, conversation_id: ObjectId
-    ) -> Conversation:
+    async def get_conversation(self, user_id: str, conversation_id: ObjectId) -> Conversation:
         """Retrieves a specific conversation."""
         try:
             logger.debug(f"Getting conversation {conversation_id} for user {user_id}")
-            doc = await self._conversations.find_one(
-                {"_id": conversation_id, "user_id": user_id}
-            )
+            doc = await self._conversations.find_one({"_id": conversation_id, "user_id": user_id})
             if not doc:
-                raise ConversationNotFoundError(
-                    f"Conversation {conversation_id} not found"
-                )
+                raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
             return Conversation.model_validate(doc)
 
         except ConversationNotFoundError:
             raise
         except Exception as e:
             raise InvalidConversationError(f"Failed to get conversation: {str(e)}")
-            
-    async def conversation_exists(
-        self, user_id: str, conversation_id: ObjectId
-    ) -> bool:
+
+    async def conversation_exists(self, user_id: str, conversation_id: ObjectId) -> bool:
         """Checks if a conversation exists."""
         try:
             logger.debug(f"Checking if conversation {conversation_id} exists for user {user_id}")
             doc = await self._conversations.find_one(
-                {"_id": conversation_id, "user_id": user_id},
-                projection={"_id": 1}  # Only retrieve the ID field for efficiency
+                {"_id": conversation_id, "user_id": user_id}, projection={"_id": 1}  # Only retrieve the ID field for efficiency
             )
             return doc is not None
         except Exception as e:
             logger.error(f"Error checking if conversation exists: {str(e)}")
             return False
 
-    async def list_conversations(
-        self, user_id: str, limit: int = 50, skip: int = 0
-    ) -> List[Conversation]:
+    async def list_conversations(self, user_id: str, limit: int = 50, skip: int = 0) -> List[Conversation]:
         """Lists all conversations for a user."""
         try:
             logger.info(f"Listing conversations for user {user_id}")
@@ -166,7 +145,7 @@ class ConversationManager:
             cursor = cursor.sort([("updated_at", -1)])
             # Apply pagination
             cursor = cursor.skip(skip).limit(limit)
-            
+
             conversations = []
             async for doc in cursor:
                 conversations.append(Conversation.model_validate(doc))
@@ -206,9 +185,7 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to update conversation: {str(e)}")
 
-    async def delete_conversation(
-        self, user_id: str, conversation_id: ObjectId
-    ) -> None:
+    async def delete_conversation(self, user_id: str, conversation_id: ObjectId) -> None:
         """Deletes a conversation and all its messages."""
         try:
             logger.info(f"Deleting conversation {conversation_id} and its messages for user {user_id}")
@@ -243,9 +220,7 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to delete conversation: {str(e)}")
 
-    async def create_message(
-        self, user_id: str, conversation_id: ObjectId, content: str, role: MessageRole, metadata: Optional[Dict] = None
-    ) -> ObjectId:
+    async def create_message(self, user_id: str, conversation_id: ObjectId, content: str, role: MessageRole, metadata: Optional[Dict] = None) -> ObjectId:
         """Creates a new message in a conversation."""
         try:
             logger.info(f"Creating message in conversation {conversation_id} for user {user_id}")
@@ -284,15 +259,11 @@ class ConversationManager:
         except Exception as e:
             raise InvalidMessageError(f"Failed to create message: {str(e)}")
 
-    async def get_message(
-        self, user_id: str, message_id: ObjectId
-    ) -> Message:
+    async def get_message(self, user_id: str, message_id: ObjectId) -> Message:
         """Retrieves a specific message."""
         try:
             logger.debug(f"Getting message {message_id} for user {user_id}")
-            doc = await self._messages.find_one(
-                {"_id": message_id, "user_id": user_id}
-            )
+            doc = await self._messages.find_one({"_id": message_id, "user_id": user_id})
             if not doc:
                 raise MessageNotFoundError(f"Message {message_id} not found")
             return Message.model_validate(doc)
@@ -302,23 +273,19 @@ class ConversationManager:
         except Exception as e:
             raise InvalidMessageError(f"Failed to get message: {str(e)}")
 
-    async def list_messages(
-        self, user_id: str, conversation_id: ObjectId, limit: int = 100, skip: int = 0
-    ) -> List[Message]:
+    async def list_messages(self, user_id: str, conversation_id: ObjectId, limit: int = 100, skip: int = 0) -> List[Message]:
         """Lists all messages in a conversation."""
         try:
             logger.info(f"Listing messages for conversation {conversation_id}")
             # Verify conversation exists and belongs to user
             await self.get_conversation(user_id, conversation_id)
 
-            cursor = self._messages.find(
-                {"user_id": user_id, "conversation_id": conversation_id}
-            )
+            cursor = self._messages.find({"user_id": user_id, "conversation_id": conversation_id})
             # Sort by timestamp (oldest first)
             cursor = cursor.sort([("created_at", 1)])
             # Apply pagination
             cursor = cursor.skip(skip).limit(limit)
-            
+
             messages = []
             async for doc in cursor:
                 messages.append(Message.model_validate(doc))
@@ -329,15 +296,11 @@ class ConversationManager:
         except Exception as e:
             raise InvalidMessageError(f"Failed to list messages: {str(e)}")
 
-    async def delete_message(
-        self, user_id: str, message_id: ObjectId
-    ) -> None:
+    async def delete_message(self, user_id: str, message_id: ObjectId) -> None:
         """Deletes a message."""
         try:
             logger.info(f"Deleting message {message_id} for user {user_id}")
-            result = await self._messages.delete_one(
-                {"_id": message_id, "user_id": user_id}
-            )
+            result = await self._messages.delete_one({"_id": message_id, "user_id": user_id})
 
             if result.deleted_count == 0:
                 raise MessageNotFoundError(f"Message {message_id} not found")

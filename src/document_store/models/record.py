@@ -3,9 +3,9 @@
 from typing import Any, Dict
 
 from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
-from models.base import BaseDocument, PydanticObjectId
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType, TypeRegistry
+from models.base import BaseDocument, PydanticObjectId
 
 RecordData = Dict[str, Any]
 

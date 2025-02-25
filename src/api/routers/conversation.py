@@ -28,9 +28,7 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
 @router.post("/", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
-async def create_conversation(
-    request: ConversationCreate, db: ConversationManager = Depends(get_conversation_db)
-) -> ConversationResponse:
+async def create_conversation(request: ConversationCreate, db: ConversationManager = Depends(get_conversation_db)) -> ConversationResponse:
     """Create a new conversation with an initial message."""
     try:
         # Create conversation with first message
@@ -94,9 +92,7 @@ async def list_conversations(
 
 
 @router.get("/{conversation_id}", response_model=ConversationResponse)
-async def get_conversation(
-    conversation_id: str, user_id: str, db: ConversationManager = Depends(get_conversation_db)
-) -> ConversationResponse:
+async def get_conversation(conversation_id: str, user_id: str, db: ConversationManager = Depends(get_conversation_db)) -> ConversationResponse:
     """Get a specific conversation."""
     try:
         # Convert string ID to ObjectId
@@ -164,9 +160,7 @@ async def update_conversation(
 
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_conversation(
-    conversation_id: str, user_id: str, db: ConversationManager = Depends(get_conversation_db)
-) -> None:
+async def delete_conversation(conversation_id: str, user_id: str, db: ConversationManager = Depends(get_conversation_db)) -> None:
     """Delete a conversation and all its messages."""
     try:
         # Convert string ID to ObjectId

@@ -1,7 +1,7 @@
 """Dataset model and related utilities."""
 
-from models.base import BaseDocument
 from document_store.models.schema import DatasetSchema
+from models.base import BaseDocument
 
 
 class Dataset(BaseDocument):

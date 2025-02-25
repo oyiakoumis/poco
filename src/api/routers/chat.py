@@ -57,11 +57,8 @@ async def process_message(
         if not conversation_exists:
             # If conversation doesn't exist, raise a 404 error
             logger.error(f"Conversation {request.conversation_id} not found")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Conversation {request.conversation_id} not found. Create a conversation first."
-            )
-        
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Conversation {request.conversation_id} not found. Create a conversation first.")
+
         # Conversation exists, store user message
         await conversation_db.create_message(
             user_id=request.user_id,
