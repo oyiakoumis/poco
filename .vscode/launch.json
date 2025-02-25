@@ -13,11 +13,14 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Debug main.py",
+            "name": "Debug graph_example.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/main.py",
-            "console": "integratedTerminal"
+            "program": "${workspaceFolder}/examples/graph_example.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
         },
         {
             "name": "Debug dataset_manager_example.py",

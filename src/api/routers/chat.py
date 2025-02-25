@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
-from agents.workflow import get_graph
+from agents.graph import create_graph
 from api.dependencies import get_db
 from api.models import ChatRequest, ChatResponse
 from document_store.dataset_manager import DatasetManager
@@ -22,7 +22,7 @@ async def process_message(request: ChatRequest, db: DatasetManager = Depends(get
     logger.info(f"Starting message processing - Thread: {request.thread_id}, User: {request.user_id}")
 
     # Get the graph
-    graph = get_graph(db)
+    graph = create_graph(db)
     graph = graph.compile(checkpointer=MemorySaver())
 
     # Configuration for the graph

@@ -2,8 +2,8 @@ import asyncio
 from langchain.schema import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
-from graph import setup_graph
-from print_event import print_event
+from agents.graph import setup_graph
+from agents.print_event import print_event
 
 
 async def main():
