@@ -2,12 +2,9 @@
 
 import asyncio
 import json
-import time
-from typing import Dict, List, Optional, Union
 
-import httpx
 from bson import ObjectId
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.testclient import TestClient
 from sseclient import SSEClient
 
@@ -15,12 +12,9 @@ from api.dependencies import get_conversation_db, get_db
 from api.main import app
 from api.models import (
     ChatRequest,
-    ChatResponse,
     ConversationCreate,
-    ConversationResponse,
 )
 from conversation_store.conversation_manager import ConversationManager
-from conversation_store.models.message import MessageRole
 from document_store.dataset_manager import DatasetManager
 
 
@@ -147,16 +141,16 @@ def main():
         # So we'll simulate the response handling
 
         try:
-            response = client.post("/chat/", json=chat_data.model_dump(), stream=True)
+            # Remove stream=True as it's not supported by TestClient
+            response = client.post("/chat/", json=chat_data.model_dump())
             print(f"Status Code: {response.status_code}")
 
             # In a real application with a real streaming response:
             # full_response = process_sse_stream(response)
             # print(f"Full response: {full_response}")
 
-            # For the example, we'll just print that we would process the stream
-            print("In a real application, we would process the SSE stream here")
-            print("Each chunk would be processed as it arrives")
+            # For the example, we'll just print the response
+            print_response(response, "Chat Response")
 
         except Exception as e:
             print(f"Error sending chat message: {str(e)}")
@@ -181,10 +175,10 @@ def main():
 
         print("\n=== Test Completed ===")
 
-        # Note: In a real application, you would want to clean up the test database
-        # asyncio.run(cleanup_test_database())
-        print("\nNote: Test database not cleaned up for demonstration purposes.")
-        print("Run cleanup_test_database() to remove test data.")
+        # Clean up the test database
+        print("\nCleaning up test database...")
+        asyncio.run(cleanup_test_database())
+        print("Test database cleaned up successfully.")
 
 
 if __name__ == "__main__":
