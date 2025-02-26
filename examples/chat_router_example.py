@@ -2,11 +2,10 @@
 
 import asyncio
 import json
+from uuid import uuid4
 
-from bson import ObjectId
 from fastapi import status
 from fastapi.testclient import TestClient
-from sseclient import SSEClient
 
 from api.dependencies import get_conversation_db, get_db
 from api.main import app
@@ -85,25 +84,6 @@ def print_response(response, title: str):
             print(f"Response: {response.text}")
 
 
-def process_sse_stream(response):
-    """Process Server-Sent Events (SSE) stream and return the complete response."""
-    if response.status_code != 200:
-        print(f"Error: Received status code {response.status_code}")
-        return response.text
-
-    # Create an SSEClient from the response content
-    client = SSEClient(response.iter_lines())
-
-    # Collect all events
-    full_response = ""
-    for event in client:
-        if event.data:
-            print(f"Received chunk: {event.data}")
-            full_response += event.data
-
-    return full_response
-
-
 def main():
     """Run example operations testing the chat router endpoints."""
     with TestClient(app) as client:
@@ -118,6 +98,9 @@ def main():
         response = client.post("/conversations/", json=create_data.model_dump())
         print_response(response, "Create Conversation")
         assert response.status_code == status.HTTP_201_CREATED
+        assert "id" in response.json(), "Response should contain conversation ID"
+        assert response.json()["user_id"] == user_id, "Response should contain correct user_id"
+        assert response.json()["title"] == "Test Chat Conversation", "Response should contain correct title"
         conversation_id = response.json()["id"]
         print(f"Created conversation with ID: {conversation_id}")
 
@@ -136,30 +119,25 @@ def main():
 
         print(f"Sending chat message: {chat_data.model_dump()}")
 
-        # Note: In a real application, you would handle the streaming response
-        # Here we're using the TestClient which doesn't support streaming properly
-        # So we'll simulate the response handling
+        # Send the chat message and get the response
+        response = client.post("/chat/", json=chat_data.model_dump())
+        print(f"Status Code: {response.status_code}")
 
-        try:
-            # Remove stream=True as it's not supported by TestClient
-            response = client.post("/chat/", json=chat_data.model_dump())
-            print(f"Status Code: {response.status_code}")
-
-            # In a real application with a real streaming response:
-            # full_response = process_sse_stream(response)
-            # print(f"Full response: {full_response}")
-
-            # For the example, we'll just print the response
-            print_response(response, "Chat Response")
-
-        except Exception as e:
-            print(f"Error sending chat message: {str(e)}")
+        # Print the response
+        print_response(response, "Chat Response")
+        
+        # Ensure the response is successful
+        assert response.status_code == status.HTTP_200_OK, f"Expected 200 OK, got {response.status_code}"
+        assert "message" in response.json(), "Response should contain 'message' field"
+        assert isinstance(response.json()["message"], str), "Message field should be a string"
+        assert len(response.json()["message"]) > 0, "Message should not be empty"
+        assert "conversation_id" in response.json(), "Response should contain 'conversation_id' field"
 
         # 3. Error Handling Examples
         print("\n=== Error Handling Examples ===")
 
         # Try to send a message to a non-existent conversation
-        non_existent_id = str(ObjectId())
+        non_existent_id = str(uuid4())
         chat_data = ChatRequest(
             user_id=user_id,
             conversation_id=non_existent_id,
@@ -172,6 +150,8 @@ def main():
         response = client.post("/chat/", json=chat_data.model_dump())
         print_response(response, "Send Message to Non-existent Conversation")
         assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "detail" in response.json(), "Error response should contain 'detail' field"
+        assert "not found" in response.json()["detail"].lower(), "Error message should indicate resource not found"
 
         print("\n=== Test Completed ===")
 
@@ -179,6 +159,9 @@ def main():
         print("\nCleaning up test database...")
         asyncio.run(cleanup_test_database())
         print("Test database cleaned up successfully.")
+        
+        # Verify all assertions passed
+        print("\nAll assertions passed successfully!")
 
 
 if __name__ == "__main__":

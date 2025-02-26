@@ -3,9 +3,9 @@
 import asyncio
 import json
 from typing import Dict, List, Optional, Union
+from uuid import uuid4
 
 import httpx
-from bson import ObjectId
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
@@ -88,6 +88,9 @@ def main():
         response = client.post("/conversations/", json=create_data.model_dump())
         print_response(response, "Create Conversation")
         assert response.status_code == status.HTTP_201_CREATED
+        assert "id" in response.json(), "Response should contain conversation ID"
+        assert response.json()["user_id"] == user_id, "Response should contain correct user_id"
+        assert response.json()["title"] == "Test Conversation", "Response should contain correct title"
         conversation_id = response.json()["id"]
         print(f"Created conversation with ID: {conversation_id}")
 
@@ -96,9 +99,11 @@ def main():
         response = client.get(f"/conversations/?user_id={user_id}")
         print_response(response, "List Conversations")
         assert response.status_code == status.HTTP_200_OK
-
-        # Temporarily disable this assertion for debugging
-        # assert response.json()["total"] == 1
+        assert "conversations" in response.json(), "Response should contain 'conversations' field"
+        assert "total" in response.json(), "Response should contain 'total' field"
+        assert response.json()["total"] >= 1, "Should have at least 1 conversation"
+        assert len(response.json()["conversations"]) >= 1, "Should have at least 1 conversation in the list"
+        assert any(conv["id"] == conversation_id for conv in response.json()["conversations"]), "Created conversation should be in the list"
         print(f"Found {response.json()['total']} conversations in the response")
 
         # Get specific conversation
@@ -106,6 +111,8 @@ def main():
         print_response(response, "Get Conversation")
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["title"] == "Test Conversation"
+        assert response.json()["id"] == conversation_id, "Response should contain correct conversation ID"
+        assert response.json()["user_id"] == user_id, "Response should contain correct user_id"
 
         # Update conversation
         update_data = ConversationUpdate(title="Updated Test Conversation")
@@ -113,6 +120,8 @@ def main():
         print_response(response, "Update Conversation")
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["title"] == "Updated Test Conversation"
+        assert response.json()["id"] == conversation_id, "Conversation ID should not change after update"
+        assert response.json()["user_id"] == user_id, "User ID should not change after update"
 
         # 2. Message Operations
         print("\n=== Message Operations ===")
@@ -125,6 +134,10 @@ def main():
         response = client.post(f"/conversations/{conversation_id}/messages", json=message_data.model_dump())
         print_response(response, "Create Message")
         assert response.status_code == status.HTTP_201_CREATED
+        assert "id" in response.json(), "Response should contain message ID"
+        assert response.json()["user_id"] == user_id, "Response should contain correct user_id"
+        assert response.json()["content"] == "Hello, this is a test message", "Response should contain correct content"
+        assert response.json()["conversation_id"] == conversation_id, "Response should contain correct conversation_id"
         message_id = response.json()["id"]
 
         # Create another message
@@ -135,27 +148,39 @@ def main():
         response = client.post(f"/conversations/{conversation_id}/messages", json=message_data.model_dump())
         print_response(response, "Create Second Message")
         assert response.status_code == status.HTTP_201_CREATED
+        assert "id" in response.json(), "Response should contain message ID"
+        assert response.json()["content"] == "This is a second test message", "Response should contain correct content"
+        second_message_id = response.json()["id"]
+        assert second_message_id != message_id, "Second message should have a different ID"
 
         # List messages
         response = client.get(f"/conversations/{conversation_id}/messages?user_id={user_id}")
         print_response(response, "List Messages")
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["total"] == 2
+        assert response.json()["total"] == 2, "Should have exactly 2 messages"
+        assert "messages" in response.json(), "Response should contain 'messages' field"
+        assert len(response.json()["messages"]) == 2, "Should return 2 messages"
+        message_ids = [msg["id"] for msg in response.json()["messages"]]
+        assert message_id in message_ids, "First message should be in the list"
+        assert second_message_id in message_ids, "Second message should be in the list"
 
         # List messages with pagination
         response = client.get(f"/conversations/{conversation_id}/messages?user_id={user_id}&skip=1&limit=1")
         print_response(response, "List Messages with Pagination")
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.json()["messages"]) == 1
+        assert len(response.json()["messages"]) == 1, "Should return exactly 1 message with limit=1"
+        assert response.json()["total"] == 2, "Total should still be 2 even with pagination"
 
         # 3. Error Handling Examples
         print("\n=== Error Handling Examples ===")
 
         # Try to get a non-existent conversation
-        non_existent_id = str(ObjectId())
+        non_existent_id = str(uuid4())
         response = client.get(f"/conversations/{non_existent_id}?user_id={user_id}")
         print_response(response, "Get Non-existent Conversation")
         assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "detail" in response.json(), "Error response should contain 'detail' field"
+        assert "not found" in response.json()["detail"].lower(), "Error message should indicate resource not found"
 
         # Try to create a message in a non-existent conversation
         message_data = MessageCreate(
@@ -165,6 +190,8 @@ def main():
         response = client.post(f"/conversations/{non_existent_id}/messages", json=message_data.model_dump())
         print_response(response, "Create Message in Non-existent Conversation")
         assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "detail" in response.json(), "Error response should contain 'detail' field"
+        assert "not found" in response.json()["detail"].lower(), "Error message should indicate resource not found"
 
         # 4. Delete Operations
         print("\n=== Delete Operations ===")
@@ -186,6 +213,7 @@ def main():
         assert response.json()["total"] == 0
 
         print("\n=== Test Completed Successfully ===")
+        print("\nAll assertions passed successfully!")
 
 
 if __name__ == "__main__":

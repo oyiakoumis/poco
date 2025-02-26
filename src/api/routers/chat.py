@@ -4,7 +4,6 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
@@ -12,7 +11,6 @@ from langgraph.checkpoint.memory import MemorySaver
 from agents.graph import create_graph
 from api.dependencies import get_conversation_db, get_db
 from api.models import ChatRequest, ChatResponse
-from api.services.streaming import StreamingService
 from conversation_store.conversation_manager import ConversationManager
 from conversation_store.exceptions import ConversationNotFoundError
 from conversation_store.models.message import MessageRole
@@ -48,17 +46,17 @@ async def get_conversation_history(conversation_id: UUID, user_id: str, conversa
 @router.post("/", response_model=ChatResponse)
 async def process_message(
     request: ChatRequest, db: DatasetManager = Depends(get_db), conversation_db: ConversationManager = Depends(get_conversation_db)
-) -> StreamingResponse:
+) -> ChatResponse:
     """
-    Process a chat message and stream the response.
+    Process a chat message and return the response.
 
     This endpoint:
     1. Validates the conversation exists
     2. Stores the user message
     3. Retrieves conversation history
     4. Processes the message through the graph
-    5. Streams the response back to the client
-    6. Stores the final response in the database
+    5. Stores the response in the database
+    6. Returns the complete response to the client
     """
     logger.info(f"Starting message processing - Thread: {request.thread_id}, User: {request.user_id}")
 
@@ -96,17 +94,28 @@ async def process_message(
             recursion_limit=25,
         )
 
-        # Return streaming response
-        return StreamingResponse(
-            StreamingService.stream_chat_response(
-                graph=graph, messages=messages, config=config, conversation_db=conversation_db, user_id=request.user_id, conversation_id=request.conversation_id
-            ),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache, no-transform",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",  # Disable buffering in Nginx
-            },
+        # Process the message through the graph
+        result = await graph.ainvoke({"messages": messages}, config)
+        
+        # Extract the assistant's response from the result
+        if result and "assistant" in result and "messages" in result["assistant"] and result["assistant"]["messages"]:
+            assistant_messages = result["assistant"]["messages"]
+            response_content = assistant_messages[-1].content if assistant_messages else ""
+        else:
+            response_content = "I apologize, but I couldn't process your request."
+        
+        # Store the assistant's response
+        await conversation_db.create_message(
+            user_id=request.user_id,
+            conversation_id=request.conversation_id,
+            content=response_content,
+            role=MessageRole.ASSISTANT,
+        )
+        
+        # Return the complete response
+        return ChatResponse(
+            message=response_content,
+            conversation_id=request.conversation_id
         )
 
     except ConversationNotFoundError:

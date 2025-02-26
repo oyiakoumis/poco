@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from typing import List, Optional
-from uuid import UUID
 
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
