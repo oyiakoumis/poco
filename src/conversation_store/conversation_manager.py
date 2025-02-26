@@ -1,6 +1,6 @@
 """Manager for conversation and message operations."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import pymongo
@@ -167,7 +167,7 @@ class ConversationManager:
             conversation = await self.get_conversation(user_id, conversation_id)
 
             # Prepare update data
-            update_data = {"updated_at": datetime.now(tz=datetime.UTC)}
+            update_data = {"updated_at": datetime.now(tz=timezone.utc)}
             if title is not None:
                 update_data["title"] = title
 
@@ -247,7 +247,7 @@ class ConversationManager:
                     # Update conversation timestamp
                     await self._conversations.update_one(
                         {"_id": conversation_id, "user_id": user_id},
-                        {"$set": {"updated_at": datetime.now(tz=datetime.UTC)}},
+                        {"$set": {"updated_at": datetime.now(tz=timezone.utc)}},
                         session=session,
                     )
 

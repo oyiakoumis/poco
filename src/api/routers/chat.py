@@ -4,6 +4,7 @@ from typing import List
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
@@ -11,6 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from agents.graph import create_graph
 from api.dependencies import get_conversation_db, get_db
 from api.models import ChatRequest, ChatResponse
+from api.services.streaming import StreamingService
 from conversation_store.conversation_manager import ConversationManager
 from conversation_store.exceptions import ConversationNotFoundError
 from conversation_store.models.message import MessageRole
@@ -46,8 +48,18 @@ async def get_conversation_history(conversation_id: ObjectId, user_id: str, conv
 @router.post("/", response_model=ChatResponse)
 async def process_message(
     request: ChatRequest, db: DatasetManager = Depends(get_db), conversation_db: ConversationManager = Depends(get_conversation_db)
-) -> ChatResponse:
-    """Process a chat message."""
+) -> StreamingResponse:
+    """
+    Process a chat message and stream the response.
+
+    This endpoint:
+    1. Validates the conversation exists
+    2. Stores the user message
+    3. Retrieves conversation history
+    4. Processes the message through the graph
+    5. Streams the response back to the client
+    6. Stores the final response in the database
+    """
     logger.info(f"Starting message processing - Thread: {request.thread_id}, User: {request.user_id}")
 
     try:
@@ -55,11 +67,10 @@ async def process_message(
         conversation_exists = await conversation_db.conversation_exists(request.user_id, request.conversation_id)
 
         if not conversation_exists:
-            # If conversation doesn't exist, raise a 404 error
             logger.error(f"Conversation {request.conversation_id} not found")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Conversation {request.conversation_id} not found. Create a conversation first.")
 
-        # Conversation exists, store user message
+        # Store user message
         await conversation_db.create_message(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
@@ -67,7 +78,7 @@ async def process_message(
             role=MessageRole.USER,
         )
 
-        # Get conversation history (including the message we just added)
+        # Get conversation history
         messages = await get_conversation_history(request.conversation_id, request.user_id, conversation_db)
 
         # Get the graph
@@ -85,41 +96,27 @@ async def process_message(
             recursion_limit=25,
         )
 
-        # Process message and get final assistant response
-        assistant_message = None
-
-        # Process all events from the graph
-        async for event in graph.astream({"messages": messages}, config, stream_mode="updates"):
-            # Log stream event
-            logger.debug(f"Stream event received.")
-
-            # Get only assistant message
-            if isinstance(event, dict) and "assistant" in event:
-                assistant_data = event["assistant"]
-                if isinstance(assistant_data, dict) and "messages" in assistant_data:
-                    event_messages = assistant_data["messages"]
-                    if event_messages and len(event_messages) > 0 and isinstance(event_messages[-1], AIMessage):
-                        assistant_message = event_messages[-1].content
-                        logger.info("Assistant response generated")
-
-        if not assistant_message:
-            logger.warning("No assistant message generated, using fallback response")
-            assistant_message = "I apologize, but I couldn't process your request."
-
-        # Store assistant response in conversation
-        await conversation_db.create_message(
-            user_id=request.user_id,
-            conversation_id=request.conversation_id,
-            content=assistant_message,
-            role=MessageRole.ASSISTANT,
+        # Return streaming response
+        return StreamingResponse(
+            StreamingService.stream_chat_response(
+                graph=graph, messages=messages, config=config, conversation_db=conversation_db, user_id=request.user_id, conversation_id=request.conversation_id
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Disable buffering in Nginx
+            },
         )
 
-        logger.info("Message processing completed")
-        return ChatResponse(message=assistant_message, conversation_id=request.conversation_id)
-
+    except ConversationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to process message",
+            detail=f"Failed to process message: {str(e)}",
         )

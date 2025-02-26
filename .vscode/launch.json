@@ -33,6 +33,16 @@
             }
         },
         {
+            "name": "Debug conversation_manager_example.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/conversation_manager_example.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
             "name": "Debug API",
             "type": "debugpy",
             "request": "launch",
