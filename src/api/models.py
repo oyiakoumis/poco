@@ -43,7 +43,6 @@ class ConversationCreate(BaseModel):
     """Request model for creating a conversation."""
 
     title: str = Field(..., description="Title of the conversation")
-    first_message: str = Field(..., description="First message of the conversation")
     user_id: str = Field(..., description="User identifier")
 
 

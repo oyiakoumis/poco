@@ -29,13 +29,12 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 @router.post("/", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
 async def create_conversation(request: ConversationCreate, db: ConversationManager = Depends(get_conversation_db)) -> ConversationResponse:
-    """Create a new conversation with an initial message."""
+    """Create a new conversation."""
     try:
-        # Create conversation with first message
+        # Create conversation without first message
         conversation_id = await db.create_conversation(
             user_id=request.user_id,
             title=request.title,
-            first_message=request.first_message,
         )
 
         # Get the created conversation

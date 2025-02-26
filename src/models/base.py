@@ -30,7 +30,7 @@ class PydanticObjectId(ObjectId):
                     ),
                 ]
             ),
-            serialization=core_schema.plain_serializer_function_ser_schema(lambda x: str(x), when_used="json"),
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda x: str(x), when_used="always"),
         )
 
     @classmethod

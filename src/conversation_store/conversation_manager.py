@@ -77,34 +77,21 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to setup indexes: {str(e)}")
 
-    async def create_conversation(self, user_id: str, title: str, first_message: str) -> ObjectId:
-        """Creates a new conversation with an initial message."""
+    async def create_conversation(self, user_id: str, title: str) -> ObjectId:
+        """Creates a new conversation without an initial message."""
         try:
             logger.info(f"Creating conversation '{title}' for user {user_id}")
 
-            # Start a transaction to create both conversation and message
-            async with await self.client.start_session() as session:
-                async with session.start_transaction():
-                    # Create conversation
-                    conversation = Conversation(
-                        user_id=user_id,
-                        title=title,
-                    )
+            # Create conversation
+            conversation = Conversation(
+                user_id=user_id,
+                title=title,
+            )
 
-                    result = await self._conversations.insert_one(conversation.model_dump(by_alias=True), session=session)
-                    conversation_id = result.inserted_id
+            result = await self._conversations.insert_one(conversation.model_dump(by_alias=True))
+            conversation_id = result.inserted_id
 
-                    # Create initial message
-                    message = Message(
-                        user_id=user_id,
-                        conversation_id=conversation_id,
-                        content=first_message,
-                        role=MessageRole.USER,
-                    )
-
-                    await self._messages.insert_one(message.model_dump(by_alias=True), session=session)
-
-            logger.info(f"Conversation created with ID: {conversation_id} and initial message")
+            logger.info(f"Conversation created with ID: {conversation_id}")
             return conversation_id
 
         except Exception as e:
@@ -114,7 +101,7 @@ class ConversationManager:
         """Retrieves a specific conversation."""
         try:
             logger.debug(f"Getting conversation {conversation_id} for user {user_id}")
-            doc = await self._conversations.find_one({"_id": conversation_id, "user_id": user_id})
+            doc = await self._conversations.find_one({"_id": str(conversation_id), "user_id": user_id})
             if not doc:
                 raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
             return Conversation.model_validate(doc)
@@ -129,7 +116,7 @@ class ConversationManager:
         try:
             logger.debug(f"Checking if conversation {conversation_id} exists for user {user_id}")
             doc = await self._conversations.find_one(
-                {"_id": conversation_id, "user_id": user_id}, projection={"_id": 1}  # Only retrieve the ID field for efficiency
+                {"_id": str(conversation_id), "user_id": user_id}, projection={"_id": 1}  # Only retrieve the ID field for efficiency
             )
             return doc is not None
         except Exception as e:
@@ -173,7 +160,7 @@ class ConversationManager:
 
             # Update in database
             result = await self._conversations.update_one(
-                {"_id": conversation_id, "user_id": user_id},
+                {"_id": str(conversation_id), "user_id": user_id},
                 {"$set": update_data},
             )
 
@@ -198,14 +185,14 @@ class ConversationManager:
                     await self._messages.delete_many(
                         {
                             "user_id": user_id,
-                            "conversation_id": conversation_id,
+                            "conversation_id": str(conversation_id),
                         },
                         session=session,
                     )
 
                     result = await self._conversations.delete_one(
                         {
-                            "_id": conversation_id,
+                            "_id": str(conversation_id),
                             "user_id": user_id,
                         },
                         session=session,
@@ -230,7 +217,7 @@ class ConversationManager:
             # Create message
             message = Message(
                 user_id=user_id,
-                conversation_id=conversation_id,
+                conversation_id=str(conversation_id),
                 content=content,
                 role=role,
                 metadata=metadata or {},
@@ -246,7 +233,7 @@ class ConversationManager:
 
                     # Update conversation timestamp
                     await self._conversations.update_one(
-                        {"_id": conversation_id, "user_id": user_id},
+                        {"_id": str(conversation_id), "user_id": user_id},
                         {"$set": {"updated_at": datetime.now(tz=timezone.utc)}},
                         session=session,
                     )
@@ -263,7 +250,7 @@ class ConversationManager:
         """Retrieves a specific message."""
         try:
             logger.debug(f"Getting message {message_id} for user {user_id}")
-            doc = await self._messages.find_one({"_id": message_id, "user_id": user_id})
+            doc = await self._messages.find_one({"_id": str(message_id), "user_id": user_id})
             if not doc:
                 raise MessageNotFoundError(f"Message {message_id} not found")
             return Message.model_validate(doc)
@@ -280,7 +267,7 @@ class ConversationManager:
             # Verify conversation exists and belongs to user
             await self.get_conversation(user_id, conversation_id)
 
-            cursor = self._messages.find({"user_id": user_id, "conversation_id": conversation_id})
+            cursor = self._messages.find({"user_id": user_id, "conversation_id": str(conversation_id)})
             # Sort by timestamp (oldest first)
             cursor = cursor.sort([("created_at", 1)])
             # Apply pagination
@@ -300,7 +287,7 @@ class ConversationManager:
         """Deletes a message."""
         try:
             logger.info(f"Deleting message {message_id} for user {user_id}")
-            result = await self._messages.delete_one({"_id": message_id, "user_id": user_id})
+            result = await self._messages.delete_one({"_id": str(message_id), "user_id": user_id})
 
             if result.deleted_count == 0:
                 raise MessageNotFoundError(f"Message {message_id} not found")

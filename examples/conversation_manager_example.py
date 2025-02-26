@@ -35,11 +35,10 @@ async def main():
         # 1. Conversation Operations
         print("\n=== Conversation Operations ===")
 
-        # Create conversation with initial message
+        # Create conversation
         conversation_id = await manager.create_conversation(
             user_id=user_id,
             title="Example Conversation",
-            first_message="Hello, this is my first message!",
         )
         print(f"Created conversation: {conversation_id}")
 
@@ -133,7 +132,6 @@ async def main():
         second_conversation_id = await manager.create_conversation(
             user_id=user_id,
             title="Second Conversation",
-            first_message="This is a second conversation",
         )
         print(f"Created second conversation: {second_conversation_id}")
 

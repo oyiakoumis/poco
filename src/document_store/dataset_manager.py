@@ -303,7 +303,7 @@ class DatasetManager:
 
             # Update in database
             result = await self._datasets.replace_one(
-                {"_id": dataset_id, "user_id": user_id},
+                {"_id": str(dataset_id), "user_id": user_id},
                 dataset_dict,
             )
             logger.info("Dataset updated successfully")
@@ -331,14 +331,14 @@ class DatasetManager:
                     await self._records.delete_many(
                         {
                             "user_id": user_id,
-                            "dataset_id": dataset_id,
+                            "dataset_id": str(dataset_id),
                         },
                         session=session,
                     )
 
                     result = await self._datasets.delete_one(
                         {
-                            "_id": dataset_id,
+                            "_id": str(dataset_id),
                             "user_id": user_id,
                         },
                         session=session,
@@ -369,7 +369,7 @@ class DatasetManager:
         """Retrieves a specific dataset."""
         try:
             logger.debug(f"Getting dataset {dataset_id} for user {user_id}")
-            doc = await self._datasets.find_one({"_id": dataset_id, "user_id": user_id})
+            doc = await self._datasets.find_one({"_id": str(dataset_id), "user_id": user_id})
             if not doc:
                 raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
             return Dataset.model_validate(doc)
@@ -406,7 +406,7 @@ class DatasetManager:
             type_impl.set_options(field_update.options)
 
         # Get records with this field using session
-        mongo_query = {"user_id": user_id, "dataset_id": dataset_id, f"data.{field_name}": {"$exists": True}}  # Only get records that have this field
+        mongo_query = {"user_id": user_id, "dataset_id": str(dataset_id), f"data.{field_name}": {"$exists": True}}  # Only get records that have this field
 
         records = []
         cursor = self._records.find(mongo_query, session=session)
@@ -425,7 +425,7 @@ class DatasetManager:
                         {
                             "_id": record.id,
                             "user_id": user_id,
-                            "dataset_id": dataset_id,
+                            "dataset_id": str(dataset_id),
                         },
                         {
                             "$set": {
@@ -488,7 +488,7 @@ class DatasetManager:
                     dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
 
                     result = await self._datasets.replace_one(
-                        {"_id": dataset_id, "user_id": user_id},
+                        {"_id": str(dataset_id), "user_id": user_id},
                         dataset_dict,
                         session=session,
                     )
@@ -498,7 +498,7 @@ class DatasetManager:
 
                     # Remove field from all records
                     await self._records.update_many(
-                        {"user_id": user_id, "dataset_id": dataset_id},
+                        {"user_id": user_id, "dataset_id": str(dataset_id)},
                         {"$unset": {f"data.{field_name}": ""}},
                         session=session,
                     )
@@ -558,7 +558,7 @@ class DatasetManager:
                     dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
 
                     result = await self._datasets.replace_one(
-                        {"_id": dataset_id, "user_id": user_id},
+                        {"_id": str(dataset_id), "user_id": user_id},
                         dataset_dict,
                         session=session,
                     )
@@ -569,7 +569,7 @@ class DatasetManager:
                     # Initialize field in existing records if default value provided
                     if field.default is not None:
                         await self._records.update_many(
-                            {"user_id": user_id, "dataset_id": dataset_id},
+                            {"user_id": user_id, "dataset_id": str(dataset_id)},
                             {"$set": {f"data.{field.field_name}": field.default}},
                             session=session,
                         )
@@ -636,7 +636,7 @@ class DatasetManager:
                     dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
 
                     result = await self._datasets.replace_one(
-                        {"_id": dataset_id, "user_id": user_id},
+                        {"_id": str(dataset_id), "user_id": user_id},
                         dataset_dict,
                         session=session,
                     )
@@ -674,7 +674,7 @@ class DatasetManager:
             # Create record
             record = Record(
                 user_id=user_id,
-                dataset_id=dataset_id,
+                dataset_id=str(dataset_id),
                 data=validated_data,
             )
 
@@ -700,9 +700,9 @@ class DatasetManager:
             # Update record
             result = await self._records.update_one(
                 {
-                    "_id": record_id,
+                    "_id": str(record_id),
                     "user_id": user_id,
-                    "dataset_id": dataset_id,
+                    "dataset_id": str(dataset_id),
                 },
                 {
                     "$set": {
@@ -716,9 +716,9 @@ class DatasetManager:
                 # Check if record exists
                 record = await self._records.find_one(
                     {
-                        "_id": record_id,
+                        "_id": str(record_id),
                         "user_id": user_id,
-                        "dataset_id": dataset_id,
+                        "dataset_id": str(dataset_id),
                     }
                 )
                 if not record:
@@ -742,9 +742,9 @@ class DatasetManager:
             # Delete record
             result = await self._records.delete_one(
                 {
-                    "_id": record_id,
+                    "_id": str(record_id),
                     "user_id": user_id,
-                    "dataset_id": dataset_id,
+                    "dataset_id": str(dataset_id),
                 }
             )
 
@@ -767,9 +767,9 @@ class DatasetManager:
             # Get record
             doc = await self._records.find_one(
                 {
-                    "_id": record_id,
+                    "_id": str(record_id),
                     "user_id": user_id,
-                    "dataset_id": dataset_id,
+                    "dataset_id": str(dataset_id),
                 }
             )
 
@@ -887,7 +887,7 @@ class DatasetManager:
             query.validate_with_schema(dataset.dataset_schema)
 
             # Build pipeline
-            pipeline = build_aggregation_pipeline(user_id, dataset_id, query)
+            pipeline = build_aggregation_pipeline(user_id, str(dataset_id), query)
 
             logger.debug("Executing aggregation pipeline")
             # Execute pipeline

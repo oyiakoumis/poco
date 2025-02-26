@@ -22,7 +22,7 @@ This is the main endpoint your mobile app will interact with. It accepts chat me
   "user_id": "user-identifier",
   "message": "User's natural language message",
   "time_zone": "Asia/Dubai",
-  "first_day_of_week": "Monday"
+  "first_day_of_week": "0"
 }
 ```
 
