@@ -2,14 +2,14 @@
 
 from datetime import datetime, timezone
 from typing import Any, Optional
+from uuid import UUID, uuid4
 
-from bson import ObjectId
 from pydantic import BaseModel, Field
 from pydantic_core import core_schema
 
 
-class PydanticObjectId(ObjectId):
-    """ObjectId field for Pydantic models."""
+class PydanticUUID(UUID):
+    """UUID field for Pydantic models."""
 
     @classmethod
     def __get_validators__(cls):
@@ -21,7 +21,7 @@ class PydanticObjectId(ObjectId):
             json_schema=core_schema.str_schema(),
             python_schema=core_schema.union_schema(
                 [
-                    core_schema.is_instance_schema(ObjectId),
+                    core_schema.is_instance_schema(UUID),
                     core_schema.chain_schema(
                         [
                             core_schema.str_schema(),
@@ -35,20 +35,20 @@ class PydanticObjectId(ObjectId):
 
     @classmethod
     def validate(cls, v):
-        if isinstance(v, ObjectId):
+        if isinstance(v, UUID):
             return v
         if isinstance(v, str):
             try:
-                return ObjectId(v)
+                return UUID(v)
             except Exception:
-                raise ValueError("Invalid ObjectId format")
-        raise ValueError("Invalid ObjectId")
+                raise ValueError("Invalid UUID format")
+        raise ValueError("Invalid UUID")
 
 
 class BaseDocument(BaseModel):
     """Base model for all document store models."""
 
-    id: Optional[PydanticObjectId] = Field(default_factory=ObjectId, alias="_id")
+    id: Optional[PydanticUUID] = Field(default_factory=uuid4, alias="_id")
     user_id: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

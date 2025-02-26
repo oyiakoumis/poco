@@ -1,8 +1,8 @@
 """Conversation router for handling conversation operations."""
 
 from typing import List, Optional
+from uuid import UUID
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.dependencies import get_conversation_db
@@ -94,11 +94,11 @@ async def list_conversations(
 async def get_conversation(conversation_id: str, user_id: str, db: ConversationManager = Depends(get_conversation_db)) -> ConversationResponse:
     """Get a specific conversation."""
     try:
-        # Convert string ID to ObjectId
-        obj_id = ObjectId(conversation_id)
+        # Convert string ID to UUID
+        uuid_id = UUID(conversation_id)
 
         # Get conversation
-        conversation = await db.get_conversation(user_id, obj_id)
+        conversation = await db.get_conversation(user_id, uuid_id)
 
         # Convert to response model
         return ConversationResponse(
@@ -127,18 +127,18 @@ async def update_conversation(
 ) -> ConversationResponse:
     """Update a conversation."""
     try:
-        # Convert string ID to ObjectId
-        obj_id = ObjectId(conversation_id)
+        # Convert string ID to UUID
+        uuid_id = UUID(conversation_id)
 
         # Update conversation
         await db.update_conversation(
             user_id=user_id,
-            conversation_id=obj_id,
+            conversation_id=uuid_id,
             title=request.title,
         )
 
         # Get updated conversation
-        conversation = await db.get_conversation(user_id, obj_id)
+        conversation = await db.get_conversation(user_id, uuid_id)
 
         # Convert to response model
         return ConversationResponse(
@@ -162,11 +162,11 @@ async def update_conversation(
 async def delete_conversation(conversation_id: str, user_id: str, db: ConversationManager = Depends(get_conversation_db)) -> None:
     """Delete a conversation and all its messages."""
     try:
-        # Convert string ID to ObjectId
-        obj_id = ObjectId(conversation_id)
+        # Convert string ID to UUID
+        uuid_id = UUID(conversation_id)
 
         # Delete conversation
-        await db.delete_conversation(user_id, obj_id)
+        await db.delete_conversation(user_id, uuid_id)
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     except InvalidConversationError as e:
@@ -187,11 +187,11 @@ async def list_messages(
 ) -> MessageListResponse:
     """List all messages in a conversation."""
     try:
-        # Convert string ID to ObjectId
-        obj_id = ObjectId(conversation_id)
+        # Convert string ID to UUID
+        uuid_id = UUID(conversation_id)
 
         # Get messages
-        messages = await db.list_messages(user_id, obj_id, limit=limit, skip=skip)
+        messages = await db.list_messages(user_id, uuid_id, limit=limit, skip=skip)
 
         # Convert to response models
         response_messages = [
@@ -208,7 +208,7 @@ async def list_messages(
 
         # Count total messages (without pagination)
         # In a real application, you might want to optimize this with a separate count query
-        total = len(await db.list_messages(user_id, obj_id, limit=0, skip=0))
+        total = len(await db.list_messages(user_id, uuid_id, limit=0, skip=0))
 
         return MessageListResponse(messages=response_messages, total=total)
     except ConversationNotFoundError:
@@ -229,13 +229,13 @@ async def create_message(
 ) -> MessageResponse:
     """Create a new message in a conversation."""
     try:
-        # Convert string ID to ObjectId
-        obj_id = ObjectId(conversation_id)
+        # Convert string ID to UUID
+        uuid_id = UUID(conversation_id)
 
         # Create message
         message_id = await db.create_message(
             user_id=request.user_id,
-            conversation_id=obj_id,
+            conversation_id=uuid_id,
             content=request.content,
             role=MessageRole.USER,
         )

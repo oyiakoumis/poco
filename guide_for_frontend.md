@@ -23,7 +23,6 @@ This is the main endpoint your mobile app will interact with. It accepts chat me
 ```json
 {
   "conversation_id": "unique-conversation-id",
-  "thread_id": "unique-thread-id",
   "user_id": "user-identifier",
   "message": "User's natural language message",
   "time_zone": "Asia/Dubai",
@@ -33,7 +32,6 @@ This is the main endpoint your mobile app will interact with. It accepts chat me
 
 **Parameters:**
 - `conversation_id`: The ID of the conversation this message belongs to
-- `thread_id`: Maintain this ID for conversation continuity
 - `user_id`: The user's unique identifier
 - `message`: The user's natural language input
 - `time_zone`: User's timezone for temporal references
@@ -41,7 +39,7 @@ This is the main endpoint your mobile app will interact with. It accepts chat me
 
 ### Conversation Management API
 
-The Conversation API allows you to manage conversation threads and messages:
+The Conversation API allows you to manage conversations and messages:
 
 #### Endpoints
 
@@ -182,9 +180,9 @@ Use a markdown renderer that supports basic formatting (headings, bold, italic, 
 
 ## User Experience Considerations
 
-1. **Conversation Management**: Use the conversation endpoints to create and manage conversation threads. Each conversation can have multiple messages.
+1. **Conversation Management**: Use the conversation endpoints to create and manage conversations. Each conversation can have multiple messages.
 
-2. **Message Threading**: Maintain conversation history in the UI and send both the `conversation_id` and `thread_id` with each request.
+2. **Message Threading**: Maintain conversation history in the UI and send both the `conversation_id` with each request.
 
 3. **Streaming Responses**: Implement support for Server-Sent Events (SSE) to handle streaming responses from the chat endpoint.
 

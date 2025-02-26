@@ -1,8 +1,8 @@
 """Chat router for handling message processing."""
 
 from typing import List
+from uuid import UUID
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
@@ -22,7 +22,7 @@ from utils.logging import logger
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-async def get_conversation_history(conversation_id: ObjectId, user_id: str, conversation_db: ConversationManager) -> List[HumanMessage | AIMessage]:
+async def get_conversation_history(conversation_id: UUID, user_id: str, conversation_db: ConversationManager) -> List[HumanMessage | AIMessage]:
     """Get conversation history as LangChain messages."""
     try:
         # Get messages from the conversation

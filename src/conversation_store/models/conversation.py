@@ -5,7 +5,7 @@ from typing import Optional
 
 from pydantic import Field
 
-from models.base import BaseDocument, PydanticObjectId
+from models.base import BaseDocument, PydanticUUID
 
 
 class Conversation(BaseDocument):

@@ -2,12 +2,12 @@
 
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 
-from bson import ObjectId
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
-from models.base import PydanticObjectId
+from models.base import PydanticUUID
 
 
 class ChatRequest(BaseModel):
@@ -15,7 +15,7 @@ class ChatRequest(BaseModel):
 
     message: str = Field(..., description="The message content")
     user_id: str = Field(..., description="User identifier")
-    conversation_id: PydanticObjectId = Field(..., description="Conversation identifier")
+    conversation_id: PydanticUUID = Field(..., description="Conversation identifier")
     time_zone: str = Field(default="UTC", description="User's timezone")
     first_day_of_week: int = Field(default=0, description="First day of week (0=Sunday, 1=Monday, etc.)", ge=0, le=6)
 
@@ -33,7 +33,7 @@ class ChatResponse(BaseModel):
     """Chat response model."""
 
     message: Optional[str] = Field(default=None, description="Assistant's complete response message")
-    conversation_id: Optional[PydanticObjectId] = Field(default=None, description="Conversation identifier")
+    conversation_id: Optional[PydanticUUID] = Field(default=None, description="Conversation identifier")
     delta: Optional[str] = Field(default=None, description="New content to append to the response (for streaming)")
     done: Optional[bool] = Field(default=None, description="Whether this is the final event (for streaming)")
     error: Optional[str] = Field(default=None, description="Error message if an error occurred")

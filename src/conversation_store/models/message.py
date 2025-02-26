@@ -6,7 +6,7 @@ from typing import Dict, Optional
 
 from pydantic import Field
 
-from models.base import BaseDocument, PydanticObjectId
+from models.base import BaseDocument, PydanticUUID
 
 
 class MessageRole(str, Enum):
@@ -19,7 +19,7 @@ class MessageRole(str, Enum):
 class Message(BaseDocument):
     """Model representing a chat message."""
 
-    conversation_id: PydanticObjectId = Field(..., description="ID of the conversation this message belongs to")
+    conversation_id: PydanticUUID = Field(..., description="ID of the conversation this message belongs to")
     content: str = Field(..., description="Content of the message")
     role: MessageRole = Field(..., description="Role of the message sender")
     metadata: Dict = Field(default_factory=dict, description="Additional metadata for the message")

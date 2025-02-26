@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 from api.models import ChatResponse
 from conversation_store.conversation_manager import ConversationManager
 from conversation_store.models.message import MessageRole
-from models.base import PydanticObjectId
+from models.base import PydanticUUID
 from utils.logging import logger
 
 
@@ -18,7 +18,7 @@ class StreamingService:
 
     @staticmethod
     async def stream_chat_response(
-        graph, messages: list, config: dict, conversation_db: ConversationManager, user_id: str, conversation_id: PydanticObjectId
+        graph, messages: list, config: dict, conversation_db: ConversationManager, user_id: str, conversation_id: PydanticUUID
     ) -> AsyncGenerator[str, None]:
         """
         Stream chat response as SSE events.
@@ -61,7 +61,7 @@ class StreamingService:
                     delta="",
                     done=True,
                     message=full_response,  # Include full message in final event
-                    conversation_id=conversation_id,  # PydanticObjectId handles serialization
+                    conversation_id=conversation_id,
                 )
             )
 
@@ -92,7 +92,7 @@ class StreamingService:
                         delta="",
                         done=True,
                         message=fallback_message,  # Include full message in final event
-                        conversation_id=conversation_id,  # PydanticObjectId handles serialization
+                        conversation_id=conversation_id,
                     )
                 )
 
@@ -143,7 +143,7 @@ class StreamingService:
         return f"data: {response.model_dump_json(exclude_none=True)}\n\n"
 
     @staticmethod
-    async def _store_response(conversation_db: ConversationManager, user_id: str, conversation_id: PydanticObjectId, content: str) -> None:
+    async def _store_response(conversation_db: ConversationManager, user_id: str, conversation_id: PydanticUUID, content: str) -> None:
         """
         Store the assistant's response in the conversation.
 
