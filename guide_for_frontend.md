@@ -6,7 +6,11 @@ POCO is a conversational data assistant that allows users to manage structured d
 
 ## API Integration
 
-### Primary Endpoint
+POCO provides two main API areas: the Chat API for message processing and the Conversation API for managing conversation threads.
+
+### Chat API
+
+#### Primary Endpoint
 
 ```
 POST /chat/
@@ -14,28 +18,95 @@ POST /chat/
 
 This is the main endpoint your mobile app will interact with. It accepts chat messages and returns formatted responses that your UI will need to render.
 
-### Request Format
+#### Request Format
 
 ```json
 {
-  "thread_id": "unique-conversation-id",
+  "conversation_id": "unique-conversation-id",
+  "thread_id": "unique-thread-id",
   "user_id": "user-identifier",
   "message": "User's natural language message",
   "time_zone": "Asia/Dubai",
-  "first_day_of_week": "0"
+  "first_day_of_week": 0
 }
 ```
 
 **Parameters:**
+- `conversation_id`: The ID of the conversation this message belongs to
 - `thread_id`: Maintain this ID for conversation continuity
 - `user_id`: The user's unique identifier
 - `message`: The user's natural language input
 - `time_zone`: User's timezone for temporal references
-- `first_day_of_week`: User's preference for week start
+- `first_day_of_week`: User's preference for week start (0 for Sunday, 1 for Monday)
+
+### Conversation Management API
+
+The Conversation API allows you to manage conversation threads and messages:
+
+#### Endpoints
+
+```
+POST /conversations/                  # Create a new conversation
+GET /conversations/                   # List conversations for a user
+GET /conversations/{conversation_id}  # Get a specific conversation
+PUT /conversations/{conversation_id}  # Update a conversation
+DELETE /conversations/{conversation_id} # Delete a conversation
+GET /conversations/{conversation_id}/messages # List messages in a conversation
+POST /conversations/{conversation_id}/messages # Create a new message
+```
+
+#### Creating a Conversation
+
+```json
+// Request
+POST /conversations/
+{
+  "user_id": "user-identifier",
+  "title": "Conversation title"
+}
+
+// Response
+{
+  "id": "conversation-id",
+  "title": "Conversation title",
+  "user_id": "user-identifier",
+  "created_at": "2025-02-26T18:30:00.000Z",
+  "updated_at": "2025-02-26T18:30:00.000Z"
+}
+```
+
+#### Listing Conversations
+
+```
+GET /conversations/?user_id=user-identifier&skip=0&limit=50
+```
+
+#### Creating a Message
+
+```json
+// Request
+POST /conversations/{conversation_id}/messages
+{
+  "user_id": "user-identifier",
+  "content": "User's message"
+}
+
+// Response
+{
+  "id": "message-id",
+  "conversation_id": "conversation-id",
+  "content": "User's message",
+  "role": "user",
+  "user_id": "user-identifier",
+  "created_at": "2025-02-26T18:35:00.000Z"
+}
+```
 
 ### Response Format
 
-The response will be a JSON string containing an array of UI components:
+#### Chat Response
+
+The chat endpoint returns a streaming response with Server-Sent Events (SSE). The final response will be a JSON string containing an array of UI components:
 
 ```json
 {
@@ -44,6 +115,8 @@ The response will be a JSON string containing an array of UI components:
 ```
 
 You'll need to parse the `message` string as JSON to get the array of components.
+
+The streaming response allows you to show partial results as they become available, improving the perceived responsiveness of your app.
 
 ## UI Components
 
@@ -109,15 +182,19 @@ Use a markdown renderer that supports basic formatting (headings, bold, italic, 
 
 ## User Experience Considerations
 
-1. **Message Threading**: Maintain conversation history in the UI and send the `thread_id` with each request.
+1. **Conversation Management**: Use the conversation endpoints to create and manage conversation threads. Each conversation can have multiple messages.
 
-2. **Loading States**: Show appropriate loading indicators while waiting for responses.
+2. **Message Threading**: Maintain conversation history in the UI and send both the `conversation_id` and `thread_id` with each request.
 
-3. **Error Handling**: Implement graceful error handling for network issues or unexpected response formats.
+3. **Streaming Responses**: Implement support for Server-Sent Events (SSE) to handle streaming responses from the chat endpoint.
 
-4. **Input Interface**: Create a chat-like interface with a text input that supports natural language queries.
+4. **Loading States**: Show appropriate loading indicators while waiting for responses.
 
-5. **Component Combinations**: The system often returns multiple components in a single response (e.g., a markdown introduction followed by a table). Your UI should handle these combinations elegantly.
+5. **Error Handling**: Implement graceful error handling for network issues or unexpected response formats.
+
+6. **Input Interface**: Create a chat-like interface with a text input that supports natural language queries.
+
+7. **Component Combinations**: The system often returns multiple components in a single response (e.g., a markdown introduction followed by a table). Your UI should handle these combinations elegantly.
 
 ## Example User Interactions
 
@@ -135,11 +212,19 @@ Your interface should encourage these types of natural language interactions rat
 
 ### Backend Architecture
 
-The POCO system consists of three main components:
+The POCO system consists of four main components:
 
-1. **API Layer** (`src/api/routers/chat.py`): Handles HTTP requests and responses using FastAPI
-2. **Agent Layer** (`src/agents/assistant.py`): Processes natural language using LLMs and executes appropriate actions
-3. **Data Layer** (`src/document_store/dataset_manager.py`): Manages data persistence in MongoDB with vector search capabilities
+1. **API Layer** (`src/api/routers/`): Handles HTTP requests and responses using FastAPI
+   - `chat.py`: Processes chat messages and streams responses
+   - `conversation.py`: Manages conversation and message persistence
+
+2. **Agent Layer** (`src/agents/`): Processes natural language using LLMs and executes appropriate actions
+   - Uses LangGraph for orchestrating the conversation flow
+   - Implements tools for data operations and temporal reference resolution
+
+3. **Conversation Store** (`src/conversation_store/`): Manages conversation history and message persistence
+
+4. **Data Layer** (`src/document_store/`): Manages data persistence in MongoDB with vector search capabilities
 
 ### Data Operations
 
@@ -151,17 +236,3 @@ Behind the scenes, the system handles:
 - Formatting results into the UI components
 
 Your app doesn't need to implement this logic - just send the user's natural language requests to the API and render the responses.
-
-## Implementation Tips
-
-1. **Component Rendering**: Create reusable components for each response type (table, chart, checkbox, markdown).
-
-2. **State Management**: Implement efficient state management to handle conversation history and UI updates.
-
-3. **Responsive Design**: Ensure all components render well on various mobile screen sizes.
-
-4. **Offline Support**: Consider implementing basic offline capabilities to improve user experience.
-
-5. **Authentication**: Implement secure authentication to manage user sessions and protect user data.
-
-Feel free to reach out if you have any questions about the API integration or component implementation!
