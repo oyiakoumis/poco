@@ -85,7 +85,7 @@ Tool Usage Protocol:
     - Data with multiple fields/columns
     - Comparing information across records
     - Structured data that needs clear organization
-  * Checkbox: PRIMARY choice for:
+  * Checklist: PRIMARY choice for:
     - Status tracking
     - Todo lists
     - Task or item completion
@@ -98,11 +98,11 @@ Tool Usage Protocol:
     - Connecting multiple components
 
 Component Combination Strategy:
-1. Start with data-focused components (Table/Checkbox)
+1. Start with data-focused components (Table/Checklist)
 2. Add minimal Markdown only when needed for clarity
 3. Example combinations:
    - Records query: Table for data with clear organization
-   - Task tracking: Checkbox for status tracking
+   - Task tracking: Checklist for status tracking
    - Financial data: Table for detailed information
    - Time-based data: Table with chronological ordering
 
@@ -115,7 +115,7 @@ Interaction Flow:
 6. Return the formatted response unmodified
 
 Remember:
-- Prefer Tables and Checkbox components over Markdown for structured data
+- Prefer Tables and Checklist components over Markdown for structured data
 - Use multiple components to show different aspects of the data
 - Keep Markdown minimal and focused on essential context
 - Let the data guide component selection

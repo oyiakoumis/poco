@@ -20,14 +20,14 @@ class Markdown(BaseModel):
     model_config = {"json_schema_extra": {"example": {"type": "markdown", "content": "# Title\nThis is a **formatted** text with _markdown_ syntax"}}}
 
 
-class Checkbox(BaseModel):
-    type: Literal["checkbox"] = "checkbox"
+class Checklist(BaseModel):
+    type: Literal["checklist"] = "checklist"
     items: List[CheckboxItem] = Field(description="Items with their checked state")
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "type": "checkbox",
+                "type": "checklist",
                 "items": [{"label": "Task 1", "checked": True}, {"label": "Task 2", "checked": False}, {"label": "Task 3", "checked": True}],
             }
         }
@@ -60,4 +60,4 @@ class Table(BaseModel):
 
 
 # Union of all components
-Component = Union[Markdown, Checkbox, Table]
+Component = Union[Markdown, Checklist, Table]
