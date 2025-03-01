@@ -1,6 +1,5 @@
 """Models package for document store."""
 
-from document_store.models.base import BaseDocument
 from document_store.models.dataset import (
     Dataset,
 )
@@ -15,7 +14,6 @@ from document_store.models.query import (
 from document_store.models.record import Record
 
 __all__ = [
-    "BaseDocument",
     "Dataset",
     "Record",
     "AggregationField",

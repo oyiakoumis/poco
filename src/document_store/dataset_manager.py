@@ -4,9 +4,9 @@ from asyncio import sleep
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Union
+from uuid import UUID, uuid4
 
 import pymongo
-from bson import ObjectId
 from langchain_openai import OpenAIEmbeddings
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
@@ -246,7 +246,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to setup indexes: {str(e)}")
 
-    async def create_dataset(self, user_id: str, name: str, description: str, schema: DatasetSchema) -> ObjectId:
+    async def create_dataset(self, user_id: str, name: str, description: str, schema: DatasetSchema) -> UUID:
         """Creates a new dataset with the given schema and generates its embedding."""
         try:
             logger.info(f"Creating dataset '{name}' for user {user_id}")
@@ -275,7 +275,7 @@ class DatasetManager:
                 raise DatasetNameExistsError(f"Dataset with name '{name}' already exists for user {user_id}")
             raise DatabaseError(f"Failed to create dataset: {str(e)}")
 
-    async def update_dataset(self, user_id: str, dataset_id: ObjectId, name: str, description: str) -> None:
+    async def update_dataset(self, user_id: str, dataset_id: UUID, name: str, description: str) -> None:
         """Updates dataset metadata (name and description) and regenerates its embedding."""
         try:
             logger.info(f"Updating dataset {dataset_id} for user {user_id}")
@@ -303,7 +303,7 @@ class DatasetManager:
 
             # Update in database
             result = await self._datasets.replace_one(
-                {"_id": dataset_id, "user_id": user_id},
+                {"_id": str(dataset_id), "user_id": user_id},
                 dataset_dict,
             )
             logger.info("Dataset updated successfully")
@@ -318,7 +318,7 @@ class DatasetManager:
                 raise DatasetNameExistsError(f"Dataset with name '{name}' already exists for user {user_id}")
             raise DatabaseError(f"Failed to update dataset: {str(e)}")
 
-    async def delete_dataset(self, user_id: str, dataset_id: ObjectId) -> None:
+    async def delete_dataset(self, user_id: str, dataset_id: UUID) -> None:
         """Deletes a dataset and all its records."""
         try:
             logger.info(f"Deleting dataset {dataset_id} and its records for user {user_id}")
@@ -331,14 +331,14 @@ class DatasetManager:
                     await self._records.delete_many(
                         {
                             "user_id": user_id,
-                            "dataset_id": dataset_id,
+                            "dataset_id": str(dataset_id),
                         },
                         session=session,
                     )
 
                     result = await self._datasets.delete_one(
                         {
-                            "_id": dataset_id,
+                            "_id": str(dataset_id),
                             "user_id": user_id,
                         },
                         session=session,
@@ -365,11 +365,11 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to list datasets: {str(e)}")
 
-    async def get_dataset(self, user_id: str, dataset_id: ObjectId) -> Dataset:
+    async def get_dataset(self, user_id: str, dataset_id: UUID) -> Dataset:
         """Retrieves a specific dataset."""
         try:
             logger.debug(f"Getting dataset {dataset_id} for user {user_id}")
-            doc = await self._datasets.find_one({"_id": dataset_id, "user_id": user_id})
+            doc = await self._datasets.find_one({"_id": str(dataset_id), "user_id": user_id})
             if not doc:
                 raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
             return Dataset.model_validate(doc)
@@ -379,7 +379,7 @@ class DatasetManager:
             raise DatabaseError(f"Failed to get dataset: {str(e)}")
 
     async def _prepare_record_updates(
-        self, user_id: str, dataset_id: ObjectId, field_name: str, old_field: SchemaField, field_update: SchemaField, session
+        self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
     ) -> List[pymongo.UpdateOne]:
         """Prepares bulk update operations for records.
 
@@ -406,7 +406,7 @@ class DatasetManager:
             type_impl.set_options(field_update.options)
 
         # Get records with this field using session
-        mongo_query = {"user_id": user_id, "dataset_id": dataset_id, f"data.{field_name}": {"$exists": True}}  # Only get records that have this field
+        mongo_query = {"user_id": user_id, "dataset_id": str(dataset_id), f"data.{field_name}": {"$exists": True}}  # Only get records that have this field
 
         records = []
         cursor = self._records.find(mongo_query, session=session)
@@ -425,7 +425,7 @@ class DatasetManager:
                         {
                             "_id": record.id,
                             "user_id": user_id,
-                            "dataset_id": dataset_id,
+                            "dataset_id": str(dataset_id),
                         },
                         {
                             "$set": {
@@ -440,7 +440,7 @@ class DatasetManager:
 
         return updates
 
-    async def delete_field(self, user_id: str, dataset_id: ObjectId, field_name: str) -> None:
+    async def delete_field(self, user_id: str, dataset_id: UUID, field_name: str) -> None:
         """Deletes a field from the dataset schema and removes it from all records.
 
         All changes are performed in a transaction to ensure consistency.
@@ -488,7 +488,7 @@ class DatasetManager:
                     dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
 
                     result = await self._datasets.replace_one(
-                        {"_id": dataset_id, "user_id": user_id},
+                        {"_id": str(dataset_id), "user_id": user_id},
                         dataset_dict,
                         session=session,
                     )
@@ -498,7 +498,7 @@ class DatasetManager:
 
                     # Remove field from all records
                     await self._records.update_many(
-                        {"user_id": user_id, "dataset_id": dataset_id},
+                        {"user_id": user_id, "dataset_id": str(dataset_id)},
                         {"$unset": {f"data.{field_name}": ""}},
                         session=session,
                     )
@@ -511,7 +511,7 @@ class DatasetManager:
     async def add_field(
         self,
         user_id: str,
-        dataset_id: ObjectId,
+        dataset_id: UUID,
         field: SchemaField,
     ) -> None:
         """Adds a new field to the dataset schema and initializes it in existing records.
@@ -558,7 +558,7 @@ class DatasetManager:
                     dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
 
                     result = await self._datasets.replace_one(
-                        {"_id": dataset_id, "user_id": user_id},
+                        {"_id": str(dataset_id), "user_id": user_id},
                         dataset_dict,
                         session=session,
                     )
@@ -569,7 +569,7 @@ class DatasetManager:
                     # Initialize field in existing records if default value provided
                     if field.default is not None:
                         await self._records.update_many(
-                            {"user_id": user_id, "dataset_id": dataset_id},
+                            {"user_id": user_id, "dataset_id": str(dataset_id)},
                             {"$set": {f"data.{field.field_name}": field.default}},
                             session=session,
                         )
@@ -582,7 +582,7 @@ class DatasetManager:
     async def update_field(
         self,
         user_id: str,
-        dataset_id: ObjectId,
+        dataset_id: UUID,
         field_name: str,
         field_update: SchemaField,
     ) -> None:
@@ -636,7 +636,7 @@ class DatasetManager:
                     dataset_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
 
                     result = await self._datasets.replace_one(
-                        {"_id": dataset_id, "user_id": user_id},
+                        {"_id": str(dataset_id), "user_id": user_id},
                         dataset_dict,
                         session=session,
                     )
@@ -661,7 +661,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to update field: {str(e)}")
 
-    async def create_record(self, user_id: str, dataset_id: ObjectId, data: RecordData) -> ObjectId:
+    async def create_record(self, user_id: str, dataset_id: UUID, data: RecordData) -> UUID:
         """Creates a new record in the specified dataset."""
         try:
             logger.info(f"Creating record in dataset {dataset_id} for user {user_id}")
@@ -674,7 +674,7 @@ class DatasetManager:
             # Create record
             record = Record(
                 user_id=user_id,
-                dataset_id=dataset_id,
+                dataset_id=str(dataset_id),
                 data=validated_data,
             )
 
@@ -687,7 +687,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to create record: {str(e)}")
 
-    async def update_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId, data: RecordData) -> None:
+    async def update_record(self, user_id: str, dataset_id: UUID, record_id: UUID, data: RecordData) -> None:
         """Updates an existing record."""
         try:
             logger.info(f"Updating record {record_id} in dataset {dataset_id}")
@@ -700,9 +700,9 @@ class DatasetManager:
             # Update record
             result = await self._records.update_one(
                 {
-                    "_id": record_id,
+                    "_id": str(record_id),
                     "user_id": user_id,
-                    "dataset_id": dataset_id,
+                    "dataset_id": str(dataset_id),
                 },
                 {
                     "$set": {
@@ -716,9 +716,9 @@ class DatasetManager:
                 # Check if record exists
                 record = await self._records.find_one(
                     {
-                        "_id": record_id,
+                        "_id": str(record_id),
                         "user_id": user_id,
-                        "dataset_id": dataset_id,
+                        "dataset_id": str(dataset_id),
                     }
                 )
                 if not record:
@@ -732,7 +732,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to update record: {str(e)}")
 
-    async def delete_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId) -> None:
+    async def delete_record(self, user_id: str, dataset_id: UUID, record_id: UUID) -> None:
         """Deletes a record."""
         try:
             logger.info(f"Deleting record {record_id} from dataset {dataset_id}")
@@ -742,9 +742,9 @@ class DatasetManager:
             # Delete record
             result = await self._records.delete_one(
                 {
-                    "_id": record_id,
+                    "_id": str(record_id),
                     "user_id": user_id,
-                    "dataset_id": dataset_id,
+                    "dataset_id": str(dataset_id),
                 }
             )
 
@@ -757,7 +757,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to delete record: {str(e)}")
 
-    async def get_record(self, user_id: str, dataset_id: ObjectId, record_id: ObjectId) -> Record:
+    async def get_record(self, user_id: str, dataset_id: UUID, record_id: UUID) -> Record:
         """Retrieves a specific record."""
         try:
             logger.debug(f"Getting record {record_id} from dataset {dataset_id}")
@@ -767,9 +767,9 @@ class DatasetManager:
             # Get record
             doc = await self._records.find_one(
                 {
-                    "_id": record_id,
+                    "_id": str(record_id),
                     "user_id": user_id,
-                    "dataset_id": dataset_id,
+                    "dataset_id": str(dataset_id),
                 }
             )
 
@@ -855,7 +855,7 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to perform vector search: {str(e)}")
 
-    async def query_records(self, user_id: str, dataset_id: ObjectId, query: Optional[RecordQuery] = None) -> Union[List[Record], List[Dict]]:
+    async def query_records(self, user_id: str, dataset_id: UUID, query: Optional[RecordQuery] = None) -> Union[List[Record], List[Dict]]:
         """Query records in the specified dataset.
 
         Supports both simple queries and aggregations through the RecordQuery model.
@@ -887,7 +887,7 @@ class DatasetManager:
             query.validate_with_schema(dataset.dataset_schema)
 
             # Build pipeline
-            pipeline = build_aggregation_pipeline(user_id, dataset_id, query)
+            pipeline = build_aggregation_pipeline(user_id, str(dataset_id), query)
 
             logger.debug("Executing aggregation pipeline")
             # Execute pipeline

@@ -6,21 +6,21 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from document_store import DatasetManager
-from document_store.models.base import PydanticObjectId
 from document_store.models.dataset import Dataset
 from document_store.models.field import SchemaField
 from document_store.models.query import RecordQuery
 from document_store.models.record import RecordData
 from document_store.models.schema import DatasetSchema
+from models.base import PydanticUUID
 from utils.logging import logger
 
 
 class DatasetArgs(BaseModel):
-    dataset_id: PydanticObjectId = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
+    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
 
 
 class RecordArgs(DatasetArgs):
-    record_id: PydanticObjectId = Field(
+    record_id: PydanticUUID = Field(
         description="Unique identifier for the record within the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439012"]}
     )
 

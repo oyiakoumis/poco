@@ -1,25 +1,28 @@
-from langgraph.graph import StateGraph
-from langgraph.checkpoint.memory import MemorySaver
-from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import StateGraph
+from motor.motor_asyncio import AsyncIOMotorClient
+
 from agents.assistant import Assistant
+from agents.state import State
 from constants import DATABASE_CONNECTION_STRING
 from document_store.dataset_manager import DatasetManager
-from state import State
+
 
 def create_graph(db: DatasetManager) -> StateGraph:
     """Create the graph with nodes and edges."""
     graph = StateGraph(State)
-    
+
     # Add nodes
     graph.add_node("assistant", Assistant(db))
-    
+
     # Add Edges
     graph.set_entry_point("assistant")
     graph.set_finish_point("assistant")
-    
+
     return graph
+
 
 async def setup_graph():
     """Setup database and create compiled graph."""
@@ -34,6 +37,7 @@ async def setup_graph():
     except Exception as e:
         client.close()
         raise e
+
 
 # For langgraph CLI - keeps client alive
 async def get_compiled_graph():

@@ -2,6 +2,7 @@ from langchain_core.messages import SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
+from agents.state import State
 from agents.tools.database_operator import (
     AddFieldOperator,
     CreateDatasetOperator,
@@ -18,7 +19,6 @@ from agents.tools.database_operator import (
 from agents.tools.output_formatter import output_formatter
 from agents.tools.resolve_temporal_reference import TemporalReferenceTool
 from document_store.dataset_manager import DatasetManager
-from state import State
 from utils.logging import logger
 
 ASSISTANT_SYSTEM_MESSAGE = f"""

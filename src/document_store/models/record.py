@@ -3,9 +3,9 @@
 from typing import Any, Dict
 
 from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
-from document_store.models.base import BaseDocument, PydanticObjectId
 from document_store.models.schema import DatasetSchema
 from document_store.models.types import FieldType, TypeRegistry
+from models.base import BaseDocument, PydanticUUID
 
 RecordData = Dict[str, Any]
 
@@ -13,7 +13,7 @@ RecordData = Dict[str, Any]
 class Record(BaseDocument):
     """Record model representing a single document in a dataset."""
 
-    dataset_id: PydanticObjectId
+    dataset_id: PydanticUUID
     data: RecordData
 
     @staticmethod

@@ -2,6 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug chat_router_example.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/chat_router_example.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
             "name": "Langgraph Dev",
             "type": "node",
             "request": "launch",
@@ -13,17 +23,40 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Debug main.py",
+            "name": "Debug graph_example.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/main.py",
-            "console": "integratedTerminal"
+            "program": "${workspaceFolder}/examples/graph_example.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
         },
         {
             "name": "Debug dataset_manager_example.py",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/examples/dataset_manager_example.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
+            "name": "Debug conversation_manager_example.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/conversation_manager_example.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
+            "name": "Debug conversation_router_example.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/conversation_router_example.py",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src"

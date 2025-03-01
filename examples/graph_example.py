@@ -2,8 +2,8 @@ import asyncio
 from langchain.schema import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
-from graph import setup_graph
-from print_event import print_event
+from agents.graph import setup_graph
+from agents.print_event import print_event
 
 
 async def main():
@@ -12,7 +12,7 @@ async def main():
         # Configuration for the graph
         config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25)
 
-        messages = [HumanMessage(content="What do I need to do today?")]
+        messages = [HumanMessage(content="How many datasets do I have in my database?")]
 
         for message in messages:
             input_messages = {"messages": [message]}
