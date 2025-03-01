@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Union
+from typing import Any, List, Union
 
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Literal
@@ -11,15 +11,6 @@ class CheckboxItem(BaseModel):
     checked: bool = Field(description="Whether the item is checked")
 
     model_config = {"json_schema_extra": {"example": {"label": "Task 1", "checked": True}}}
-
-
-class ChartDataset(BaseModel):
-    """Model for chart dataset configuration"""
-
-    label: str = Field(description="Label for the dataset")
-    data: List[float] = Field(description="Numerical data points")
-
-    model_config = {"json_schema_extra": {"example": {"label": "Sales", "data": [65, 59, 80]}}}
 
 
 class Markdown(BaseModel):
@@ -68,32 +59,5 @@ class Table(BaseModel):
     }
 
 
-class Chart(BaseModel):
-    type: Literal["chart"] = "chart"
-    chart_type: Literal["bar", "line", "pie"] = Field(description="Type of chart")
-    labels: List[str] = Field(description="Data labels")
-    datasets: List[ChartDataset] = Field(description="Chart datasets")
-
-    @model_validator(mode="after")
-    def validate_dataset_lengths(self) -> "Chart":
-        if self.labels:
-            expected_length = len(self.labels)
-            for i, dataset in enumerate(self.datasets):
-                if len(dataset.data) != expected_length:
-                    raise ValueError(f"Dataset {i} has {len(dataset.data)} points but should have {expected_length} to match labels")
-        return self
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "type": "chart",
-                "chart_type": "bar",
-                "labels": ["January", "February", "March"],
-                "datasets": [{"label": "Sales", "data": [65, 59, 80]}],
-            }
-        }
-    }
-
-
 # Union of all components
-Component = Union[Markdown, Checkbox, Table, Chart]
+Component = Union[Markdown, Checkbox, Table]
