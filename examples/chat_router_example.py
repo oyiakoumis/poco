@@ -89,7 +89,6 @@ def main():
     with TestClient(app) as client:
         # Use same user_id format as main application
         user_id = "user_123"
-        thread_id = "thread_123"
 
         # 1. Create a conversation first
         print("\n=== Setup: Create Conversation ===")
@@ -111,7 +110,6 @@ def main():
         chat_data = ChatRequest(
             user_id=user_id,
             conversation_id=conversation_id,
-            thread_id=thread_id,
             message="Hello, can you help me with something?",
             time_zone="UTC",
             first_day_of_week=0,
@@ -141,7 +139,6 @@ def main():
         chat_data = ChatRequest(
             user_id=user_id,
             conversation_id=non_existent_id,
-            thread_id=thread_id,
             message="This message should fail",
             time_zone="UTC",
             first_day_of_week=0,

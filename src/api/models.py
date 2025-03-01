@@ -33,8 +33,6 @@ class ChatResponse(BaseModel):
 
     message: Optional[str] = Field(default=None, description="Assistant's complete response message")
     conversation_id: Optional[PydanticUUID] = Field(default=None, description="Conversation identifier")
-    delta: Optional[str] = Field(default=None, description="New content to append to the response (for streaming)")
-    done: Optional[bool] = Field(default=None, description="Whether this is the final event (for streaming)")
     error: Optional[str] = Field(default=None, description="Error message if an error occurred")
 
 

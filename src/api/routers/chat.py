@@ -96,14 +96,13 @@ async def process_message(
 
         # Process the message through the graph
         result = await graph.ainvoke({"messages": messages}, config)
-        
+
         # Extract the assistant's response from the result
-        if result and "assistant" in result and "messages" in result["assistant"] and result["assistant"]["messages"]:
-            assistant_messages = result["assistant"]["messages"]
-            response_content = assistant_messages[-1].content if assistant_messages else ""
+        if result and "messages" in result and result["messages"] and isinstance(result["messages"][-1], AIMessage):
+            response_content = result["messages"][-1].content
         else:
             response_content = "I apologize, but I couldn't process your request."
-        
+
         # Store the assistant's response
         await conversation_db.create_message(
             user_id=request.user_id,
@@ -111,12 +110,9 @@ async def process_message(
             content=response_content,
             role=MessageRole.ASSISTANT,
         )
-        
+
         # Return the complete response
-        return ChatResponse(
-            message=response_content,
-            conversation_id=request.conversation_id
-        )
+        return ChatResponse(message=response_content, conversation_id=request.conversation_id)
 
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
