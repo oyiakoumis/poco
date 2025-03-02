@@ -104,27 +104,7 @@ GET /conversations/{conversation_id}?user_id={user_id}
 
 **Response:** Single conversation object
 
-#### Update a Conversation
-```http
-PUT /conversations/{conversation_id}?user_id={user_id}
-```
-
-**Request Body:**
-```json
-{
-  "title": "Updated Title"
-}
-```
-
-**Response:** Updated conversation object
-
-#### Delete a Conversation
-```http
-DELETE /conversations/{conversation_id}?user_id={user_id}
-```
-
-**Response:** No content (204)
-
+#### Update 
 ### 3. Message Management
 
 #### List Messages in a Conversation
