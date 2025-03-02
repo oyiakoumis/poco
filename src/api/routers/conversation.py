@@ -35,6 +35,7 @@ async def create_conversation(request: ConversationCreate, db: ConversationManag
         conversation_id = await db.create_conversation(
             user_id=request.user_id,
             title=request.title,
+            conversation_id=str(request.id),
         )
 
         # Get the created conversation
@@ -218,4 +219,46 @@ async def list_messages(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error listing messages: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
+
+
+@router.post("/{conversation_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+async def create_message(
+    conversation_id: str,
+    request: MessageCreate,
+    db: ConversationManager = Depends(get_conversation_db),
+) -> MessageResponse:
+    """Create a new message in a conversation."""
+    try:
+        # Convert string ID to UUID
+        uuid_id = UUID(conversation_id)
+
+        # Create message
+        message_id = await db.create_message(
+            user_id=request.user_id,
+            conversation_id=uuid_id,
+            content=request.content,
+            role=MessageRole.USER,  # Default role is USER
+            message_id=request.id,
+        )
+
+        # Get the created message
+        message = await db.get_message(request.user_id, message_id)
+
+        # Convert to response model
+        return MessageResponse(
+            id=str(message.id),
+            conversation_id=str(message.conversation_id),
+            content=message.content,
+            role=message.role.value,
+            user_id=message.user_id,
+            created_at=message.created_at,
+        )
+    except ConversationNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except InvalidMessageError as e:
+        logger.error(f"Failed to create message: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error creating message: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")

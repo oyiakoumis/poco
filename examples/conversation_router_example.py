@@ -3,7 +3,7 @@
 import asyncio
 import json
 from typing import Dict, List, Optional, Union
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 from fastapi import FastAPI, status
@@ -83,7 +83,12 @@ def main():
         print("\n=== Conversation Operations ===")
 
         # Create conversation
-        create_data = ConversationCreate(user_id=user_id, title="Test Conversation")
+        conversation_id = uuid4()
+        create_data = ConversationCreate(
+            id=conversation_id,
+            user_id=user_id,
+            title="Test Conversation"
+        )
         print(f"Creating conversation with data: {create_data.model_dump()}")
         response = client.post("/conversations/", json=create_data.model_dump())
         print_response(response, "Create Conversation")
@@ -127,7 +132,9 @@ def main():
         print("\n=== Message Operations ===")
 
         # Create message
+        message_id = uuid4()
         message_data = MessageCreate(
+            id=message_id,
             user_id=user_id,
             content="Hello, this is a test message",
         )
@@ -141,7 +148,9 @@ def main():
         message_id = response.json()["id"]
 
         # Create another message
+        second_message_id = uuid4()
         message_data = MessageCreate(
+            id=second_message_id,
             user_id=user_id,
             content="This is a second test message",
         )
@@ -183,7 +192,9 @@ def main():
         assert "not found" in response.json()["detail"].lower(), "Error message should indicate resource not found"
 
         # Try to create a message in a non-existent conversation
+        message_id = uuid4()
         message_data = MessageCreate(
+            id=message_id,
             user_id=user_id,
             content="This message should fail",
         )

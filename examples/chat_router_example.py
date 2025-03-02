@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -92,7 +92,12 @@ def main():
 
         # 1. Create a conversation first
         print("\n=== Setup: Create Conversation ===")
-        create_data = ConversationCreate(user_id=user_id, title="Test Chat Conversation")
+        conversation_id = uuid4()
+        create_data = ConversationCreate(
+            id=conversation_id,
+            user_id=user_id,
+            title="Test Chat Conversation"
+        )
         print(f"Creating conversation with data: {create_data.model_dump()}")
         response = client.post("/conversations/", json=create_data.model_dump())
         print_response(response, "Create Conversation")
@@ -107,7 +112,9 @@ def main():
         print("\n=== Chat Operations ===")
 
         # Send a chat message
+        message_id = uuid4()
         chat_data = ChatRequest(
+            message_id=message_id,
             user_id=user_id,
             conversation_id=conversation_id,
             message="Hello, can you help me with something?",
@@ -136,7 +143,9 @@ def main():
 
         # Try to send a message to a non-existent conversation
         non_existent_id = str(uuid4())
+        message_id = uuid4()
         chat_data = ChatRequest(
+            message_id=message_id,
             user_id=user_id,
             conversation_id=non_existent_id,
             message="This message should fail",

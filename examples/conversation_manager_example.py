@@ -35,10 +35,12 @@ async def main():
         # 1. Conversation Operations
         print("\n=== Conversation Operations ===")
 
-        # Create conversation
+        # Create conversation with UUID
+        conversation_id = uuid4()
         conversation_id = await manager.create_conversation(
             user_id=user_id,
             title="Example Conversation",
+            conversation_id=conversation_id,
         )
         print(f"Created conversation: {conversation_id}")
         assert conversation_id is not None, "Conversation ID should not be None"
@@ -80,23 +82,27 @@ async def main():
         # 2. Message Operations
         print("\n=== Message Operations ===")
 
-        # Create assistant message
+        # Create assistant message with UUID
+        assistant_message_id = uuid4()
         assistant_message_id = await manager.create_message(
             user_id=user_id,
             conversation_id=conversation_id,
             content="Hello! I'm an AI assistant. How can I help you today?",
             role=MessageRole.ASSISTANT,
+            message_id=assistant_message_id,
         )
         print(f"Created assistant message: {assistant_message_id}")
         assert assistant_message_id is not None, "Message ID should not be None"
         assert isinstance(assistant_message_id, UUID), "Message ID should be a string"
 
-        # Create user message with metadata
+        # Create user message with metadata and UUID
+        user_message_id = uuid4()
         user_message_id = await manager.create_message(
             user_id=user_id,
             conversation_id=conversation_id,
             content="Can you help me with a Python question?",
             role=MessageRole.USER,
+            message_id=user_message_id,
             metadata={"source": "web", "browser": "Chrome"},
         )
         print(f"Created user message with metadata: {user_message_id}")
@@ -125,11 +131,13 @@ async def main():
         # Create a few more messages to demonstrate pagination
         additional_message_ids = []
         for i in range(3):
+            msg_id_uuid = uuid4()
             msg_id = await manager.create_message(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 content=f"Additional message {i+1}",
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
+                message_id=msg_id_uuid,
             )
             additional_message_ids.append(msg_id)
             assert msg_id is not None, f"Additional message {i+1} ID should not be None"
@@ -165,10 +173,12 @@ async def main():
         remaining_messages = await manager.list_messages(user_id, conversation_id)
         assert len(remaining_messages) == 4, "Should have 4 messages after deleting 1"
 
-        # Create a second conversation for testing
+        # Create a second conversation for testing with UUID
+        second_conversation_id_uuid = uuid4()
         second_conversation_id = await manager.create_conversation(
             user_id=user_id,
             title="Second Conversation",
+            conversation_id=second_conversation_id_uuid,
         )
         print(f"Created second conversation: {second_conversation_id}")
         assert second_conversation_id is not None, "Second conversation ID should not be None"

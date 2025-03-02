@@ -77,13 +77,12 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to setup indexes: {str(e)}")
 
-    async def create_conversation(self, user_id: str, title: str) -> UUID:
+    async def create_conversation(self, user_id: str, title: str, conversation_id: UUID) -> UUID:
         """Creates a new conversation without an initial message."""
         try:
             logger.info(f"Creating conversation '{title}' for user {user_id}")
 
-            # Create conversation with UUID
-            conversation_id = uuid4()
+            # Create conversation with provided UUID
             conversation = Conversation(
                 id=str(conversation_id),
                 user_id=user_id,
@@ -208,15 +207,14 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to delete conversation: {str(e)}")
 
-    async def create_message(self, user_id: str, conversation_id: UUID, content: str, role: MessageRole, metadata: Optional[Dict] = None) -> UUID:
+    async def create_message(self, user_id: str, conversation_id: UUID, content: str, role: MessageRole, message_id: UUID, metadata: Optional[Dict] = None) -> UUID:
         """Creates a new message in a conversation."""
         try:
             logger.info(f"Creating message in conversation {conversation_id} for user {user_id}")
             # Verify conversation exists and belongs to user
             await self.get_conversation(user_id, conversation_id)
 
-            # Create message with UUID
-            message_id = uuid4()
+            # Create message with provided UUID
             message = Message(
                 id=str(message_id),
                 user_id=user_id,

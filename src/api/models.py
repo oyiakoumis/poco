@@ -13,6 +13,7 @@ class ChatRequest(BaseModel):
     """Chat request model."""
 
     message: str = Field(..., description="The message content")
+    message_id: PydanticUUID = Field(..., description="Message identifier")
     user_id: str = Field(..., description="User identifier")
     conversation_id: PydanticUUID = Field(..., description="Conversation identifier")
     time_zone: str = Field(default="UTC", description="User's timezone")
@@ -39,6 +40,7 @@ class ChatResponse(BaseModel):
 class ConversationCreate(BaseModel):
     """Request model for creating a conversation."""
 
+    id: PydanticUUID = Field(..., description="Conversation identifier")
     title: str = Field(..., description="Title of the conversation")
     user_id: str = Field(..., description="User identifier")
 
@@ -62,6 +64,7 @@ class ConversationResponse(BaseModel):
 class MessageCreate(BaseModel):
     """Request model for creating a message."""
 
+    id: PydanticUUID = Field(..., description="Message identifier")
     content: str = Field(..., description="Content of the message")
     user_id: str = Field(..., description="User identifier")
 

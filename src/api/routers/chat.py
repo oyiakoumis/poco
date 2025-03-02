@@ -1,7 +1,7 @@
 """Chat router for handling message processing."""
 
 from typing import List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from langchain_core.messages import AIMessage, HumanMessage
@@ -74,6 +74,7 @@ async def process_message(
             conversation_id=request.conversation_id,
             content=request.message,
             role=MessageRole.USER,
+            message_id=request.message_id,
         )
 
         # Get conversation history
@@ -104,11 +105,13 @@ async def process_message(
             response_content = "I apologize, but I couldn't process your request."
 
         # Store the assistant's response
+        assistant_message_id = uuid4()
         await conversation_db.create_message(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
             content=response_content,
             role=MessageRole.ASSISTANT,
+            message_id=assistant_message_id,
         )
 
         # Return the complete response
