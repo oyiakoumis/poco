@@ -13,3 +13,4 @@ rich
 fastapi
 uvicorn
 pydantic-settings
+gunicorn
