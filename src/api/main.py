@@ -16,17 +16,19 @@ from document_store.dataset_manager import DatasetManager
 async def lifespan(app: FastAPI):
     # Code to run on startup (if any)
     yield
-    # Clear collections on shutdown
+
     client = AsyncIOMotorClient(settings.database_url)
-    db = client.get_database(DatasetManager.DATABASE)
+    if False:
+        # Clear collections on shutdown
+        db = client.get_database(DatasetManager.DATABASE)
 
-    # Clear collections used by ConversationManager
-    await db.get_collection(ConversationManager.COLLECTION_CONVERSATIONS).delete_many({})
-    await db.get_collection(ConversationManager.COLLECTION_MESSAGES).delete_many({})
+        # Clear collections used by ConversationManager
+        await db.get_collection(ConversationManager.COLLECTION_CONVERSATIONS).delete_many({})
+        await db.get_collection(ConversationManager.COLLECTION_MESSAGES).delete_many({})
 
-    # Clear collections used by DatasetManager
-    await db.get_collection(DatasetManager.COLLECTION_DATASETS).delete_many({})
-    await db.get_collection(DatasetManager.COLLECTION_RECORDS).delete_many({})
+        # Clear collections used by DatasetManager
+        await db.get_collection(DatasetManager.COLLECTION_DATASETS).delete_many({})
+        await db.get_collection(DatasetManager.COLLECTION_RECORDS).delete_many({})
 
     client.close()
 
