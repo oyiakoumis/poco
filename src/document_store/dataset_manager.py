@@ -791,21 +791,7 @@ class DatasetManager:
         min_score: Optional[float] = None,
         filter_dict: Optional[Dict] = None,
     ) -> List[Dataset]:
-        """Find similar datasets using vector search.
-
-        Args:
-            user_id: ID of the user to search datasets for
-            dataset: A Dataset object to find similar datasets to
-            limit: Maximum number of results to return
-            min_score: Minimum similarity score (0-1), defaults to VECTOR_SEARCH_CONFIG["MIN_SCORE"]
-            filter_dict: Optional MongoDB filter to apply after vector search
-
-        Returns:
-            List of Dataset objects ordered by similarity
-
-        Raises:
-            DatabaseError: If vector search fails
-        """
+        """Find similar datasets using vector search."""
         try:
             logger.info(f"Searching similar datasets for user {user_id}")
             logger.debug("Generating embedding for similarity search")
@@ -855,25 +841,29 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to perform vector search: {str(e)}")
 
+    async def get_all_records(self, user_id: str, dataset_id: UUID) -> List[Record]:
+        """Retrieves all records in the specified dataset."""
+        try:
+            logger.info(f"Getting all records from dataset {dataset_id} for user {user_id}")
+            # Verify dataset exists
+            await self.get_dataset(user_id, dataset_id)
+
+            # Get all records
+            records = []
+            cursor = self._records.find({"user_id": user_id, "dataset_id": str(dataset_id)})
+            async for doc in cursor:
+                records.append(Record.model_validate(doc))
+
+            logger.info(f"Retrieved {len(records)} records")
+            return records
+
+        except DatasetNotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to get all records: {str(e)}")
+
     async def query_records(self, user_id: str, dataset_id: UUID, query: Optional[RecordQuery] = None) -> Union[List[Record], List[Dict]]:
-        """Query records in the specified dataset.
-
-        Supports both simple queries and aggregations through the RecordQuery model.
-
-        Args:
-            user_id: User ID
-            dataset_id: Dataset ID
-            query: Optional RecordQuery for filtering, sorting, and/or aggregating
-
-        Returns:
-            List[Record] for simple queries (no aggregations)
-            List[Dict] for queries with aggregations
-
-        Raises:
-            DatasetNotFoundError: If dataset not found
-            InvalidRecordDataError: If query is invalid
-            DatabaseError: For other database errors
-        """
+        """Query records in the specified dataset."""
         try:
             logger.info(f"Querying records in dataset {dataset_id} for user {user_id}")
             # Verify dataset exists and get schema for validation

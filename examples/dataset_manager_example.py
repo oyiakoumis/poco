@@ -187,6 +187,19 @@ async def main():
         updated_record = await manager.get_record(user_id, dataset_id, record1_id)
         assert updated_record.data["quantity"] == 3, f"Expected updated quantity 3, got {updated_record.data['quantity']}"
 
+        # Get all records in the dataset
+        all_records = await manager.get_all_records(user_id=user_id, dataset_id=dataset_id)
+        print(f"Retrieved all {len(all_records)} records from dataset")
+        # Assert all records were retrieved
+        assert len(all_records) == 2, f"Expected 2 records, got {len(all_records)}"
+        # Assert records contain expected data
+        milk_record = next((r for r in all_records if r.data["item"] == "Milk"), None)
+        yogurt_record = next((r for r in all_records if r.data["item"] == "Yogurt"), None)
+        assert milk_record is not None, "Expected to find Milk record"
+        assert yogurt_record is not None, "Expected to find Yogurt record"
+        assert milk_record.data["quantity"] == 3, f"Expected Milk quantity 3, got {milk_record.data['quantity']}"
+        assert yogurt_record.data["quantity"] == 4, f"Expected Yogurt quantity 4, got {yogurt_record.data['quantity']}"
+        
         # Query records with simple filter
         simple_filter = FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy")
         filter_query = RecordQuery(filter=simple_filter)

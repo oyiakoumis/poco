@@ -278,6 +278,20 @@ class SearchSimilarDatasetsArgs(BaseModel):
     dataset: Dataset = Field(description="Dataset to find similar datasets to")
 
 
+class GetAllRecordsOperator(BaseDBOperator):
+    name: str = "get_all_records"
+    description: str = "Get all records in a dataset"
+    args_schema: Type[BaseModel] = DatasetArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = DatasetArgs(**kwargs)
+        logger.info(f"Getting all records from dataset {args.dataset_id} for user: {user_id}")
+        records = await self.db.get_all_records(user_id, args.dataset_id)
+        logger.info(f"Retrieved {len(records)} records")
+        return [record.model_dump() for record in records]
+
+
 class SearchSimilarDatasetsOperator(BaseDBOperator):
     name: str = "search_similar_datasets"
     description: str = "Find similar datasets using vector search"
