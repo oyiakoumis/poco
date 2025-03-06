@@ -68,14 +68,14 @@ async def process_message_core(
 
     Returns the assistant's response message.
     """
-    logger.info(f"Processing message - Thread: {conversation_id}, User: {user_id}")
+    logger.info(f"Processing message - Thread: {conversation_id}, User: {user_id}.")
 
     try:
         # Check if conversation exists
         conversation_exists = await conversation_db.conversation_exists(user_id, conversation_id)
 
         if not conversation_exists:
-            logger.error(f"Conversation {conversation_id} not found")
+            logger.error(f"Conversation {conversation_id} not found for user {user_id}")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Conversation {conversation_id} not found. Create a conversation first.")
 
         # Store user message
@@ -108,11 +108,13 @@ async def process_message_core(
 
         # Process the message through the graph
         result = await graph.ainvoke({"messages": messages}, config)
+        logger.info(f"Graph processing completed - Thread: {conversation_id}")
 
         # Extract the assistant's response from the result
         if result and "messages" in result and result["messages"] and isinstance(result["messages"][-1], AIMessage):
             response_content = result["messages"][-1].content
         else:
+            logger.warning(f"No valid response generated from graph - Thread: {conversation_id}")
             response_content = "I apologize, but I couldn't process your request."
 
         # Store the assistant's response
@@ -124,6 +126,8 @@ async def process_message_core(
             role=MessageRole.ASSISTANT,
             message_id=assistant_message_id,
         )
+
+        logger.info(f"Message processing completed - Thread: {conversation_id}, User: {user_id}")
 
         return response_content
 
@@ -155,8 +159,6 @@ async def process_message(
     5. Stores the response in the database
     6. Returns the complete response to the client
     """
-    logger.info(f"Starting message processing - Thread: {request.thread_id}, User: {request.user_id}")
-
     response_content = await process_message_core(
         message=request.message,
         user_id=request.user_id,
@@ -194,7 +196,7 @@ async def process_whatsapp_message(
     4. Processes the message through the existing graph
     5. Returns a TwiML response to send back to WhatsApp
     """
-    logger.info(f"Received WhatsApp message from {From}: {Body}")
+    logger.info(f"WhatsApp message received from {From}, SID: {SmsMessageSid}")
 
     # Validate the request is coming from Twilio
     if settings.twilio_auth_token and x_twilio_signature:
@@ -217,8 +219,8 @@ async def process_whatsapp_message(
     conversation_id = None
     for conv in conversations:
         # Check if this is a WhatsApp conversation
-        if await conversation_db.conversation_exists(user_id, UUID(conv.id)):
-            conversation_id = UUID(conv.id)
+        if await conversation_db.conversation_exists(user_id, conv.id):
+            conversation_id = conv.id
             break
 
     # If no conversation found, create a new one
@@ -226,6 +228,7 @@ async def process_whatsapp_message(
         conversation_id = uuid4()
         # Create a title based on the user's profile name or number
         title = f"WhatsApp: {ProfileName or From}"
+        logger.info(f"Creating new WhatsApp conversation: {conversation_id}, Title: {title}")
         await conversation_db.create_conversation(user_id, title, conversation_id)
 
     # Create a message ID for the incoming message
@@ -248,5 +251,7 @@ async def process_whatsapp_message(
     # Create TwiML response
     twiml_response = MessagingResponse()
     twiml_response.message(response_content)
+
+    logger.info(f"WhatsApp request completed - Thread: {conversation_id}")
 
     return Response(content=str(twiml_response), media_type="application/xml")
