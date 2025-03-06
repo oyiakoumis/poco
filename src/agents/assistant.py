@@ -1,5 +1,6 @@
 from langchain_core.messages import SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
 from agents.state import State
@@ -123,7 +124,7 @@ Remember:
 
 
 class Assistant:
-    MODEL_NAME = "gpt-4o-mini"
+    MODEL_NAME = "gpt-4o"
     TOKEN_LIMIT = 128000
 
     def __init__(self, db: DatasetManager):
@@ -147,6 +148,7 @@ class Assistant:
     async def __call__(self, state: State):
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
+        # llm = ChatGoogleGenerativeAI(model=self.MODEL_NAME, temperature=0)
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=0)
 
         logger.debug("Trimming messages to token limit")
