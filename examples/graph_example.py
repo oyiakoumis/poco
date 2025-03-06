@@ -12,7 +12,7 @@ async def main():
         # Configuration for the graph
         config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25)
 
-        messages = [HumanMessage(content="Remove duplicates from my watch list")]
+        messages = [HumanMessage(content="Show me my watch list")]
 
         for message in messages:
             input_messages = {"messages": [message]}

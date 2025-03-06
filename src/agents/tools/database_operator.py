@@ -105,7 +105,22 @@ class ListDatasetsOperator(BaseDBOperator):
         logger.debug(f"Listing datasets for user: {user_id}")
         datasets = await self.db.list_datasets(user_id)
         logger.debug(f"Found {len(datasets)} datasets")
-        return [dataset.model_dump() for dataset in datasets]
+        return [{"id": str(dataset.id), "name": dataset.name, "description": dataset.description} for dataset in datasets]
+
+
+# Get Dataset Operator
+class GetDatasetOperator(BaseDBOperator):
+    name: str = "get_dataset"
+    description: str = "Get a dataset by its ID to view schema details"
+    args_schema: Type[BaseModel] = DatasetArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = DatasetArgs(**kwargs)
+        logger.info(f"Getting dataset {args.dataset_id} for user: {user_id}")
+        dataset = await self.db.get_dataset(user_id, args.dataset_id)
+        logger.info(f"Retrieved dataset: {dataset.name}")
+        return dataset.model_dump()
 
 
 # Create Dataset Operator

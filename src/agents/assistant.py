@@ -11,6 +11,7 @@ from agents.tools.database_operator import (
     DeleteDatasetOperator,
     DeleteFieldOperator,
     DeleteRecordOperator,
+    GetDatasetOperator,
     ListDatasetsOperator,
     QueryRecordsOperator,
     UpdateDatasetOperator,
@@ -63,7 +64,8 @@ Remember to:
 Tool Usage Protocol:
 
 1. Dataset Operations:
-- list_datasets: Always use first to get dataset details (id, name, description, schema)
+- list_datasets: Always use first to get dataset details (id, name, description)
+- get_dataset: Retrieve detailed schema information for a specific dataset. Always use before any data operation on a dataset.
 - create_dataset, update_dataset, delete_dataset: Manage dataset structures
 - update_field: Update a field in the dataset schema and convert existing records if needed
 - add_field: Add a new field to the dataset schema
@@ -124,7 +126,7 @@ Remember:
 
 
 class Assistant:
-    MODEL_NAME = "gpt-4o"
+    MODEL_NAME = "gpt-4o-mini"
     TOKEN_LIMIT = 128000
 
     def __init__(self, db: DatasetManager):
@@ -135,6 +137,7 @@ class Assistant:
             UpdateDatasetOperator(db),
             DeleteDatasetOperator(db),
             ListDatasetsOperator(db),
+            GetDatasetOperator(db),
             CreateRecordOperator(db),
             UpdateRecordOperator(db),
             DeleteRecordOperator(db),
