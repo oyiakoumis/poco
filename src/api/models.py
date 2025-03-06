@@ -92,3 +92,13 @@ class MessageListResponse(BaseModel):
 
     messages: List[MessageResponse] = Field(..., description="List of messages")
     total: int = Field(..., description="Total number of messages")
+
+
+class WhatsAppWebhookRequest(BaseModel):
+    """Model for incoming WhatsApp messages via Twilio."""
+    
+    From: str = Field(..., description="WhatsApp number of the sender")
+    Body: str = Field(..., description="Message content")
+    ProfileName: Optional[str] = Field(None, description="Name of the sender")
+    WaId: str = Field(..., description="WhatsApp ID of the sender")
+    SmsMessageSid: str = Field(..., description="Twilio message SID")
