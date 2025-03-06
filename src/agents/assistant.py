@@ -1,6 +1,7 @@
 from langchain_core.messages import SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from langgraph.prebuilt import create_react_agent
 
 from agents.state import State
@@ -154,7 +155,7 @@ class Assistant:
     async def __call__(self, state: State):
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
-        # llm = ChatGoogleGenerativeAI(model=self.MODEL_NAME, temperature=0)
+        # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=0)
 
         logger.debug("Trimming messages to token limit")

@@ -1,6 +1,7 @@
 langgraph
 langchain
 langchain-openai
+langchain-google-genai
 langchain-community
 langsmith
 python-dotenv
