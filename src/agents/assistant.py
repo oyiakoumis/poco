@@ -1,7 +1,6 @@
 from langchain_core.messages import SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_google_vertexai import ChatVertexAI
 from langgraph.prebuilt import create_react_agent
 
 from agents.state import State

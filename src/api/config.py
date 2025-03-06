@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings
 from constants import (
     DATABASE_CONNECTION_STRING,
     LOGGING_LEVEL,
+    API_URL,
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
     TWILIO_PHONE_NUMBER,
@@ -30,6 +31,7 @@ class Settings(BaseSettings):
     logging_level: int = LOGGING_LEVEL
 
     # Twilio settings
+    api_url: str = API_URL
     twilio_account_sid: str = TWILIO_ACCOUNT_SID
     twilio_auth_token: str = TWILIO_AUTH_TOKEN
     twilio_phone_number: str = TWILIO_PHONE_NUMBER

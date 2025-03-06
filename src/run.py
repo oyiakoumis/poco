@@ -14,5 +14,5 @@ if __name__ == "__main__":
         "api.main:app", 
         host=settings.host, 
         port=settings.port,
-        workers=num_workers
+        # workers=num_workers
     )
