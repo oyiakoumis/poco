@@ -1,13 +1,17 @@
 """Chat router for handling message processing."""
 
+import time
 from typing import Optional, List, Dict
 from uuid import uuid4
 
+from azure.storage.blob.aio import BlobServiceClient
+from azure.storage.blob import ContentSettings
 from fastapi import APIRouter, Depends, Form, Header, Response, Request
 from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client
 
-from api.config import settings
+from config import settings
 from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.models.message import MessageRole
 from database.manager import DatabaseManager
@@ -16,7 +20,51 @@ from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
 from utils.text import format_message
 
+
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+async def upload_to_blob_storage(media_url: str, content_type: str, message_id: uuid4) -> str:
+    """
+    Upload media from Twilio URL to Azure Blob Storage.
+
+    Args:
+        media_url: URL of the media file from Twilio
+        content_type: Content type of the media file
+        message_id: Message ID to use in the blob name
+
+    Returns:
+        Blob name of the uploaded file
+    """
+    # Generate a unique blob name using message_id and timestamp
+    file_extension = content_type.split("/")[-1]
+    if file_extension == "jpeg":
+        file_extension = "jpg"  # Standardize jpeg extension
+    blob_name = f"{message_id}_{int(time.time())}.{file_extension}"
+
+    # Initialize Twilio client
+    twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+
+    # Initialize Azure Blob Storage client
+    async with BlobServiceClient.from_connection_string(settings.azure_storage_connection_string) as blob_service_client:
+        container_client = blob_service_client.get_container_client(settings.azure_blob_container_name)
+
+        # Create container if it doesn't exist
+        if not await container_client.exists():
+            await container_client.create_container()
+
+        # Download the media from Twilio
+        media_response = twilio_client.request(method="GET", uri=media_url)
+        if not media_response or not media_response.content:
+            raise Exception(f"Failed to download media from Twilio")
+
+        # Upload to Azure Blob Storage
+        blob_client = container_client.get_blob_client(blob_name)
+        content_settings = ContentSettings(content_type=content_type)
+        await blob_client.upload_blob(media_response.content, content_settings=content_settings)
+
+        logger.info(f"Media uploaded to Azure Blob Storage: {blob_name}")
+        return blob_name
 
 
 def validate_twilio_request(request_data: dict, signature: str, url: str) -> bool:
@@ -108,7 +156,16 @@ async def process_whatsapp_message(
 
         if media_url and media_type:
             if media_type.startswith("image/"):
-                media_items.append({"url": media_url, "content_type": media_type})
+                try:
+                    # Upload image to Azure Blob Storage
+                    blob_name = await upload_to_blob_storage(media_url, media_type, message_id)
+
+                    # Store blob name instead of URL
+                    media_items.append(MediaItem(blob_name=blob_name, content_type=media_type))
+                    logger.info(f"Image uploaded to Azure Blob Storage: {blob_name}")
+                except Exception as e:
+                    logger.error(f"Error uploading image to Azure Blob Storage: {str(e)}")
+                    # Skip this image
             else:
                 # Flag that we received unsupported media
                 unsupported_media = True
@@ -146,7 +203,7 @@ async def process_whatsapp_message(
             message_id=message_id,
             request_url=request_url,
             media_count=len(media_items),
-            media_items=[MediaItem(**item) for item in media_items],
+            media_items=media_items,
             unsupported_media=unsupported_media,
         )
 

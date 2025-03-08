@@ -9,8 +9,8 @@ from models.base import PydanticUUID
 
 class MediaItem(BaseModel):
     """Media item model for WhatsApp messages."""
-    
-    url: str
+
+    blob_name: str
     content_type: str
 
 

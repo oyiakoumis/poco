@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from api.config import settings
+from config import settings
 from api.routers import chat
 from database.conversation_store.conversation_manager import ConversationManager
 from database.document_store.dataset_manager import DatasetManager

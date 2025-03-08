@@ -18,3 +18,4 @@ gunicorn
 twilio>=8.0.0
 python-multipart
 azure-servicebus
+azure-storage-blob
