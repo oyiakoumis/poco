@@ -1,9 +1,9 @@
 """Chat router for handling message processing."""
 
-from typing import Optional
+from typing import Optional, List, Dict
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Form, Header, Response
+from fastapi import APIRouter, Depends, Form, Header, Response, Request
 from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
 
@@ -11,7 +11,7 @@ from api.config import settings
 from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.models.message import MessageRole
 from database.manager import DatabaseManager
-from messaging.models import WhatsAppQueueMessage
+from messaging.models import MediaItem, WhatsAppQueueMessage
 from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
 from utils.text import format_message
@@ -27,11 +27,13 @@ def validate_twilio_request(request_data: dict, signature: str, url: str) -> boo
 
 @router.post("/whatsapp", response_class=Response)
 async def process_whatsapp_message(
+    request: Request,
     From: str = Form(...),
     Body: str = Form(...),
     ProfileName: Optional[str] = Form(None),
     WaId: str = Form(...),
     SmsMessageSid: str = Form(...),
+    NumMedia: Optional[int] = Form(0),
     x_twilio_signature: str = Header(None),
     request_url: str = Header(None, alias="X-Original-URL"),
 ) -> Response:
@@ -51,7 +53,14 @@ async def process_whatsapp_message(
     # Validate the request is coming from Twilio
     if settings.twilio_auth_token and x_twilio_signature:
         # Create a dictionary of form fields for Twilio validation
-        request_data = {"From": From, "Body": Body, "ProfileName": ProfileName or "", "WaId": WaId, "SmsMessageSid": SmsMessageSid}
+        request_data = {
+            "From": From,
+            "Body": Body,
+            "ProfileName": ProfileName or "",
+            "WaId": WaId,
+            "SmsMessageSid": SmsMessageSid,
+            "NumMedia": str(NumMedia) if NumMedia is not None else "0",
+        }
         # If request_url is not provided, construct it from the settings
         url = request_url or f"https://{settings.api_url}:{settings.port}/chat/whatsapp"
 
@@ -87,8 +96,32 @@ async def process_whatsapp_message(
     # Create a message ID for the incoming message
     message_id = uuid4()
 
+    # Extract media information (images only)
+    media_items = []
+    unsupported_media = False
+    num_media = int(NumMedia) if NumMedia is not None else 0
+
+    for i in range(num_media):
+        form_data = await request.form()
+        media_url = form_data.get(f"MediaUrl{i}")
+        media_type = form_data.get(f"MediaContentType{i}")
+
+        if media_url and media_type:
+            if media_type.startswith("image/"):
+                media_items.append({"url": media_url, "content_type": media_type})
+            else:
+                # Flag that we received unsupported media
+                unsupported_media = True
+                logger.info(f"Unsupported media type received: {media_type}")
+
     # WhatsApp-specific metadata
-    metadata = {"whatsapp_id": WaId, "sms_message_sid": SmsMessageSid}
+    metadata = {
+        "whatsapp_id": WaId,
+        "sms_message_sid": SmsMessageSid,
+        "media_count": len(media_items),
+        "media_items": media_items,
+        "unsupported_media": unsupported_media,
+    }
 
     # Store user message
     await conversation_db.create_message(
@@ -112,6 +145,9 @@ async def process_whatsapp_message(
             conversation_id=conversation_id,
             message_id=message_id,
             request_url=request_url,
+            media_count=len(media_items),
+            media_items=[MediaItem(**item) for item in media_items],
+            unsupported_media=unsupported_media,
         )
 
         # Send to Azure Service Bus
@@ -122,7 +158,10 @@ async def process_whatsapp_message(
 
         # Create immediate TwiML response
         twiml_response = MessagingResponse()
-        twiml_response.message("Your message is being processed. We'll respond to it shortly.")
+        response_text = "Your message is being processed. We'll respond to it shortly."
+        if unsupported_media:
+            response_text += " Note: Non-image media attachments were ignored."
+        twiml_response.message(response_text)
 
         return Response(content=str(twiml_response), media_type="application/xml")
 

@@ -33,7 +33,23 @@ async def get_conversation_history(conversation_id: UUID, user_id: str, conversa
         langchain_messages = []
         for msg in messages:
             if msg.role == MessageRole.USER:
-                langchain_messages.append(HumanMessage(content=msg.content))
+                # Check if message has image media
+                if msg.metadata and msg.metadata.get("media_count", 0) > 0:
+                    # Create multimodal content
+                    content = []
+
+                    # Add text content if present
+                    if msg.content:
+                        content.append({"type": "text", "text": msg.content})
+
+                    # Add image URLs
+                    for media_item in msg.metadata.get("media_items", []):
+                        content.append({"type": "image_url", "image_url": {"url": media_item["url"]}})
+
+                    langchain_messages.append(HumanMessage(content=content))
+                else:
+                    # Regular text message
+                    langchain_messages.append(HumanMessage(content=msg.content))
             elif msg.role == MessageRole.ASSISTANT:
                 langchain_messages.append(AIMessage(content=msg.content))
 
@@ -56,7 +72,7 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
     conversation_db = await database_manager.setup_conversation_manager()
 
     try:
-        # Get conversation history
+        # Get conversation history - our updated function will handle multimodal messages
         messages = await get_conversation_history(message.conversation_id, message.user_id, conversation_db)
 
         # Get the graph
@@ -126,10 +142,7 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
 
 async def run_worker():
     """Run the worker process to consume messages from the queue."""
-    logger.info("Starting WhatsApp message worker")
-
     consumer = WhatsAppMessageConsumer(process_whatsapp_message)
-
     try:
         while True:
             await consumer.process_messages()

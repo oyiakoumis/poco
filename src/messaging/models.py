@@ -1,10 +1,17 @@
 """Message models for Azure Service Bus."""
 
-from typing import Optional
+from typing import Optional, List, Dict
 
 from pydantic import BaseModel
 
 from models.base import PydanticUUID
+
+
+class MediaItem(BaseModel):
+    """Media item model for WhatsApp messages."""
+    
+    url: str
+    content_type: str
 
 
 class WhatsAppQueueMessage(BaseModel):
@@ -19,3 +26,6 @@ class WhatsAppQueueMessage(BaseModel):
     conversation_id: PydanticUUID
     message_id: PydanticUUID
     request_url: Optional[str] = None
+    media_count: int = 0
+    media_items: List[MediaItem] = []
+    unsupported_media: bool = False
