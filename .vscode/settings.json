@@ -19,6 +19,7 @@
     "levelname",
     "levelno",
     "relativedelta",
+    "servicebus",
     "sseclient",
     "twiml"
   ]

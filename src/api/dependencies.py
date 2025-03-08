@@ -25,11 +25,11 @@ async def get_database() -> AsyncGenerator[Tuple[DatasetManager, ConversationMan
         client.close()
 
 
-async def get_db(managers: Tuple[DatasetManager, ConversationManager] = Depends(get_database)) -> DatasetManager:
+def get_db(managers: Tuple[DatasetManager, ConversationManager] = Depends(get_database)) -> DatasetManager:
     """Dependency for getting dataset manager."""
     return managers[0]
 
 
-async def get_conversation_db(managers: Tuple[DatasetManager, ConversationManager] = Depends(get_database)) -> ConversationManager:
+def get_conversation_db(managers: Tuple[DatasetManager, ConversationManager] = Depends(get_database)) -> ConversationManager:
     """Dependency for getting conversation manager."""
     return managers[1]

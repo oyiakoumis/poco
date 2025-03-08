@@ -1,177 +1,28 @@
 """Chat router for handling message processing."""
 
-from typing import Dict, List, Optional
-from uuid import UUID, uuid4
+from typing import Optional
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Form, Header, HTTPException, Response, status
-from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.memory import MemorySaver
-from twilio.twiml.messaging_response import MessagingResponse
+from fastapi import APIRouter, Depends, Form, Header, Response
 from twilio.request_validator import RequestValidator
+from twilio.twiml.messaging_response import MessagingResponse
 
-from agents.graph import create_graph
 from api.config import settings
 from api.dependencies import get_conversation_db, get_db
-from api.models import ChatRequest, ChatResponse
 from conversation_store.conversation_manager import ConversationManager
-from conversation_store.exceptions import ConversationNotFoundError
 from conversation_store.models.message import MessageRole
 from document_store.dataset_manager import DatasetManager
+from messaging.models import WhatsAppQueueMessage
+from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-
-async def get_conversation_history(conversation_id: UUID, user_id: str, conversation_db: ConversationManager) -> List[HumanMessage | AIMessage]:
-    """Get conversation history as LangChain messages."""
-    try:
-        # Get messages from the conversation
-        messages = await conversation_db.list_messages(user_id, conversation_id)
-
-        # Convert to LangChain messages
-        langchain_messages = []
-        for msg in messages:
-            if msg.role == MessageRole.USER:
-                langchain_messages.append(HumanMessage(content=msg.content))
-            elif msg.role == MessageRole.ASSISTANT:
-                langchain_messages.append(AIMessage(content=msg.content))
-
-        return langchain_messages
-    except ConversationNotFoundError:
-        # If conversation not found, return empty list
-        return []
-    except Exception as e:
-        logger.error(f"Error getting conversation history: {str(e)}")
-        return []
 
 
 def validate_twilio_request(request_data: dict, signature: str, url: str) -> bool:
     """Validate that the request is coming from Twilio."""
     validator = RequestValidator(settings.twilio_auth_token)
     return validator.validate(url, request_data, signature)
-
-
-async def process_message_core(
-    message: str,
-    user_id: str,
-    conversation_id: UUID,
-    message_id: UUID,
-    time_zone: str = "UTC",
-    first_day_of_week: int = 0,
-    metadata: Optional[Dict] = None,
-    db: Optional[DatasetManager] = None,
-    conversation_db: Optional[ConversationManager] = None,
-) -> str:
-    """
-    Core message processing logic shared between regular chat and WhatsApp.
-
-    Returns the assistant's response message.
-    """
-    logger.info(f"Processing message - Thread: {conversation_id}, User: {user_id}.")
-
-    try:
-        # Check if conversation exists
-        conversation_exists = await conversation_db.conversation_exists(user_id, conversation_id)
-
-        if not conversation_exists:
-            logger.error(f"Conversation {conversation_id} not found for user {user_id}")
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Conversation {conversation_id} not found. Create a conversation first.")
-
-        # Store user message
-        await conversation_db.create_message(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            content=message,
-            role=MessageRole.USER,
-            message_id=message_id,
-            metadata=metadata,
-        )
-
-        # Get conversation history
-        messages = await get_conversation_history(conversation_id, user_id, conversation_db)
-
-        # Get the graph
-        graph = create_graph(db)
-        graph = graph.compile(checkpointer=MemorySaver())
-
-        # Configuration for the graph
-        config = RunnableConfig(
-            configurable={
-                "thread_id": str(conversation_id),
-                "user_id": user_id,
-                "time_zone": time_zone,
-                "first_day_of_the_week": first_day_of_week,
-            },
-            recursion_limit=25,
-        )
-
-        # Process the message through the graph
-        result = await graph.ainvoke({"messages": messages}, config)
-        logger.info(f"Graph processing completed - Thread: {conversation_id}")
-
-        # Extract the assistant's response from the result
-        if result and "messages" in result and result["messages"] and isinstance(result["messages"][-1], AIMessage):
-            response_content = result["messages"][-1].content
-        else:
-            logger.warning(f"No valid response generated from graph - Thread: {conversation_id}")
-            response_content = "I apologize, but I couldn't process your request."
-
-        # Store the assistant's response
-        assistant_message_id = uuid4()
-        await conversation_db.create_message(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            content=response_content,
-            role=MessageRole.ASSISTANT,
-            message_id=assistant_message_id,
-        )
-
-        logger.info(f"Message processing completed - Thread: {conversation_id}, User: {user_id}")
-
-        return response_content
-
-    except ConversationNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except Exception as e:
-        logger.error(f"Error processing message: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process message: {str(e)}",
-        )
-
-
-@router.post("/", response_model=ChatResponse)
-async def process_message(
-    request: ChatRequest, db: DatasetManager = Depends(get_db), conversation_db: ConversationManager = Depends(get_conversation_db)
-) -> ChatResponse:
-    """
-    Process a chat message and return the response.
-
-    This endpoint:
-    1. Validates the conversation exists
-    2. Stores the user message
-    3. Retrieves conversation history
-    4. Processes the message through the graph
-    5. Stores the response in the database
-    6. Returns the complete response to the client
-    """
-    response_content = await process_message_core(
-        message=request.message,
-        user_id=request.user_id,
-        conversation_id=request.conversation_id,
-        message_id=request.message_id,
-        time_zone=request.time_zone,
-        first_day_of_week=request.first_day_of_week,
-        db=db,
-        conversation_db=conversation_db,
-    )
-
-    # Return the complete response
-    return ChatResponse(message=response_content, conversation_id=request.conversation_id)
 
 
 @router.post("/whatsapp", response_class=Response)
@@ -193,8 +44,9 @@ async def process_whatsapp_message(
     1. Validates the request is coming from Twilio
     2. Extracts the sender's WhatsApp number and message
     3. Finds or creates a conversation for this user
-    4. Processes the message through the existing graph
-    5. Returns a TwiML response to send back to WhatsApp
+    4. Stores the user message in the database
+    5. Sends the message to Azure Service Bus for asynchronous processing
+    6. Returns a quick acknowledgment to Twilio
     """
     logger.info(f"WhatsApp message received from {From}, SID: {SmsMessageSid}")
 
@@ -237,21 +89,63 @@ async def process_whatsapp_message(
     # WhatsApp-specific metadata
     metadata = {"whatsapp_id": WaId, "sms_message_sid": SmsMessageSid}
 
-    # Process the message using the shared core function
-    response_content = await process_message_core(
-        message=Body,
+    # Store user message
+    await conversation_db.create_message(
         user_id=user_id,
         conversation_id=conversation_id,
+        content=Body,
+        role=MessageRole.USER,
         message_id=message_id,
         metadata=metadata,
-        db=db,
-        conversation_db=conversation_db,
     )
 
-    # Create TwiML response
-    twiml_response = MessagingResponse()
-    twiml_response.message(response_content)
+    try:
+        # Create queue message
+        queue_message = WhatsAppQueueMessage(
+            from_number=From,
+            body=Body,
+            profile_name=ProfileName,
+            wa_id=WaId,
+            sms_message_sid=SmsMessageSid,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            request_url=request_url,
+            metadata=metadata,
+        )
 
-    logger.info(f"WhatsApp request completed - Thread: {conversation_id}")
+        # Send to Azure Service Bus
+        producer = WhatsAppMessageProducer()
+        await producer.send_message(queue_message)
 
-    return Response(content=str(twiml_response), media_type="application/xml")
+        logger.info(f"WhatsApp message queued - Thread: {conversation_id}")
+
+        # Create immediate TwiML response
+        twiml_response = MessagingResponse()
+        twiml_response.message("Your message is being processed. We'll respond shortly.")
+
+        return Response(content=str(twiml_response), media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error queuing WhatsApp message: {str(e)}")
+
+        # Fallback to synchronous processing if queue fails
+        logger.info(f"Falling back to synchronous processing - Thread: {conversation_id}")
+
+        response_content = await process_message_core(
+            message=Body,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            metadata=metadata,
+            db=db,
+            conversation_db=conversation_db,
+        )
+
+        # Create TwiML response
+        twiml_response = MessagingResponse()
+        twiml_response.message(response_content)
+
+        logger.info(f"WhatsApp request completed (synchronous fallback) - Thread: {conversation_id}")
+
+        return Response(content=str(twiml_response), media_type="application/xml")

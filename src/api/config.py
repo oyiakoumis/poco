@@ -3,9 +3,9 @@
 from pydantic_settings import BaseSettings
 
 from constants import (
+    API_URL,
     DATABASE_CONNECTION_STRING,
     LOGGING_LEVEL,
-    API_URL,
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
     TWILIO_PHONE_NUMBER,
