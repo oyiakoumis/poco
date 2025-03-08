@@ -15,6 +15,7 @@ from document_store.dataset_manager import DatasetManager
 from messaging.models import WhatsAppQueueMessage
 from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
+from utils.text import format_message
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -129,8 +130,11 @@ async def process_whatsapp_message(
         logger.error(f"Error queuing WhatsApp message: {str(e)}")
 
         # Create error message TwiML response
+        error_message = "We're experiencing technical difficulties processing your message. Our team has been notified."
+        formatted_error = format_message(Body, error_message, is_error=True)
+        
         twiml_response = MessagingResponse()
-        twiml_response.message("We're experiencing technical difficulties processing your message. Our team has been notified.")
+        twiml_response.message(formatted_error)
 
         logger.info(f"WhatsApp error notification sent - Thread: {conversation_id}")
 

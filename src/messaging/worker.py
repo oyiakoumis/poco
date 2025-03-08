@@ -17,6 +17,7 @@ from conversation_store.models.message import MessageRole
 from messaging.consumer import WhatsAppMessageConsumer
 from messaging.models import WhatsAppQueueMessage
 from utils.logging import logger
+from utils.text import format_message
 from langgraph.checkpoint.memory import MemorySaver
 from conversation_store.conversation_manager import ConversationManager
 from conversation_store.exceptions import ConversationNotFoundError
@@ -93,32 +94,28 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
             message_id=assistant_message_id,
         )
 
+        # Format the response with the user's message
+        formatted_response = format_message(message.body, response_content)
+        
         # Initialize Twilio client and send response
         twilio_client = Client(api_settings.twilio_account_sid, api_settings.twilio_auth_token)
-        twilio_message = twilio_client.messages.create(
-            body=response_content,
-            from_=api_settings.twilio_phone_number,
-            to=message.from_number
-        )
-        
+        twilio_message = twilio_client.messages.create(body=formatted_response, from_=api_settings.twilio_phone_number, to=message.from_number)
+
         logger.info(f"Message processing completed and sent via WhatsApp - Thread: {message.conversation_id}, SID: {twilio_message.sid}")
 
         return {"status": "success", "message_sid": twilio_message.sid}
 
     except Exception as e:
         logger.error(f"Error processing WhatsApp message: {str(e)}", exc_info=True)
-        
+
         # Create a more informative error message
         error_message = "We're experiencing technical difficulties processing your request. Our team has been notified and is working on it."
-        
+        formatted_error = format_message(message.body, error_message, is_error=True)
+
         # Send error message via WhatsApp without storing in conversation
         try:
             twilio_client = Client(api_settings.twilio_account_sid, api_settings.twilio_auth_token)
-            twilio_message = twilio_client.messages.create(
-                body=error_message,
-                from_=api_settings.twilio_phone_number,
-                to=message.from_number
-            )
+            twilio_message = twilio_client.messages.create(body=formatted_error, from_=api_settings.twilio_phone_number, to=message.from_number)
             logger.info(f"Error notification sent via WhatsApp - Thread: {message.conversation_id}, SID: {twilio_message.sid}")
             return {"status": "error", "message_sid": twilio_message.sid}
         except Exception as twilio_e:
