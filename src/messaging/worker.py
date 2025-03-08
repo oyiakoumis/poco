@@ -24,7 +24,7 @@ from utils.logging import logger
 from utils.text import format_message
 from langgraph.checkpoint.memory import MemorySaver
 from database.conversation_store.conversation_manager import ConversationManager
-from database.conversation_store.exceptions import ConversationNotFoundError
+from database.conversation_store.exceptions import ConversationNotFoundError, InvalidConversationError
 
 
 async def generate_blob_presigned_url(blob_name: str) -> str:
@@ -63,6 +63,10 @@ async def convert_message_to_langchain_format(msg: Message) -> HumanMessage | AI
     if msg.role == MessageRole.USER:
         # Check if message has image media
         if msg.metadata and msg.metadata.get("media_count", 0) > 0:
+            # Log when media is present
+            media_count = msg.metadata["media_count"]
+            logger.info(f"Processing message with {media_count} media item(s) for user {msg.user_id}")
+
             # Create multimodal content
             content = []
 
@@ -116,27 +120,20 @@ async def get_conversation_history(conversation_id: UUID, user_id: str, conversa
         conversation_manager: Manager for accessing conversation data
         twilio_client: Initialized Twilio client
     """
-    try:
-        # Get messages from the conversation
-        messages = await conversation_manager.list_messages(user_id, conversation_id)
-        if not messages:
-            logger.info(f"No messages found for conversation {conversation_id}")
-            return []
+    # Get messages from the conversation
+    messages = await conversation_manager.list_messages(user_id, conversation_id)
+    if not messages:
+        logger.error(f"No messages found for conversation {conversation_id}")
+        raise InvalidConversationError(f"No messages found for conversation {conversation_id}")
 
-        # Convert to LangChain messages
-        langchain_messages = []
-        for msg in messages:
-            langchain_msg = await convert_message_to_langchain_format(msg)
-            if langchain_msg:
-                langchain_messages.append(langchain_msg)
+    # Convert to LangChain messages
+    langchain_messages = []
+    for msg in messages:
+        langchain_msg = await convert_message_to_langchain_format(msg)
+        if langchain_msg:
+            langchain_messages.append(langchain_msg)
 
-        return langchain_messages
-    except ConversationNotFoundError:
-        logger.info(f"Conversation not found: {conversation_id}")
-        return []
-    except Exception as e:
-        logger.error(f"Error getting conversation history for {conversation_id}: {str(e)}", exc_info=True)
-        return []
+    return langchain_messages
 
 
 async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, str]:

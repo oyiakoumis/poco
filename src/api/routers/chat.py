@@ -1,18 +1,17 @@
 """Chat router for handling message processing."""
 
 import time
-from typing import Optional, List, Dict
+from typing import Optional
 from uuid import uuid4
 
 from azure.storage.blob.aio import BlobServiceClient
 from azure.storage.blob import ContentSettings
-from fastapi import APIRouter, Depends, Form, Header, Response, Request
+from fastapi import APIRouter, Form, Header, Response, Request
 from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 
 from config import settings
-from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.models.message import MessageRole
 from database.manager import DatabaseManager
 from messaging.models import MediaItem, WhatsAppQueueMessage
@@ -54,7 +53,7 @@ async def upload_to_blob_storage(media_url: str, content_type: str, message_id: 
             await container_client.create_container()
 
         # Download the media from Twilio
-        media_response = twilio_client.request(method="GET", uri=media_url)
+        media_response = await twilio_client.request_async(method="GET", uri=media_url, allow_redirects=True)
         if not media_response or not media_response.content:
             raise Exception(f"Failed to download media from Twilio")
 
