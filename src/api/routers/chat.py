@@ -4,6 +4,7 @@ import time
 from typing import Optional
 from uuid import uuid4
 
+import httpx
 from azure.storage.blob.aio import BlobServiceClient
 from azure.storage.blob import ContentSettings
 from fastapi import APIRouter, Form, Header, Response, Request
@@ -24,25 +25,12 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 async def upload_to_blob_storage(media_url: str, content_type: str, message_id: uuid4) -> str:
-    """
-    Upload media from Twilio URL to Azure Blob Storage.
-
-    Args:
-        media_url: URL of the media file from Twilio
-        content_type: Content type of the media file
-        message_id: Message ID to use in the blob name
-
-    Returns:
-        Blob name of the uploaded file
-    """
+    """Upload media from Twilio URL to Azure Blob Storage."""
     # Generate a unique blob name using message_id and timestamp
     file_extension = content_type.split("/")[-1]
     if file_extension == "jpeg":
         file_extension = "jpg"  # Standardize jpeg extension
     blob_name = f"{message_id}_{int(time.time())}.{file_extension}"
-
-    # Initialize Twilio client
-    twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
 
     # Initialize Azure Blob Storage client
     async with BlobServiceClient.from_connection_string(settings.azure_storage_connection_string) as blob_service_client:
@@ -52,10 +40,12 @@ async def upload_to_blob_storage(media_url: str, content_type: str, message_id: 
         if not await container_client.exists():
             await container_client.create_container()
 
-        # Download the media from Twilio
-        media_response = await twilio_client.request_async(method="GET", uri=media_url, allow_redirects=True)
-        if not media_response or not media_response.content:
-            raise Exception(f"Failed to download media from Twilio")
+        # Download the media from Twilio using httpx
+        async with httpx.AsyncClient() as client:
+            auth = (settings.twilio_account_sid, settings.twilio_auth_token)
+            media_response = await client.get(media_url, auth=auth, follow_redirects=True)
+            if not media_response or not media_response.content:
+                raise Exception(f"Failed to download media from Twilio")
 
         # Upload to Azure Blob Storage
         blob_client = container_client.get_blob_client(blob_name)
@@ -84,17 +74,7 @@ async def process_whatsapp_message(
     x_twilio_signature: str = Header(None),
     request_url: str = Header(None, alias="X-Original-URL"),
 ) -> Response:
-    """
-    Process incoming WhatsApp messages from Twilio.
-
-    This endpoint:
-    1. Validates the request is coming from Twilio
-    2. Extracts the sender's WhatsApp number and message
-    3. Finds or creates a conversation for this user
-    4. Stores the user message in the database
-    5. Sends the message to Azure Service Bus for asynchronous processing
-    6. Returns a quick acknowledgment to Twilio
-    """
+    """Process incoming WhatsApp messages from Twilio."""
     logger.info(f"WhatsApp message received from {From}, SID: {SmsMessageSid}")
 
     # Validate the request is coming from Twilio

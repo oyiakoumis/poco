@@ -28,15 +28,7 @@ from database.conversation_store.exceptions import ConversationNotFoundError, In
 
 
 async def generate_blob_presigned_url(blob_name: str) -> str:
-    """
-    Generate a presigned URL for a blob in Azure Blob Storage.
-
-    Args:
-        blob_name: Name of the blob in Azure Blob Storage
-
-    Returns:
-        Presigned URL with 24-hour expiry
-    """
+    """Generate a presigned URL for a blob in Azure Blob Storage."""
     async with BlobServiceClient.from_connection_string(settings.azure_storage_connection_string) as blob_service_client:
         # Extract account name from the blob service client
         account_name = blob_service_client.account_name
@@ -111,15 +103,7 @@ async def convert_message_to_langchain_format(msg: Message) -> HumanMessage | AI
 
 
 async def get_conversation_history(conversation_id: UUID, user_id: str, conversation_manager: ConversationManager) -> List[HumanMessage | AIMessage]:
-    """
-    Get conversation history as LangChain messages.
-
-    Args:
-        conversation_id: UUID of the conversation
-        user_id: ID of the user
-        conversation_manager: Manager for accessing conversation data
-        twilio_client: Initialized Twilio client
-    """
+    """Get conversation history as LangChain messages."""
     # Get messages from the conversation
     messages = await conversation_manager.list_messages(user_id, conversation_id)
     if not messages:
