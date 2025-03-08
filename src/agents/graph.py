@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from agents.assistant import Assistant
 from agents.state import State
 from constants import DATABASE_CONNECTION_STRING
-from document_store.dataset_manager import DatasetManager
+from database.document_store.dataset_manager import DatasetManager
 
 
 def create_graph(db: DatasetManager) -> StateGraph:

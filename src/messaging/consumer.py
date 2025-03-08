@@ -23,8 +23,6 @@ class WhatsAppMessageConsumer:
 
     async def process_messages(self, max_message_count: int = 10, max_wait_time: int = 5):
         """Process messages from the Azure Service Bus queue."""
-        logger.info(f"Starting to process messages from queue: {self.settings.queue_name}")
-
         client = ServiceBusClient.from_connection_string(conn_str=self.settings.connection_string)
 
         async with client:

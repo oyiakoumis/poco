@@ -3,8 +3,8 @@
 from datetime import date, datetime
 from typing import Any, List, Optional, Set
 
-from document_store.models.types.base import BaseType
-from document_store.models.types.constants import FieldType
+from database.document_store.models.types.base import BaseType
+from database.document_store.models.types.constants import FieldType
 
 
 class BooleanType(BaseType):

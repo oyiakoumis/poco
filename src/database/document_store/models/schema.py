@@ -4,9 +4,9 @@ from typing import List, Optional, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
-from document_store.exceptions import InvalidDatasetSchemaError, InvalidRecordDataError
-from document_store.models.field import SchemaField
-from document_store.models.types import TypeRegistry
+from database.document_store.exceptions import InvalidDatasetSchemaError, InvalidRecordDataError
+from database.document_store.models.field import SchemaField
+from database.document_store.models.types import TypeRegistry
 
 
 class DatasetSchema(BaseModel):

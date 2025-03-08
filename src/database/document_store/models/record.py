@@ -2,9 +2,9 @@
 
 from typing import Any, Dict
 
-from document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
-from document_store.models.schema import DatasetSchema
-from document_store.models.types import FieldType, TypeRegistry
+from database.document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
+from database.document_store.models.schema import DatasetSchema
+from database.document_store.models.types import FieldType, TypeRegistry
 from models.base import BaseDocument, PydanticUUID
 
 RecordData = Dict[str, Any]

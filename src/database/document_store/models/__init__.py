@@ -1,9 +1,9 @@
 """Models package for document store."""
 
-from document_store.models.dataset import (
+from database.document_store.models.dataset import (
     Dataset,
 )
-from document_store.models.query import (
+from database.document_store.models.query import (
     AggregationField,
     AggregationType,
     ComparisonOperator,
@@ -11,7 +11,7 @@ from document_store.models.query import (
     FilterExpression,
     RecordQuery,
 )
-from document_store.models.record import Record
+from database.document_store.models.record import Record
 
 __all__ = [
     "Dataset",

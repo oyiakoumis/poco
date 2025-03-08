@@ -12,22 +12,22 @@ from twilio.rest import Client
 
 from agents.graph import create_graph
 from api.config import settings as api_settings
-from api.dependencies import get_conversation_db, get_db
-from conversation_store.models.message import MessageRole
+from database.manager import DatabaseManager
+from database.conversation_store.models.message import MessageRole
 from messaging.consumer import WhatsAppMessageConsumer
 from messaging.models import WhatsAppQueueMessage
 from utils.logging import logger
 from utils.text import format_message
 from langgraph.checkpoint.memory import MemorySaver
-from conversation_store.conversation_manager import ConversationManager
-from conversation_store.exceptions import ConversationNotFoundError
+from database.conversation_store.conversation_manager import ConversationManager
+from database.conversation_store.exceptions import ConversationNotFoundError
 
 
-async def get_conversation_history(conversation_id: UUID, user_id: str, conversation_db: ConversationManager) -> List[HumanMessage | AIMessage]:
+async def get_conversation_history(conversation_id: UUID, user_id: str, conversation_manager: ConversationManager) -> List[HumanMessage | AIMessage]:
     """Get conversation history as LangChain messages."""
     try:
         # Get messages from the conversation
-        messages = await conversation_db.list_messages(user_id, conversation_id)
+        messages = await conversation_manager.list_messages(user_id, conversation_id)
 
         # Convert to LangChain messages
         langchain_messages = []
@@ -50,16 +50,17 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
     """Process a WhatsApp message from the queue."""
     logger.info(f"Processing WhatsApp message from queue: {message.sms_message_sid}")
 
-    # Get dependencies
-    db = get_db()
-    conversation_db = get_conversation_db()
+    # Get database managers
+    database_manager = DatabaseManager()
+    dataset_db = await database_manager.setup_dataset_manager()
+    conversation_db = await database_manager.setup_conversation_manager()
 
     try:
         # Get conversation history
         messages = await get_conversation_history(message.conversation_id, message.user_id, conversation_db)
 
         # Get the graph
-        graph = create_graph(db)
+        graph = create_graph(dataset_db)
         graph = graph.compile(checkpointer=MemorySaver())
 
         # Configuration for the graph
@@ -96,7 +97,7 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
 
         # Format the response with the user's message
         formatted_response = format_message(message.body, response_content)
-        
+
         # Initialize Twilio client and send response
         twilio_client = Client(api_settings.twilio_account_sid, api_settings.twilio_auth_token)
         twilio_message = twilio_client.messages.create(body=formatted_response, from_=api_settings.twilio_phone_number, to=message.from_number)

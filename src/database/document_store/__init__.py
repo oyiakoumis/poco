@@ -1,7 +1,7 @@
 """Document store package."""
 
-from document_store.dataset_manager import DatasetManager
-from document_store.exceptions import (
+from database.document_store.dataset_manager import DatasetManager
+from database.document_store.exceptions import (
     DatabaseError,
     DatasetNameExistsError,
     DatasetNotFoundError,
@@ -13,7 +13,7 @@ from document_store.exceptions import (
     RecordNotFoundError,
     TypeConversionError,
 )
-from document_store.models import Dataset, Record
+from database.document_store.models import Dataset, Record
 
 __all__ = [
     # Main class

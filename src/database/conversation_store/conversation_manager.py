@@ -11,14 +11,14 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
 )
 
-from conversation_store.exceptions import (
+from database.conversation_store.exceptions import (
     ConversationNotFoundError,
     InvalidConversationError,
     InvalidMessageError,
     MessageNotFoundError,
 )
-from conversation_store.models.conversation import Conversation
-from conversation_store.models.message import Message, MessageRole
+from database.conversation_store.models.conversation import Conversation
+from database.conversation_store.models.message import Message, MessageRole
 from utils.logging import logger
 
 

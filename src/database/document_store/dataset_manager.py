@@ -16,7 +16,7 @@ from motor.motor_asyncio import (
 from pymongo.errors import BulkWriteError
 from pymongo.operations import SearchIndexModel
 
-from document_store.exceptions import (
+from database.document_store.exceptions import (
     DatabaseError,
     DatasetNameExistsError,
     DatasetNotFoundError,
@@ -24,13 +24,13 @@ from document_store.exceptions import (
     InvalidRecordDataError,
     RecordNotFoundError,
 )
-from document_store.models import Dataset, Record
-from document_store.models.field import SchemaField
-from document_store.models.query import RecordQuery
-from document_store.models.record import RecordData
-from document_store.models.schema import DatasetSchema
-from document_store.models.types import FieldType, TypeRegistry
-from document_store.pipeline import build_aggregation_pipeline
+from database.document_store.models import Dataset, Record
+from database.document_store.models.field import SchemaField
+from database.document_store.models.query import RecordQuery
+from database.document_store.models.record import RecordData
+from database.document_store.models.schema import DatasetSchema
+from database.document_store.models.types import FieldType, TypeRegistry
+from database.document_store.pipeline import build_aggregation_pipeline
 from utils.logging import logger
 
 

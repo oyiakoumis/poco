@@ -21,7 +21,7 @@ from agents.tools.database_operator import (
 )
 from agents.tools.output_formatter import output_formatter
 from agents.tools.resolve_temporal_reference import TemporalReferenceTool
-from document_store.dataset_manager import DatasetManager
+from database.document_store.dataset_manager import DatasetManager
 from utils.logging import logger
 
 ASSISTANT_SYSTEM_MESSAGE = f"""

@@ -4,8 +4,8 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from document_store.exceptions import InvalidDatasetSchemaError
-from document_store.models.types import FieldType, TypeRegistry
+from database.document_store.exceptions import InvalidDatasetSchemaError
+from database.document_store.models.types import FieldType, TypeRegistry
 
 
 class SchemaField(BaseModel):

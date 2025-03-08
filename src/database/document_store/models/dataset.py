@@ -1,6 +1,6 @@
 """Dataset model and related utilities."""
 
-from document_store.models.schema import DatasetSchema
+from database.document_store.models.schema import DatasetSchema
 from models.base import BaseDocument
 
 

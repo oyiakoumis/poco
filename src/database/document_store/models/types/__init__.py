@@ -1,14 +1,14 @@
 """Type definitions and implementations for the document store module."""
 
-from document_store.models.types.base import BaseType
-from document_store.models.types.constants import (
+from database.document_store.models.types.base import BaseType
+from database.document_store.models.types.constants import (
     SAFE_TYPE_CONVERSIONS,
     VALID_AGGREGATIONS,
     AggregationType,
     FieldType,
 )
-from document_store.models.types.registry import TypeRegistry
-from document_store.models.types.types import (
+from database.document_store.models.types.registry import TypeRegistry
+from database.document_store.models.types.types import (
     BooleanType,
     DateTimeType,
     DateType,

@@ -8,10 +8,9 @@ from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
 
 from api.config import settings
-from api.dependencies import get_conversation_db, get_db
-from conversation_store.conversation_manager import ConversationManager
-from conversation_store.models.message import MessageRole
-from document_store.dataset_manager import DatasetManager
+from database.conversation_store.conversation_manager import ConversationManager
+from database.conversation_store.models.message import MessageRole
+from database.manager import DatabaseManager
 from messaging.models import WhatsAppQueueMessage
 from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
@@ -33,8 +32,6 @@ async def process_whatsapp_message(
     ProfileName: Optional[str] = Form(None),
     WaId: str = Form(...),
     SmsMessageSid: str = Form(...),
-    db: DatasetManager = Depends(get_db),
-    conversation_db: ConversationManager = Depends(get_conversation_db),
     x_twilio_signature: str = Header(None),
     request_url: str = Header(None, alias="X-Original-URL"),
 ) -> Response:
@@ -64,6 +61,9 @@ async def process_whatsapp_message(
 
     # Use the WhatsApp number as the user ID
     user_id = From
+
+    database_manager = DatabaseManager()
+    conversation_db = await database_manager.setup_conversation_manager()
 
     # Find existing conversations for this user
     conversations = await conversation_db.list_conversations(user_id)
@@ -122,7 +122,7 @@ async def process_whatsapp_message(
 
         # Create immediate TwiML response
         twiml_response = MessagingResponse()
-        twiml_response.message("Your message is being processed. We'll respond shortly.")
+        twiml_response.message("Your message is being processed. We'll respond to it shortly.")
 
         return Response(content=str(twiml_response), media_type="application/xml")
 
@@ -132,10 +132,10 @@ async def process_whatsapp_message(
         # Create error message TwiML response
         error_message = "We're experiencing technical difficulties processing your message. Our team has been notified."
         formatted_error = format_message(Body, error_message, is_error=True)
-        
+
         twiml_response = MessagingResponse()
         twiml_response.message(formatted_error)
 
         logger.info(f"WhatsApp error notification sent - Thread: {conversation_id}")
 
-        return Response(content=str(twiml_response), media_type="application/xml")
+        return Response(content=str(twiml_response), status_code=500, media_type="application/xml")

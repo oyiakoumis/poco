@@ -5,9 +5,9 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from constants import DATABASE_CONNECTION_STRING
-from document_store.dataset_manager import DatasetManager
-from document_store.models.field import SchemaField
-from document_store.models.query import (
+from database.document_store.dataset_manager import DatasetManager
+from database.document_store.models.field import SchemaField
+from database.document_store.models.query import (
     AggregationField,
     ComparisonOperator,
     FilterCondition,
@@ -15,8 +15,8 @@ from document_store.models.query import (
     LogicalOperator,
     RecordQuery,
 )
-from document_store.models.schema import DatasetSchema
-from document_store.models.types import AggregationType, FieldType
+from database.document_store.models.schema import DatasetSchema
+from database.document_store.models.types import AggregationType, FieldType
 
 
 class ExampleDatasetManager(DatasetManager):

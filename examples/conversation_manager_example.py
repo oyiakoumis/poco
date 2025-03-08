@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from constants import DATABASE_CONNECTION_STRING
-from conversation_store.conversation_manager import ConversationManager
-from conversation_store.models.message import MessageRole
+from database.conversation_store.conversation_manager import ConversationManager
+from database.conversation_store.models.message import MessageRole
 
 
 class ExampleConversationManager(ConversationManager):
@@ -141,7 +141,7 @@ async def main():
             )
             additional_message_ids.append(msg_id)
             assert msg_id is not None, f"Additional message {i+1} ID should not be None"
-        
+
         # Verify we now have 5 messages total
         all_messages = await manager.list_messages(user_id, conversation_id)
         assert len(all_messages) == 5, "Should have 5 messages total after adding 3 more"
@@ -168,7 +168,7 @@ async def main():
         except Exception as e:
             print(f"Successfully verified message deletion: {str(e)}")
             assert "not found" in str(e).lower(), "Exception should indicate message not found"
-        
+
         # Verify we now have 4 messages after deletion
         remaining_messages = await manager.list_messages(user_id, conversation_id)
         assert len(remaining_messages) == 4, "Should have 4 messages after deleting 1"

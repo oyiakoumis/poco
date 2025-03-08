@@ -1,9 +1,10 @@
 """Message models for Azure Service Bus."""
 
-from typing import Dict, Optional
-from uuid import UUID
+from typing import Optional
 
 from pydantic import BaseModel
+
+from models.base import PydanticUUID
 
 
 class WhatsAppQueueMessage(BaseModel):
@@ -15,6 +16,6 @@ class WhatsAppQueueMessage(BaseModel):
     wa_id: str
     sms_message_sid: str
     user_id: str
-    conversation_id: UUID
-    message_id: UUID
+    conversation_id: PydanticUUID
+    message_id: PydanticUUID
     request_url: Optional[str] = None

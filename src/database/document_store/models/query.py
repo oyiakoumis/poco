@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from document_store.exceptions import InvalidRecordDataError
-from document_store.models.schema import DatasetSchema
-from document_store.models.types import AggregationType, FieldType, TypeRegistry
+from database.document_store.exceptions import InvalidRecordDataError
+from database.document_store.models.schema import DatasetSchema
+from database.document_store.models.types import AggregationType, FieldType, TypeRegistry
 
 
 class SortOrder(str, Enum):
