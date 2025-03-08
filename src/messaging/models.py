@@ -18,4 +18,3 @@ class WhatsAppQueueMessage(BaseModel):
     conversation_id: UUID
     message_id: UUID
     request_url: Optional[str] = None
-    metadata: Optional[Dict] = None

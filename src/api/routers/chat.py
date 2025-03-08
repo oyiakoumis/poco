@@ -111,7 +111,6 @@ async def process_whatsapp_message(
             conversation_id=conversation_id,
             message_id=message_id,
             request_url=request_url,
-            metadata=metadata,
         )
 
         # Send to Azure Service Bus
@@ -129,23 +128,10 @@ async def process_whatsapp_message(
     except Exception as e:
         logger.error(f"Error queuing WhatsApp message: {str(e)}")
 
-        # Fallback to synchronous processing if queue fails
-        logger.info(f"Falling back to synchronous processing - Thread: {conversation_id}")
-
-        response_content = await process_message_core(
-            message=Body,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            message_id=message_id,
-            metadata=metadata,
-            db=db,
-            conversation_db=conversation_db,
-        )
-
-        # Create TwiML response
+        # Create error message TwiML response
         twiml_response = MessagingResponse()
-        twiml_response.message(response_content)
+        twiml_response.message("We're experiencing technical difficulties processing your message. Our team has been notified.")
 
-        logger.info(f"WhatsApp request completed (synchronous fallback) - Thread: {conversation_id}")
+        logger.info(f"WhatsApp error notification sent - Thread: {conversation_id}")
 
         return Response(content=str(twiml_response), media_type="application/xml")

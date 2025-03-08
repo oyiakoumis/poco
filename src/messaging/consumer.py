@@ -15,7 +15,7 @@ from utils.logging import logger
 class WhatsAppMessageConsumer:
     """Consumer for processing WhatsApp messages from Azure Service Bus."""
 
-    def __init__(self, process_func: Callable[[WhatsAppQueueMessage], Awaitable[str]], service_bus_settings: ServiceBusSettings = None):
+    def __init__(self, process_func: Callable[[WhatsAppQueueMessage], Awaitable[dict]], service_bus_settings: ServiceBusSettings = None):
         """Initialize the consumer with settings and processing function."""
         self.settings = service_bus_settings or ServiceBusSettings()
         self.process_func = process_func
@@ -40,13 +40,10 @@ class WhatsAppMessageConsumer:
 
                         logger.info(f"Processing message: {whatsapp_msg.sms_message_sid}")
 
-                        # Process the message
-                        response_content = await self.process_func(whatsapp_msg)
+                        # Process the message - now sends WhatsApp message directly
+                        result = await self.process_func(whatsapp_msg)
 
-                        # Send response via Twilio
-                        self.twilio_client.messages.create(body=response_content, from_=api_settings.twilio_phone_number, to=whatsapp_msg.from_number)
-
-                        logger.info(f"Response sent to WhatsApp: {whatsapp_msg.sms_message_sid}")
+                        logger.info(f"Message processed with status: {result.get('status', 'unknown')}, SID: {result.get('message_sid', 'N/A')}")
 
                         # Complete the message
                         await receiver.complete_message(msg)
