@@ -7,7 +7,11 @@ from pydantic import BaseModel, Field
 
 from database.document_store.exceptions import InvalidRecordDataError
 from database.document_store.models.schema import DatasetSchema
-from database.document_store.models.types import AggregationType, FieldType, TypeRegistry
+from database.document_store.models.types import (
+    AggregationType,
+    FieldType,
+    TypeRegistry,
+)
 
 
 class SortOrder(str, Enum):

@@ -6,8 +6,8 @@ from typing import Awaitable, Callable
 from azure.servicebus.aio import ServiceBusClient
 from twilio.rest import Client
 
-from config import settings as api_settings
 from config import settings
+from config import settings as api_settings
 from messaging.models import WhatsAppQueueMessage
 from utils.logging import logger
 

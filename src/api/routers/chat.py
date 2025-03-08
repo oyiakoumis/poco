@@ -5,12 +5,12 @@ from typing import Optional
 from uuid import uuid4
 
 import httpx
-from azure.storage.blob.aio import BlobServiceClient
 from azure.storage.blob import ContentSettings
-from fastapi import APIRouter, Form, Header, Response, Request
+from azure.storage.blob.aio import BlobServiceClient
+from fastapi import APIRouter, Form, Header, Request, Response
 from twilio.request_validator import RequestValidator
-from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
+from twilio.twiml.messaging_response import MessagingResponse
 
 from config import settings
 from database.conversation_store.models.message import MessageRole
@@ -19,7 +19,6 @@ from messaging.models import MediaItem, WhatsAppQueueMessage
 from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
 from utils.text import format_message
-
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -192,12 +191,15 @@ async def process_whatsapp_message(
 
         logger.info(f"WhatsApp message queued - Thread: {conversation_id}")
 
-        # Create immediate TwiML response
+        # Create immediate TwiML response with friendly message and emojis
         twiml_response = MessagingResponse()
-        response_text = "Your message is being processed. We'll respond to it shortly."
+        response_message = "✨ Thanks for your message! 🙏 We're processing it now and will get back to you shortly."
         if unsupported_media:
-            response_text += " Note: Non-image media attachments were ignored."
-        twiml_response.message(response_text)
+            response_message += " 📝 Note: We currently only support image attachments, other media types were not processed."
+        
+        # Use format_message to include a reference to the user's message
+        formatted_response = format_message(Body, response_message)
+        twiml_response.message(formatted_response)
 
         return Response(content=str(twiml_response), media_type="application/xml")
 

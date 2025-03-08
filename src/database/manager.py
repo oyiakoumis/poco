@@ -1,6 +1,7 @@
 """Database setup and initialization using a singleton pattern."""
 
 import asyncio
+
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from config import settings

@@ -2,7 +2,10 @@
 
 from typing import Any, Dict
 
-from database.document_store.exceptions import InvalidFieldValueError, InvalidRecordDataError
+from database.document_store.exceptions import (
+    InvalidFieldValueError,
+    InvalidRecordDataError,
+)
 from database.document_store.models.schema import DatasetSchema
 from database.document_store.models.types import FieldType, TypeRegistry
 from models.base import BaseDocument, PydanticUUID

@@ -1,6 +1,7 @@
 """Azure Service Bus and Blob Storage configuration."""
 
 from pydantic_settings import BaseSettings
+
 from constants import (
     API_URL,
     AZURE_BLOB_CONTAINER_NAME,
