@@ -18,6 +18,7 @@
     "initlist",
     "levelname",
     "levelno",
+    "multimodal",
     "relativedelta",
     "servicebus",
     "sseclient",
