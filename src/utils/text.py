@@ -23,15 +23,11 @@ def format_message(user_message: str, response: str, is_error: bool = False) -> 
     """Format a message with the user's message and the response"""
     trimmed_user_message = trim_message(user_message)
 
+    formatted_message = f"> {trimmed_user_message}\n"
+
     if is_error:
-        # Error message with empathetic tone and helpful emojis
-        error_message = f"⚠️ We encountered an issue with your request:\n"
-        error_message += f'"{trimmed_user_message}"\n\n'
-        error_message += f"🔧 {response}"
-        return error_message
+        formatted_message += f"🔧 {response}"
     else:
-        # Regular message with friendly emojis
-        regular_message = f"✨ In response to your message:\n"
-        regular_message += f'"{trimmed_user_message}"\n\n'
-        regular_message += f"📝 {response}"
-        return regular_message
+        formatted_message += f"{response}"
+
+    return formatted_message

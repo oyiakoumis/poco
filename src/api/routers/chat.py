@@ -26,6 +26,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 class Command(str, Enum):
     """Enum for WhatsApp commands."""
+
     NEW_CONVERSATION = "/new"
 
 
@@ -76,8 +77,8 @@ def extract_message_after_command(message: str, command: str) -> str:
     """Extract the message content after a command."""
     if not message.strip().startswith(command):
         return message
-        
-    return message[message.find(command) + len(command):].strip()
+
+    return message[message.find(command) + len(command) :].strip()
 
 
 @router.post("/whatsapp", response_class=Response)
@@ -121,7 +122,7 @@ async def process_whatsapp_message(
 
     # Flag to track if a new conversation was created by command
     new_conversation_created = False
-    
+
     if is_command(Body, Command.NEW_CONVERSATION):
         # Create a new conversation regardless of existing ones
         conversation_id = uuid4()
@@ -213,11 +214,11 @@ async def process_whatsapp_message(
 
         # Create immediate TwiML response with friendly message and emojis
         twiml_response = MessagingResponse()
-        response_message = "✨ Thanks for your message! 🙏 We're processing it now and will get back to you shortly."
-        
+        response_message = "Got it! Give me just a second..."
+
         if new_conversation_created:
             response_message += "\n\n🆕 A new conversation has been created as requested."
-            
+
         if unsupported_media:
             response_message += "\n\n📝 Note: We currently only support image attachments."
         # Use format_message to include a reference to the user's message
