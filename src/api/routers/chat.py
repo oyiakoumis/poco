@@ -1,13 +1,8 @@
 """Chat router for handling message processing."""
 
-from enum import Enum
-import time
 from typing import Optional
 from uuid import uuid4
 
-import httpx
-from azure.storage.blob import ContentSettings
-from azure.storage.blob.aio import BlobServiceClient
 from fastapi import APIRouter, Form, Header, Request, Response
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
@@ -19,66 +14,22 @@ from database.manager import DatabaseManager
 from messaging.models import MediaItem, WhatsAppQueueMessage
 from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
-from utils.text import format_message
+from utils.media_storage import upload_to_blob_storage
+from utils.text import (
+    Command,
+    build_notification_string,
+    extract_message_after_command,
+    format_message,
+    is_command,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-
-class Command(str, Enum):
-    """Enum for WhatsApp commands."""
-
-    NEW_CONVERSATION = "/new"
-
-
-async def upload_to_blob_storage(media_url: str, content_type: str, message_id: uuid4) -> str:
-    """Upload media from Twilio URL to Azure Blob Storage."""
-    # Generate a unique blob name using message_id and timestamp
-    file_extension = content_type.split("/")[-1]
-    if file_extension == "jpeg":
-        file_extension = "jpg"  # Standardize jpeg extension
-    blob_name = f"{message_id}_{int(time.time())}.{file_extension}"
-
-    # Initialize Azure Blob Storage client
-    async with BlobServiceClient.from_connection_string(settings.azure_storage_connection_string) as blob_service_client:
-        container_client = blob_service_client.get_container_client(settings.azure_blob_container_name)
-
-        # Create container if it doesn't exist
-        if not await container_client.exists():
-            await container_client.create_container()
-
-        # Download the media from Twilio using httpx
-        async with httpx.AsyncClient() as client:
-            auth = (settings.twilio_account_sid, settings.twilio_auth_token)
-            media_response = await client.get(media_url, auth=auth, follow_redirects=True)
-            if not media_response or not media_response.content:
-                raise Exception(f"Failed to download media from Twilio")
-
-        # Upload to Azure Blob Storage
-        blob_client = container_client.get_blob_client(blob_name)
-        content_settings = ContentSettings(content_type=content_type)
-        await blob_client.upload_blob(media_response.content, content_settings=content_settings)
-
-        logger.info(f"Media uploaded to Azure Blob Storage: {blob_name}")
-        return blob_name
 
 
 def validate_twilio_request(request_data: dict, signature: str, url: str) -> bool:
     """Validate that the request is coming from Twilio."""
     validator = RequestValidator(settings.twilio_auth_token)
     return validator.validate(url, request_data, signature)
-
-
-def is_command(message: str, command: str) -> bool:
-    """Check if the message starts with a specific command."""
-    return message.strip().startswith(command)
-
-
-def extract_message_after_command(message: str, command: str) -> str:
-    """Extract the message content after a command."""
-    if not message.strip().startswith(command):
-        return message
-
-    return message[message.find(command) + len(command) :].strip()
 
 
 @router.post("/whatsapp", response_class=Response)
@@ -212,15 +163,19 @@ async def process_whatsapp_message(
 
         logger.info(f"WhatsApp message queued - Thread: {conversation_id}")
 
-        # Create immediate TwiML response with friendly message and emojis
+        # Create immediate TwiML response
         twiml_response = MessagingResponse()
         response_message = "Got it! Give me just a second..."
 
-        if new_conversation_created:
-            response_message += "\n\n🆕 A new conversation has been created as requested."
+        # Build concise notification string if needed
+        notification_str = build_notification_string({
+            "new_conversation": new_conversation_created,
+            "unsupported_media": unsupported_media
+        })
 
-        if unsupported_media:
-            response_message += "\n\n📝 Note: We currently only support image attachments."
+        if notification_str:
+            response_message += f"\n\n{notification_str}"
+            
         # Use format_message to include a reference to the user's message
         formatted_response = format_message(Body, response_message)
         twiml_response.message(formatted_response)
