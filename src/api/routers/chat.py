@@ -1,5 +1,6 @@
 """Chat router for handling message processing."""
 
+from enum import Enum
 import time
 from typing import Optional
 from uuid import uuid4
@@ -21,6 +22,11 @@ from utils.logging import logger
 from utils.text import format_message
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+class Command(str, Enum):
+    """Enum for WhatsApp commands."""
+    NEW_CONVERSATION = "/new"
 
 
 async def upload_to_blob_storage(media_url: str, content_type: str, message_id: uuid4) -> str:
@@ -59,6 +65,19 @@ def validate_twilio_request(request_data: dict, signature: str, url: str) -> boo
     """Validate that the request is coming from Twilio."""
     validator = RequestValidator(settings.twilio_auth_token)
     return validator.validate(url, request_data, signature)
+
+
+def is_command(message: str, command: str) -> bool:
+    """Check if the message starts with a specific command."""
+    return message.strip().startswith(command)
+
+
+def extract_message_after_command(message: str, command: str) -> str:
+    """Extract the message content after a command."""
+    if not message.strip().startswith(command):
+        return message
+        
+    return message[message.find(command) + len(command):].strip()
 
 
 @router.post("/whatsapp", response_class=Response)
@@ -100,24 +119,25 @@ async def process_whatsapp_message(
     database_manager = DatabaseManager()
     conversation_db = await database_manager.setup_conversation_manager()
 
-    # Find existing conversations for this user
-    conversations = await conversation_db.list_conversations(user_id)
-
-    # Find a conversation with WhatsApp metadata or create a new one
-    conversation_id = None
-    for conv in conversations:
-        # Check if this is a WhatsApp conversation
-        if await conversation_db.conversation_exists(user_id, conv.id):
-            conversation_id = conv.id
-            break
-
-    # If no conversation found, create a new one
-    if not conversation_id:
+    # Flag to track if a new conversation was created by command
+    new_conversation_created = False
+    
+    if is_command(Body, Command.NEW_CONVERSATION):
+        # Create a new conversation regardless of existing ones
+        conversation_id = uuid4()
+        await conversation_db.create_conversation(user_id, str(conversation_id), conversation_id)
+        # Remove the command from the message body for processing
+        Body = extract_message_after_command(Body, Command.NEW_CONVERSATION)
+        new_conversation_created = True
+    elif latest_conversation := await conversation_db.get_latest_conversation(user_id):
+        # Use the latest conversation if it exists, otherwise create a new one
+        conversation_id = latest_conversation.id
+    else:
+        # No conversation found, create a new one
         conversation_id = uuid4()
         # Create a title based on the user's profile name or number
-        title = f"WhatsApp: {ProfileName or From}"
-        logger.info(f"Creating new WhatsApp conversation: {conversation_id}, Title: {title}")
-        await conversation_db.create_conversation(user_id, title, conversation_id)
+        logger.info(f"Creating new WhatsApp conversation: {conversation_id}")
+        await conversation_db.create_conversation(user_id, str(conversation_id), conversation_id)
 
     # Create a message ID for the incoming message
     message_id = uuid4()
@@ -194,9 +214,12 @@ async def process_whatsapp_message(
         # Create immediate TwiML response with friendly message and emojis
         twiml_response = MessagingResponse()
         response_message = "✨ Thanks for your message! 🙏 We're processing it now and will get back to you shortly."
+        
+        if new_conversation_created:
+            response_message += "\n\n🆕 A new conversation has been created as requested."
+            
         if unsupported_media:
             response_message += "\n\n📝 Note: We currently only support image attachments."
-        
         # Use format_message to include a reference to the user's message
         formatted_response = format_message(Body, response_message)
         twiml_response.message(formatted_response)

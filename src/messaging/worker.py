@@ -18,7 +18,6 @@ from config import settings
 from config import settings as api_settings
 from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.exceptions import (
-    ConversationNotFoundError,
     InvalidConversationError,
 )
 from database.conversation_store.models.message import Message, MessageRole

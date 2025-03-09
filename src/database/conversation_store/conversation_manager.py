@@ -140,6 +140,25 @@ class ConversationManager:
 
         except Exception as e:
             raise InvalidConversationError(f"Failed to list conversations: {str(e)}")
+            
+    async def get_latest_conversation(self, user_id: str) -> Optional[Conversation]:
+        """Gets the most recently updated conversation for a user."""
+        try:
+            logger.info(f"Getting latest conversation for user {user_id}")
+            doc = await self._conversations.find_one(
+                {"user_id": user_id},
+                sort=[("updated_at", -1)]  # Sort by last updated, newest first
+            )
+            
+            if not doc:
+                logger.info(f"No conversations found for user {user_id}")
+                return None
+                
+            return Conversation.model_validate(doc)
+            
+        except Exception as e:
+            logger.error(f"Failed to get latest conversation: {str(e)}")
+            return None
 
     async def update_conversation(
         self,
