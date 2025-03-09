@@ -195,7 +195,7 @@ async def process_whatsapp_message(
         twiml_response = MessagingResponse()
         response_message = "✨ Thanks for your message! 🙏 We're processing it now and will get back to you shortly."
         if unsupported_media:
-            response_message += " 📝 Note: We currently only support image attachments, other media types were not processed."
+            response_message += "\n\n📝 Note: We currently only support image attachments."
         
         # Use format_message to include a reference to the user's message
         formatted_response = format_message(Body, response_message)
