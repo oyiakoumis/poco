@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -59,6 +59,38 @@ class UpdateRecordArgs(RecordArgs):
     data: RecordData = Field(
         description="Updated record data that matches the dataset's defined schema",
         example={"feedback_text": "Great product, documentation has improved", "rating": 5},
+    )
+
+
+class BatchCreateRecordsArgs(DatasetArgs):
+    records: List[RecordData] = Field(
+        description="List of record data objects that match the dataset's defined schema",
+        example=[{"feedback_text": "Great product, but needs better documentation", "rating": 4}, {"feedback_text": "Works well, very intuitive", "rating": 5}],
+        min_items=1,
+    )
+
+
+class RecordUpdate(BaseModel):
+    record_id: PydanticUUID = Field(description="Unique identifier for the record to update", json_schema_extra={"examples": ["507f1f77bcf86cd799439012"]})
+    data: RecordData = Field(
+        description="Updated record data that matches the dataset's defined schema", example={"feedback_text": "Updated feedback", "rating": 5}
+    )
+
+
+class BatchUpdateRecordsArgs(DatasetArgs):
+    records: List[RecordUpdate] = Field(
+        description="List of record updates, each containing record_id and data",
+        example=[
+            {"record_id": "507f1f77bcf86cd799439012", "data": {"feedback_text": "Updated feedback", "rating": 5}},
+            {"record_id": "507f1f77bcf86cd799439013", "data": {"feedback_text": "Another update", "rating": 4}},
+        ],
+        min_items=1,
+    )
+
+
+class BatchDeleteRecordsArgs(DatasetArgs):
+    record_ids: List[PydanticUUID] = Field(
+        description="List of record IDs to delete from the dataset", example=["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"], min_items=1
     )
 
 
@@ -247,6 +279,47 @@ class AddFieldOperator(BaseDBOperator):
         user_id = config.get("configurable", {}).get("user_id")
         args = AddFieldArgs(**kwargs)
         await self.db.add_field(user_id, args.dataset_id, args.field)
+
+
+class BatchCreateRecordsOperator(BaseDBOperator):
+    name: str = "batch_create_records"
+    description: str = "Create multiple records in a dataset at once"
+    args_schema: Type[BaseModel] = BatchCreateRecordsArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, List[str]]:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = BatchCreateRecordsArgs(**kwargs)
+        record_ids = await self.db.batch_create_records(user_id, args.dataset_id, args.records)
+        return {"record_ids": [str(record_id) for record_id in record_ids]}
+
+
+class BatchUpdateRecordsOperator(BaseDBOperator):
+    name: str = "batch_update_records"
+    description: str = "Update multiple records in a dataset at once"
+    args_schema: Type[BaseModel] = BatchUpdateRecordsArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = BatchUpdateRecordsArgs(**kwargs)
+
+        # Convert RecordUpdate objects to the dictionary format expected by batch_update_records
+        record_updates = [{"record_id": record_update.record_id, "data": record_update.data} for record_update in args.records]
+
+        updated_ids = await self.db.batch_update_records(user_id, args.dataset_id, record_updates)
+        return {"updated_record_ids": [str(record_id) for record_id in updated_ids]}
+
+
+class BatchDeleteRecordsOperator(BaseDBOperator):
+    name: str = "batch_delete_records"
+    description: str = "Delete multiple records from a dataset at once"
+    args_schema: Type[BaseModel] = BatchDeleteRecordsArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
+        user_id = config.get("configurable", {}).get("user_id")
+        args = BatchDeleteRecordsArgs(**kwargs)
+
+        deleted_ids = await self.db.batch_delete_records(user_id, args.dataset_id, args.record_ids)
+        return {"deleted_record_ids": [str(record_id) for record_id in deleted_ids]}
 
 
 class SearchSimilarDatasetsArgs(BaseModel):

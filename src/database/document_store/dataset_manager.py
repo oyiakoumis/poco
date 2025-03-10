@@ -1,9 +1,9 @@
 """Dataset manager for MongoDB operations."""
-
+from __future__ import annotations
 from asyncio import sleep
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
 import pymongo
@@ -32,6 +32,9 @@ from database.document_store.models.schema import DatasetSchema
 from database.document_store.models.types import FieldType, TypeRegistry
 from database.document_store.pipeline import build_aggregation_pipeline
 from utils.logging import logger
+
+if TYPE_CHECKING:
+    from agents.tools.database_operator import RecordUpdate
 
 
 class IndexStatus(Enum):
@@ -381,22 +384,7 @@ class DatasetManager:
     async def _prepare_record_updates(
         self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
     ) -> List[pymongo.UpdateOne]:
-        """Prepares bulk update operations for records.
-
-        Args:
-            user_id: User ID
-            dataset_id: Dataset ID
-            field_name: Field being updated
-            old_field: Original field definition
-            field_update: New field definition
-            session: MongoDB session for transaction
-
-        Returns:
-            List of UpdateOne operations
-
-        Raises:
-            InvalidRecordDataError: If conversion fails
-        """
+        """Prepares bulk update operations for records."""
         if old_field.type == field_update.type:
             return []
 
@@ -441,20 +429,7 @@ class DatasetManager:
         return updates
 
     async def delete_field(self, user_id: str, dataset_id: UUID, field_name: str) -> None:
-        """Deletes a field from the dataset schema and removes it from all records.
-
-        All changes are performed in a transaction to ensure consistency.
-
-        Args:
-            user_id: ID of the user who owns the dataset
-            dataset_id: ID of the dataset to update
-            field_name: Name of the field to delete
-
-        Raises:
-            DatasetNotFoundError: If dataset not found
-            InvalidDatasetSchemaError: If field does not exist
-            DatabaseError: For other database errors
-        """
+        """Deletes a field from the dataset schema and removes it from all records."""
         try:
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
@@ -514,21 +489,7 @@ class DatasetManager:
         dataset_id: UUID,
         field: SchemaField,
     ) -> None:
-        """Adds a new field to the dataset schema and initializes it in existing records.
-
-        All changes are performed in a transaction to ensure consistency. If the field
-        has a default value defined, it will be used to initialize the field in existing records.
-
-        Args:
-            user_id: ID of the user who owns the dataset
-            dataset_id: ID of the dataset to update
-            field: New field definition with optional default value
-
-        Raises:
-            DatasetNotFoundError: If dataset not found
-            InvalidDatasetSchemaError: If field already exists or is invalid
-            DatabaseError: For other database errors
-        """
+        """Adds a new field to the dataset schema and initializes it in existing records."""
         try:
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
@@ -586,24 +547,7 @@ class DatasetManager:
         field_name: str,
         field_update: SchemaField,
     ) -> None:
-        """Updates a single field in the dataset schema and converts existing records.
-
-        All changes are performed in a transaction to ensure consistency. If the field
-        type changes, existing record values will be converted if the conversion is safe.
-        Only updates records if the field type has changed.
-
-        Args:
-            user_id: ID of the user who owns the dataset
-            dataset_id: ID of the dataset to update
-            field_name: Name of the field to update
-            field_update: New field definition
-
-        Raises:
-            DatasetNotFoundError: If dataset not found
-            InvalidDatasetSchemaError: If field update is invalid
-            InvalidRecordDataError: If records cannot be converted to new field type
-            DatabaseError: For other database errors
-        """
+        """Updates a single field in the dataset schema and converts existing records."""
         try:
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
@@ -861,6 +805,136 @@ class DatasetManager:
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to get all records: {str(e)}")
+
+    async def batch_create_records(self, user_id: str, dataset_id: UUID, records_data: List[RecordData]) -> List[UUID]:
+        """Creates multiple records in the specified dataset."""
+        try:
+            logger.info(f"Batch creating {len(records_data)} records in dataset {dataset_id} for user {user_id}")
+            # Get dataset to validate against schema
+            dataset = await self.get_dataset(user_id, dataset_id)
+
+            # Validate and convert all data first
+            validated_records = []
+            for data in records_data:
+                validated_data = Record.validate_data(data, dataset.dataset_schema)
+                record = Record(
+                    user_id=user_id,
+                    dataset_id=str(dataset_id),
+                    data=validated_data,
+                )
+                validated_records.append(record.model_dump(by_alias=True))
+
+            # Insert all records
+            result = await self._records.insert_many(validated_records)
+            logger.info(f"Batch created {len(result.inserted_ids)} records")
+            return result.inserted_ids
+
+        except (DatasetNotFoundError, InvalidRecordDataError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to batch create records: {str(e)}")
+
+    async def batch_update_records(self, user_id: str, dataset_id: UUID, records_updates: List["RecordUpdate"]) -> List[UUID]:
+        """Updates multiple existing records."""
+        try:
+            logger.info(f"Batch updating {len(records_updates)} records in dataset {dataset_id}")
+            # Get dataset to validate against schema
+            dataset = await self.get_dataset(user_id, dataset_id)
+
+            # Prepare bulk operations
+            operations = []
+            record_ids = []
+
+            for update in records_updates:
+                record_id = update.get("record_id")
+                data = update.get("data")
+
+                if not record_id or not data:
+                    raise InvalidRecordDataError("Record update missing record_id or data")
+
+                # Validate and convert data
+                validated_data = Record.validate_data(data, dataset.dataset_schema)
+
+                # Add to operations
+                operations.append(
+                    pymongo.UpdateOne(
+                        {
+                            "_id": str(record_id),
+                            "user_id": user_id,
+                            "dataset_id": str(dataset_id),
+                        },
+                        {
+                            "$set": {
+                                "data": validated_data,
+                                "updated_at": datetime.now(timezone.utc),
+                            }
+                        },
+                    )
+                )
+                record_ids.append(record_id)
+
+            # Execute bulk update
+            if operations:
+                result = await self._records.bulk_write(operations)
+                logger.info(f"Batch updated {result.modified_count}/{len(operations)} records")
+
+                # Check if all records were updated
+                if result.modified_count != len(operations):
+                    # Find all missing records in a single query
+                    str_record_ids = [str(record_id) for record_id in record_ids]
+                    existing_records = await self._records.find(
+                        {
+                            "_id": {"$in": str_record_ids},
+                            "user_id": user_id,
+                            "dataset_id": str(dataset_id),
+                        }
+                    ).to_list(None)
+                    
+                    existing_ids = {str(record["_id"]) for record in existing_records}
+                    missing_ids = [record_id for record_id in record_ids if str(record_id) not in existing_ids]
+                    
+                    if missing_ids:
+                        if len(missing_ids) == 1:
+                            raise RecordNotFoundError(f"Record {missing_ids[0]} not found")
+                        else:
+                            raise RecordNotFoundError(f"Multiple records not found: {', '.join(str(id) for id in missing_ids)}")
+                    else:
+                        # Records exist but weren't modified (likely because data is identical)
+                        logger.debug("Some records were not modified, but all exist")
+
+            return record_ids
+
+        except (DatasetNotFoundError, RecordNotFoundError, InvalidRecordDataError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to batch update records: {str(e)}")
+
+    async def batch_delete_records(self, user_id: str, dataset_id: UUID, record_ids: List[UUID]) -> List[UUID]:
+        """Deletes multiple records."""
+        try:
+            logger.info(f"Batch deleting {len(record_ids)} records from dataset {dataset_id}")
+            # Verify dataset exists
+            await self.get_dataset(user_id, dataset_id)
+
+            # Convert record IDs to strings
+            str_record_ids = [str(record_id) for record_id in record_ids]
+
+            # Delete records
+            result = await self._records.delete_many(
+                {
+                    "_id": {"$in": str_record_ids},
+                    "user_id": user_id,
+                    "dataset_id": str(dataset_id),
+                }
+            )
+
+            logger.info(f"Batch deleted {result.deleted_count}/{len(record_ids)} records")
+            return record_ids
+
+        except DatasetNotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to batch delete records: {str(e)}")
 
     async def query_records(self, user_id: str, dataset_id: UUID, query: Optional[RecordQuery] = None) -> Union[List[Record], List[Dict]]:
         """Query records in the specified dataset."""
