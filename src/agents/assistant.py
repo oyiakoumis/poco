@@ -6,6 +6,9 @@ from langgraph.prebuilt import create_react_agent
 from agents.state import State
 from agents.tools.database_operator import (
     AddFieldOperator,
+    BatchCreateRecordsOperator,
+    BatchDeleteRecordsOperator,
+    BatchUpdateRecordsOperator,
     CreateDatasetOperator,
     CreateRecordOperator,
     DeleteDatasetOperator,
@@ -108,7 +111,10 @@ CRITICAL: You MUST ALWAYS update the database immediately when information chang
 - create_record, update_record, delete_record: Manage individual records. ALWAYS use these operations when the user mentions changes to their data.
 - query_records: Search for records with optional filtering, sorting, and aggregation
 
-3. Temporal Processing:
+3. Batch Record Operations:
+- batch_create_records, batch_update_records, batch_delete_records: Perform bulk operations on multiple records. Prefer to use these when multiple records in the same dataset need to be created, updated, or deleted at once.
+
+4. Temporal Processing:
 - Always use temporal_reference_resolver for any time-related expressions
 - Convert natural language time references to proper datetime format
 - Handle both specific moments and time ranges
@@ -198,6 +204,9 @@ class Assistant:
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
+            BatchCreateRecordsOperator(db),
+            BatchUpdateRecordsOperator(db),
+            BatchDeleteRecordsOperator(db),
         ]
 
     async def __call__(self, state: State):
