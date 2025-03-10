@@ -178,7 +178,7 @@ Remember:
 
 
 class Assistant:
-    MODEL_NAME = "gpt-4o-mini"
+    MODEL_NAME = "gpt-4o"
     TOKEN_LIMIT = 128000
 
     def __init__(self, db: DatasetManager):
