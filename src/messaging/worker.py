@@ -53,7 +53,7 @@ async def generate_blob_presigned_url(blob_name: str) -> str:
 
 async def convert_message_to_langchain_format(msg: Message) -> HumanMessage | AIMessage:
     """Convert a single message to LangChain format."""
-    if msg.role == MessageRole.USER:
+    if msg.role == MessageRole.HUMAN:
         # Check if message has image media
         if msg.metadata and msg.metadata.get("media_count", 0) > 0:
             # Log when media is present

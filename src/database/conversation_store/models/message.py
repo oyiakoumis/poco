@@ -12,7 +12,7 @@ from models.base import BaseDocument, PydanticUUID
 class MessageRole(str, Enum):
     """Enum for message roles."""
 
-    USER = "user"
+    HUMAN = "human"
     ASSISTANT = "assistant"
     SYSTEM = "system"
     TOOL = "tool"

@@ -101,7 +101,7 @@ async def main():
             user_id=user_id,
             conversation_id=conversation_id,
             content="Can you help me with a Python question?",
-            role=MessageRole.USER,
+            role=MessageRole.HUMAN,
             message_id=user_message_id,
             metadata={"source": "web", "browser": "Chrome"},
         )
@@ -136,7 +136,7 @@ async def main():
                 user_id=user_id,
                 conversation_id=conversation_id,
                 content=f"Additional message {i+1}",
-                role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
+                role=MessageRole.HUMAN if i % 2 == 0 else MessageRole.ASSISTANT,
                 message_id=msg_id_uuid,
             )
             additional_message_ids.append(msg_id)

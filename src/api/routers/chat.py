@@ -135,7 +135,7 @@ async def process_whatsapp_message(
         user_id=user_id,
         conversation_id=conversation_id,
         content=Body,
-        role=MessageRole.USER,
+        role=MessageRole.HUMAN,
         message_id=message_id,
         metadata=metadata,
     )
