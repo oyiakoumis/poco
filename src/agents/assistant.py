@@ -1,7 +1,10 @@
-from langchain_core.messages import SystemMessage, trim_messages
+from typing import List
+from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, AnyMessage, trim_messages
+from agents.exceptions import AssistantResponseError
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
+from langgraph.graph.graph import CompiledGraph
 
 from agents.state import State
 from agents.tools.database_operator import (
@@ -28,7 +31,7 @@ from database.document_store.dataset_manager import DatasetManager
 from utils.logging import logger
 
 ASSISTANT_SYSTEM_MESSAGE = """
-You are a friendly and helpful AI assistant that functions like a productivity app, helping users organize and manage their personal information by understanding their real-world needs and automatically handling all technical details behind the scenes.
+You are a friendly and helpful AI assistant that functions like a productivity app, helping users organize and manage their personal information by understanding their real-world needs and automatically handling all technical details behind the scenes. Always provide a response, never return an empty message.
 
 CRITICAL DATABASE USAGE:
 - **YOU ONLY HAVE ACCESS TO THE DATABASE through provided tools** - there is NO OTHER WAY to store user data permanently.
@@ -146,6 +149,7 @@ GENERAL KNOWLEDGE QUERIES:
 class Assistant:
     MODEL_NAME = "gpt-4o"
     TOKEN_LIMIT = 128000
+    MAX_RETRIES = 3  # Define as class constant
 
     def __init__(self, db: DatasetManager):
         logger.info("Initializing Assistant with tools")
@@ -177,7 +181,7 @@ class Assistant:
 
         logger.debug("Trimming messages to token limit")
         messages = [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages
-        trimmed_messages = trim_messages(
+        trimmed_messages: List[AnyMessage] = trim_messages(
             messages,
             strategy="last",
             token_counter=llm,
@@ -189,8 +193,27 @@ class Assistant:
         )
         runnable = create_react_agent(llm, self.tools)
 
-        logger.debug("Invoking LLM with trimmed messages")
-        response = await runnable.ainvoke({"messages": trimmed_messages})
+        # Get a valid response using the retry mechanism
+        result = await self._get_valid_response(trimmed_messages, runnable)
 
         logger.debug("LLM response received")
-        return {"messages": response["messages"]}
+        return {"messages": result["messages"]}
+
+    async def _get_valid_response(self, messages: List[AnyMessage], runnable: CompiledGraph) -> AIMessage:
+        """Attempt to get a valid response with retry logic."""
+        for attempt in range(self.MAX_RETRIES):
+            logger.debug(f"Invoking LLM (attempt {attempt+1}/{self.MAX_RETRIES})")
+            result: AIMessage = await runnable.ainvoke({"messages": messages})
+            last_message: AnyMessage = result["messages"][-1]
+
+            if not isinstance(last_message, ToolMessage) and last_message.content.strip():
+                return result  # Valid response, return immediately
+
+            # Handle invalid response
+            logger.warning(f"Empty response on attempt {attempt+1}")
+            messages.extend([result, SystemMessage("Please provide a non-empty response.")])
+
+        # If we get here, all retries failed
+        error_msg = f"Failed to get valid response after {self.MAX_RETRIES} attempts"
+        logger.error(error_msg)
+        raise AssistantResponseError(error_msg)
