@@ -199,7 +199,54 @@ async def main():
         assert yogurt_record is not None, "Expected to find Yogurt record"
         assert milk_record.data["quantity"] == 3, f"Expected Milk quantity 3, got {milk_record.data['quantity']}"
         assert yogurt_record.data["quantity"] == 4, f"Expected Yogurt quantity 4, got {yogurt_record.data['quantity']}"
-        
+
+        # 3.1 Batch Record Operations
+        print("\n=== Batch Record Operations ===")
+
+        # Batch create records
+        batch_records_data = [
+            {"item": "Apples", "quantity": 6, "unit": "pieces", "category": "fruits"},
+            {"item": "Bread", "quantity": 2, "unit": "pack", "category": "pantry"},
+            {"item": "Cheese", "quantity": 1, "unit": "kg", "category": "dairy"},
+        ]
+        batch_record_ids = await manager.batch_create_records(user_id=user_id, dataset_id=dataset_id, records_data=batch_records_data)
+        print(f"Batch created {len(batch_record_ids)} records")
+        # Assert all records were created
+        assert len(batch_record_ids) == 3, f"Expected 3 record IDs, got {len(batch_record_ids)}"
+
+        # Verify batch created records
+        all_records_after_batch = await manager.get_all_records(user_id=user_id, dataset_id=dataset_id)
+        print(f"Now have {len(all_records_after_batch)} records in dataset")
+        assert len(all_records_after_batch) == 5, f"Expected 5 records after batch creation, got {len(all_records_after_batch)}"
+
+        # Batch update records
+        # Prepare updates for the first two batch-created records
+        batch_updates = [
+            {"record_id": batch_record_ids[0], "data": {"item": "Apples", "quantity": 1, "unit": "kg", "category": "fruits"}},  # Change unit and quantity
+            {"record_id": batch_record_ids[1], "data": {"item": "Bread", "quantity": 1, "unit": "pack", "category": "pantry"}},  # Increase quantity
+        ]
+        updated_record_ids = await manager.batch_update_records(user_id=user_id, dataset_id=dataset_id, records_updates=batch_updates)
+        print(f"Batch updated {len(updated_record_ids)} records")
+        assert len(updated_record_ids) == 2, f"Expected 2 record IDs, got {len(updated_record_ids)}"
+
+        # Verify batch updates
+        apples_record = await manager.get_record(user_id, dataset_id, batch_record_ids[0])
+        bread_record = await manager.get_record(user_id, dataset_id, batch_record_ids[1])
+        assert apples_record.data["quantity"] == 1, f"Expected updated quantity 1, got {apples_record.data['quantity']}"
+        assert apples_record.data["unit"] == "kg", f"Expected updated unit 'kg', got {apples_record.data['unit']}"
+        assert bread_record.data["quantity"] == 1, f"""Expected updated quantity 1, got {bread_record.data['quantity']}"""
+
+        # Batch delete records
+        # Delete all batch-created records
+        deleted_record_ids = await manager.batch_delete_records(user_id=user_id, dataset_id=dataset_id, record_ids=batch_record_ids)
+        print(f"Batch deleted {len(deleted_record_ids)} records")
+        assert len(deleted_record_ids) == 3, f"Expected 3 record IDs, got {len(deleted_record_ids)}"
+
+        # Verify batch deletion
+        records_after_deletion = await manager.get_all_records(user_id=user_id, dataset_id=dataset_id)
+        print(f"Now have {len(records_after_deletion)} records in dataset")
+        assert len(records_after_deletion) == 2, f"Expected 2 records after batch deletion, got {len(records_after_deletion)}"
+
         # Query records with simple filter
         simple_filter = FilterCondition(field="category", operator=ComparisonOperator.EQUALS, value="dairy")
         filter_query = RecordQuery(filter=simple_filter)
@@ -382,7 +429,7 @@ async def main():
         )
         print(f"Created recipe dataset: {recipe_dataset_id}")
 
-        # Shopping list dataset (similar to grocery list)
+        # Shopping list dataset (very similar to grocery list to ensure similarity detection)
         shopping_schema = DatasetSchema(
             fields=[
                 SchemaField(
@@ -398,17 +445,18 @@ async def main():
                     required=True,
                 ),
                 SchemaField(
-                    field_name="store",
-                    description="Store to buy from",
-                    type=FieldType.STRING,
+                    field_name="unit",
+                    description="Unit of measurement",
+                    type=FieldType.SELECT,
                     required=True,
+                    options=["pieces", "kg", "g", "l", "ml", "pack", "box"],
                 ),
                 SchemaField(
-                    field_name="priority",
-                    description="Shopping priority",
+                    field_name="category",
+                    description="Category of the item",
                     type=FieldType.SELECT,
                     required=False,
-                    options=["low", "medium", "high"],
+                    options=["fruits", "vegetables", "dairy", "meat", "pantry", "beverages"],
                 ),
             ]
         )
