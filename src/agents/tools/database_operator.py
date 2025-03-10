@@ -188,7 +188,9 @@ class DeleteDatasetOperator(BaseDBOperator):
 
 class CreateRecordOperator(BaseDBOperator):
     name: str = "create_record"
-    description: str = f"Create a new record: {CreateRecordArgs.model_json_schema()}"
+    description: str = (
+        f"Create a SINGLE new record. WARNING: Do NOT use this for creating multiple records - use batch_create_records instead. {CreateRecordArgs.model_json_schema()}"
+    )
     args_schema: Type[BaseModel] = CreateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
@@ -200,7 +202,9 @@ class CreateRecordOperator(BaseDBOperator):
 
 class UpdateRecordOperator(BaseDBOperator):
     name: str = "update_record"
-    description: str = f"Update a record: {UpdateRecordArgs.model_json_schema()}"
+    description: str = (
+        f"Update a SINGLE record. WARNING: Do NOT use this for updating multiple records - use batch_update_records instead. {UpdateRecordArgs.model_json_schema()}"
+    )
     args_schema: Type[BaseModel] = UpdateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -211,7 +215,7 @@ class UpdateRecordOperator(BaseDBOperator):
 
 class DeleteRecordOperator(BaseDBOperator):
     name: str = "delete_record"
-    description: str = "Delete record"
+    description: str = "Delete a SINGLE record. WARNING: Do NOT use this for deleting multiple records - use batch_delete_records instead."
     args_schema: Type[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -283,7 +287,9 @@ class AddFieldOperator(BaseDBOperator):
 
 class BatchCreateRecordsOperator(BaseDBOperator):
     name: str = "batch_create_records"
-    description: str = "Create multiple records in a dataset at once"
+    description: str = (
+        f"Create multiple records in a dataset at once. ALWAYS use this instead of create_record when you need to create multiple records in the same dataset. {BatchCreateRecordsArgs.model_json_schema()}"
+    )
     args_schema: Type[BaseModel] = BatchCreateRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, List[str]]:
@@ -295,7 +301,9 @@ class BatchCreateRecordsOperator(BaseDBOperator):
 
 class BatchUpdateRecordsOperator(BaseDBOperator):
     name: str = "batch_update_records"
-    description: str = "Update multiple records in a dataset at once"
+    description: str = (
+        "Update multiple records in a dataset at once. ALWAYS use this instead of update_record when you need to update multiple records in the same dataset."
+    )
     args_schema: Type[BaseModel] = BatchUpdateRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
@@ -311,7 +319,9 @@ class BatchUpdateRecordsOperator(BaseDBOperator):
 
 class BatchDeleteRecordsOperator(BaseDBOperator):
     name: str = "batch_delete_records"
-    description: str = "Delete multiple records from a dataset at once"
+    description: str = (
+        "Delete multiple records from a dataset at once. ALWAYS use this instead of delete_record when you need to delete multiple records from the same dataset."
+    )
     args_schema: Type[BaseModel] = BatchDeleteRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:

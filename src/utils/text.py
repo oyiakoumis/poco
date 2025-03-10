@@ -18,7 +18,7 @@ def trim_message(message: str, max_length: int = 50) -> str:
     if last_space > 0:
         trimmed = trimmed[:last_space]
 
-    return f"{trimmed}..."
+    return f"{trimmed}[...]"
 
 
 def format_message(user_message: str, response: str, is_error: bool = False) -> str:
