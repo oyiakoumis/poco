@@ -2,19 +2,15 @@
 
 import asyncio
 import sys
-from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from uuid import UUID, uuid4
 
-from azure.storage.blob import BlobSasPermissions, generate_blob_sas
-from azure.storage.blob.aio import BlobServiceClient
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from twilio.rest import Client
 
 from agents.graph import create_graph
-from config import settings
 from config import settings as api_settings
 from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.exceptions import (
@@ -26,81 +22,6 @@ from messaging.consumer import WhatsAppMessageConsumer
 from messaging.models import WhatsAppQueueMessage
 from utils.logging import logger
 from utils.text import format_message
-
-
-async def generate_blob_presigned_url(blob_name: str) -> str:
-    """Generate a presigned URL for a blob in Azure Blob Storage."""
-    async with BlobServiceClient.from_connection_string(settings.azure_storage_connection_string) as blob_service_client:
-        # Extract account name from the blob service client
-        account_name = blob_service_client.account_name
-        container_name = settings.azure_blob_container_name
-        account_key = settings.azure_storage_account_key
-
-        # Generate SAS token
-        sas_token = generate_blob_sas(
-            account_name=account_name,
-            container_name=container_name,
-            blob_name=blob_name,
-            account_key=account_key,
-            permission=BlobSasPermissions(read=True),
-            expiry=datetime.now(timezone.utc) + timedelta(hours=24),
-        )
-
-        # Create the presigned URL
-        presigned_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
-        return presigned_url
-
-
-async def convert_message_to_langchain_format(msg: Message) -> HumanMessage | AIMessage:
-    """Convert a single message to LangChain format."""
-    if msg.role == MessageRole.HUMAN:
-        # Check if message has image media
-        if msg.metadata and msg.metadata.get("media_count", 0) > 0:
-            # Log when media is present
-            media_count = msg.metadata["media_count"]
-            logger.info(f"Processing message with {media_count} media item(s) for user {msg.user_id}")
-
-            # Create multimodal content
-            content = []
-
-            # Add text content if present
-            if msg.content:
-                content.append({"type": "text", "text": msg.content})
-
-            # Add images with presigned URLs
-            url_generation_failures = 0
-            url_generation_successes = 0
-
-            for media_item in msg.metadata.get("media_items", []):
-                # Get the blob name from the media item
-                blob_name = media_item["blob_name"]
-                try:
-                    # Generate presigned URL for the blob
-                    presigned_url = await generate_blob_presigned_url(blob_name)
-
-                    # Add image with presigned URL to content
-                    content.append({"type": "image_url", "image_url": {"url": presigned_url}})
-
-                    url_generation_successes += 1
-                    logger.debug(f"Successfully generated presigned URL for image: {blob_name}")
-                except Exception as e:
-                    logger.error(f"Error generating presigned URL for blob {blob_name}: {str(e)}")
-                    url_generation_failures += 1
-
-            # Log summary of URL generation results
-            if url_generation_failures > 0 or url_generation_successes > 0:
-                logger.info(f"Presigned URL generation summary: {url_generation_successes} successful, {url_generation_failures} failed")
-
-            return HumanMessage(content=content)
-        else:
-            # Regular text message - content is just a string
-            return HumanMessage(content=msg.content)
-    elif msg.role == MessageRole.ASSISTANT:
-        return AIMessage(content=msg.content)
-    else:
-        # Handle unexpected message roles
-        logger.warning(f"Unexpected message role: {msg.role}")
-        return None
 
 
 async def get_conversation_history(conversation_id: UUID, user_id: str, conversation_manager: ConversationManager) -> List[HumanMessage | AIMessage]:
@@ -168,7 +89,7 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         await conversation_db.create_message(
             user_id=message.user_id,
             conversation_id=message.conversation_id,
-            content=response_content,
+            message=response_content,
             role=MessageRole.ASSISTANT,
             message_id=assistant_message_id,
         )

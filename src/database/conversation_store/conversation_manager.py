@@ -10,6 +10,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorCollection,
     AsyncIOMotorDatabase,
 )
+from langchain_core.messages import AnyMessage
 
 from database.conversation_store.exceptions import (
     ConversationNotFoundError,
@@ -224,7 +225,7 @@ class ConversationManager:
             raise InvalidConversationError(f"Failed to delete conversation: {str(e)}")
 
     async def create_message(
-        self, user_id: str, conversation_id: UUID, content: str, role: MessageRole, message_id: UUID, metadata: Optional[Dict] = None
+        self, user_id: str, conversation_id: UUID, message: AnyMessage, role: MessageRole, message_id: UUID, metadata: Optional[Dict] = None
     ) -> UUID:
         """Creates a new message in a conversation."""
         try:
@@ -237,7 +238,7 @@ class ConversationManager:
                 id=str(message_id),
                 user_id=user_id,
                 conversation_id=str(conversation_id),
-                content=content,
+                message=message,
                 role=role,
                 metadata=metadata or {},
             )

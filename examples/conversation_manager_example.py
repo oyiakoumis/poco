@@ -87,7 +87,7 @@ async def main():
         assistant_message_id = await manager.create_message(
             user_id=user_id,
             conversation_id=conversation_id,
-            content="Hello! I'm an AI assistant. How can I help you today?",
+            message="Hello! I'm an AI assistant. How can I help you today?",
             role=MessageRole.ASSISTANT,
             message_id=assistant_message_id,
         )
@@ -100,7 +100,7 @@ async def main():
         user_message_id = await manager.create_message(
             user_id=user_id,
             conversation_id=conversation_id,
-            content="Can you help me with a Python question?",
+            message="Can you help me with a Python question?",
             role=MessageRole.HUMAN,
             message_id=user_message_id,
             metadata={"source": "web", "browser": "Chrome"},
@@ -111,11 +111,11 @@ async def main():
 
         # Get specific message
         message = await manager.get_message(user_id, assistant_message_id)
-        print(f"Retrieved message: {message.content}")
+        print(f"Retrieved message: {message.message}")
         assert message.id == assistant_message_id, "Retrieved message ID should match"
         assert message.user_id == user_id, "Retrieved message user_id should match"
         assert message.conversation_id == conversation_id, "Retrieved message conversation_id should match"
-        assert message.content == "Hello! I'm an AI assistant. How can I help you today?", "Retrieved message content should match"
+        assert message.message == "Hello! I'm an AI assistant. How can I help you today?", "Retrieved message content should match"
         assert message.role == MessageRole.ASSISTANT, "Retrieved message role should match"
 
         # List messages in conversation
@@ -126,7 +126,7 @@ async def main():
         assert assistant_message_id in message_ids, "Assistant message should be in the list"
         assert user_message_id in message_ids, "User message should be in the list"
         for idx, msg in enumerate(messages):
-            print(f"  {idx+1}. [{msg.role.value}]: {msg.content}")
+            print(f"  {idx+1}. [{msg.role.value}]: {msg.message}")
 
         # Create a few more messages to demonstrate pagination
         additional_message_ids = []
@@ -135,7 +135,7 @@ async def main():
             msg_id = await manager.create_message(
                 user_id=user_id,
                 conversation_id=conversation_id,
-                content=f"Additional message {i+1}",
+                message=f"Additional message {i+1}",
                 role=MessageRole.HUMAN if i % 2 == 0 else MessageRole.ASSISTANT,
                 message_id=msg_id_uuid,
             )
@@ -152,7 +152,7 @@ async def main():
         print(f"Retrieved {len(paginated_messages)} messages with pagination (limit=2, skip=1)")
         assert len(paginated_messages) == 2, "Should have exactly 2 messages with limit=2"
         for idx, msg in enumerate(paginated_messages):
-            print(f"  {idx+1}. [{msg.role.value}]: {msg.content}")
+            print(f"  {idx+1}. [{msg.role.value}]: {msg.message}")
 
         # 3. Delete Operations
         print("\n=== Delete Operations ===")

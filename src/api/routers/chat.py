@@ -134,7 +134,7 @@ async def process_whatsapp_message(
     await conversation_db.create_message(
         user_id=user_id,
         conversation_id=conversation_id,
-        content=Body,
+        message=Body,
         role=MessageRole.HUMAN,
         message_id=message_id,
         metadata=metadata,
@@ -168,14 +168,11 @@ async def process_whatsapp_message(
         response_message = "Got it! Give me just a second..."
 
         # Build concise notification string if needed
-        notification_str = build_notification_string({
-            "new_conversation": new_conversation_created,
-            "unsupported_media": unsupported_media
-        })
+        notification_str = build_notification_string({"new_conversation": new_conversation_created, "unsupported_media": unsupported_media})
 
         if notification_str:
             response_message += f"\n\n{notification_str}"
-            
+
         # Use format_message to include a reference to the user's message
         formatted_response = format_message(Body, response_message)
         twiml_response.message(formatted_response)
