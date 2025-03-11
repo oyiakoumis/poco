@@ -37,12 +37,12 @@ def format_message(user_message: str, response: str, is_error: bool = False) -> 
 
 def build_notification_string(flags: dict) -> str:
     """Build a concise notification string based on flag conditions.
-    
+
     Args:
         flags: Dictionary of notification flags
             - new_conversation: True if a new conversation was created
             - unsupported_media: True if unsupported media was received
-            
+
     Returns:
         A concise notification string with icons, or empty string if no notifications
     """
@@ -51,7 +51,7 @@ def build_notification_string(flags: dict) -> str:
         parts.append("🆕 New chat")
     if flags.get("unsupported_media"):
         parts.append("📝 Images only")
-    
+
     return " | ".join(parts) if parts else ""
 
 

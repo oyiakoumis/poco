@@ -129,6 +129,39 @@ async def main():
         for idx, msg in enumerate(messages):
             print(f"  {idx+1}. [{msg.role.value}]: {msg.message.content}")
 
+        # Demonstrate create_messages method for creating multiple messages at once
+        print("\n=== Batch Message Creation ===")
+        batch_messages = [
+            HumanMessage("Can you explain how to use Python's asyncio?"),
+            AIMessage("Asyncio is a library to write concurrent code using the async/await syntax."),
+            HumanMessage("Can you show me an example?"),
+            AIMessage("Sure! Here's a simple example:\n\n```python\nimport asyncio\n\nasync def main():\n    print('Hello')\n    await asyncio.sleep(1)\n    print('World')\n\nasyncio.run(main())\n```")
+        ]
+        
+        batch_message_ids = await manager.create_messages(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            messages=batch_messages,
+        )
+        print(f"Created {len(batch_message_ids)} messages in a single batch operation")
+        assert len(batch_message_ids) == 4, "Should have created 4 messages in batch"
+        
+        # Verify the batch messages were created with correct roles
+        batch_messages_from_db = await manager.list_messages(user_id, conversation_id)
+        print(f"Total messages in conversation after batch: {len(batch_messages_from_db)}")
+        
+        # The last 4 messages should be our batch messages
+        last_four_messages = batch_messages_from_db[-4:]
+        assert len(last_four_messages) == 4, "Should have 4 batch messages"
+        
+        # Verify roles were correctly determined by message type
+        assert last_four_messages[0].role == MessageRole.HUMAN, "First batch message should have HUMAN role"
+        assert last_four_messages[1].role == MessageRole.ASSISTANT, "Second batch message should have ASSISTANT role"
+        assert last_four_messages[2].role == MessageRole.HUMAN, "Third batch message should have HUMAN role"
+        assert last_four_messages[3].role == MessageRole.ASSISTANT, "Fourth batch message should have ASSISTANT role"
+        
+        print("Successfully verified batch message creation with automatic role determination")
+        
         # Create a few more messages to demonstrate pagination
         additional_message_ids = []
         for i in range(3):
@@ -145,7 +178,7 @@ async def main():
 
         # Verify we now have 5 messages total
         all_messages = await manager.list_messages(user_id, conversation_id)
-        assert len(all_messages) == 5, "Should have 5 messages total after adding 3 more"
+        assert len(all_messages) == 9, "Should have 9 messages total after adding 3 more"
 
         # List messages with pagination
         print("\n=== Message Pagination ===")
@@ -172,7 +205,7 @@ async def main():
 
         # Verify we now have 4 messages after deletion
         remaining_messages = await manager.list_messages(user_id, conversation_id)
-        assert len(remaining_messages) == 4, "Should have 4 messages after deleting 1"
+        assert len(remaining_messages) == 8, "Should have 8 messages after deleting 1"
 
         # Create a second conversation for testing with UUID
         second_conversation_id_uuid = uuid4()

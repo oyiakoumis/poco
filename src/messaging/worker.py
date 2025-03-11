@@ -5,7 +5,7 @@ import sys
 from typing import Dict, List
 from uuid import UUID, uuid4
 
-from langchain_core.messages import AIMessage, HumanMessage, AnyMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from twilio.rest import Client
@@ -53,6 +53,9 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         # Get conversation history - our updated function will handle multimodal messages
         messages = await get_conversation_history(message.conversation_id, message.user_id, conversation_db)
 
+        # Get initial message count to identify new messages later
+        initial_message_count = len(messages)
+
         # Get the graph
         graph = create_graph(dataset_db)
         graph = graph.compile(checkpointer=MemorySaver())
@@ -72,17 +75,18 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         result = await graph.ainvoke({"messages": messages}, config)
         logger.info(f"Graph processing completed - Thread: {message.conversation_id}")
 
-        response: AnyMessage = result["messages"][-1]
+        # Identify new messages (all messages after the initial count)
+        new_messages = result["messages"][initial_message_count:]
 
-        # Store the assistant's response
-        assistant_message_id = uuid4()
-        await conversation_db.create_message(
+        # Store all new messages
+        await conversation_db.create_messages(
             user_id=message.user_id,
             conversation_id=message.conversation_id,
-            message=response,
-            role=MessageRole.ASSISTANT,
-            message_id=assistant_message_id,
+            messages=new_messages,
         )
+
+        # Get the last message for the WhatsApp response
+        response: AnyMessage = result["messages"][-1]
 
         # Format the response with the user's message
         formatted_response = format_message(message.body, response.content)

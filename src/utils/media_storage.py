@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta, timezone
 import asyncio
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
@@ -71,7 +71,7 @@ async def generate_multiple_blob_presigned_urls(blob_names: List[str]) -> Dict[s
     """Generate presigned URLs for multiple blobs concurrently."""
     if not blob_names:
         return {}
-    
+
     # Create a helper function to handle errors for individual URL generation
     async def get_url_with_error_handling(blob_name: str) -> Tuple[str, Optional[str]]:
         try:
@@ -80,11 +80,9 @@ async def generate_multiple_blob_presigned_urls(blob_names: List[str]) -> Dict[s
         except Exception as e:
             logger.error(f"Error generating presigned URL for blob {blob_name}: {str(e)}")
             return blob_name, None
-    
+
     # Use asyncio.gather to run all URL generation tasks concurrently
-    results = await asyncio.gather(
-        *[get_url_with_error_handling(blob_name) for blob_name in blob_names]
-    )
-    
+    results = await asyncio.gather(*[get_url_with_error_handling(blob_name) for blob_name in blob_names])
+
     # Convert results to a dictionary
     return {blob_name: url for blob_name, url in results}

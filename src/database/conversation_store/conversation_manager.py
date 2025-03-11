@@ -1,16 +1,22 @@
 """Manager for conversation and message operations."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
 import pymongo
+from langchain_core.messages import (
+    AIMessage,
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
     AsyncIOMotorCollection,
     AsyncIOMotorDatabase,
 )
-from langchain_core.messages import AnyMessage
 
 from database.conversation_store.exceptions import (
     ConversationNotFoundError,
@@ -224,6 +230,77 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to delete conversation: {str(e)}")
 
+    async def create_messages(self, user_id: str, conversation_id: UUID, messages: List[AnyMessage], metadata: Optional[Dict] = None) -> List[UUID]:
+        """Creates multiple messages in a conversation in a single transaction."""
+        try:
+            logger.info(f"Creating {len(messages)} messages in conversation {conversation_id} for user {user_id}")
+            # Verify conversation exists and belongs to user
+            if not await self.conversation_exists(user_id, conversation_id):
+                raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
+
+            message_ids = []
+            message_documents = []
+
+            # Get current timestamp as base
+            base_timestamp = datetime.now(tz=timezone.utc)
+
+            # Prepare all message documents with incrementing timestamps
+            for i, message in enumerate(messages):
+                message_id = uuid4()
+                message_ids.append(message_id)
+
+                # Determine role based on message type
+                if isinstance(message, AIMessage):
+                    message_role = MessageRole.ASSISTANT
+                elif isinstance(message, HumanMessage):
+                    message_role = MessageRole.HUMAN
+                elif isinstance(message, SystemMessage):
+                    message_role = MessageRole.SYSTEM
+                elif isinstance(message, ToolMessage):
+                    message_role = MessageRole.TOOL
+                else:
+                    raise InvalidMessageError(f"Invalid message type: {type(message)}")
+
+                # Create timestamp with 1 millisecond increment for each message to ensure order
+                message_timestamp = base_timestamp + timedelta(milliseconds=i)
+
+                message_obj = Message(
+                    id=str(message_id),
+                    user_id=user_id,
+                    conversation_id=str(conversation_id),
+                    role=message_role,
+                    message=message,
+                    metadata=metadata or {},
+                    created_at=message_timestamp,
+                    updated_at=message_timestamp,
+                )
+
+                message_documents.append(message_obj.model_dump(by_alias=True))
+
+            # Insert all messages and update conversation timestamp in a transaction
+            async with await self.client.start_session() as session:
+                async with session.start_transaction():
+                    if message_documents:
+                        await self._messages.insert_many(
+                            message_documents,
+                            session=session,
+                        )
+
+                    # Update conversation timestamp
+                    await self._conversations.update_one(
+                        {"_id": str(conversation_id), "user_id": user_id},
+                        {"$set": {"updated_at": datetime.now(tz=timezone.utc)}},
+                        session=session,
+                    )
+
+            logger.info(f"Created {len(messages)} messages in conversation {conversation_id}")
+            return message_ids
+
+        except ConversationNotFoundError:
+            raise
+        except Exception as e:
+            raise InvalidMessageError(f"Failed to create messages: {str(e)}")
+
     async def create_message(
         self, user_id: str, conversation_id: UUID, message: AnyMessage, role: MessageRole, message_id: UUID, metadata: Optional[Dict] = None
     ) -> UUID:
@@ -231,7 +308,8 @@ class ConversationManager:
         try:
             logger.info(f"Creating message in conversation {conversation_id} for user {user_id}")
             # Verify conversation exists and belongs to user
-            await self.get_conversation(user_id, conversation_id)
+            if not await self.conversation_exists(user_id, conversation_id):
+                raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
 
             # Create message with provided UUID
             message = Message(
@@ -285,7 +363,8 @@ class ConversationManager:
         try:
             logger.info(f"Listing messages for conversation {conversation_id}")
             # Verify conversation exists and belongs to user
-            await self.get_conversation(user_id, conversation_id)
+            if not await self.conversation_exists(user_id, conversation_id):
+                raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
 
             cursor = self._messages.find({"user_id": user_id, "conversation_id": str(conversation_id)})
             # Sort by timestamp (oldest first)

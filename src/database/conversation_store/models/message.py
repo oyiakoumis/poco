@@ -1,11 +1,17 @@
 """Message model for chat history."""
 
-from enum import Enum
-from typing import Dict, List, Union, Any
 import asyncio
+from enum import Enum
+from typing import Any, Dict, List, Union
 
+from langchain_core.messages import (
+    AIMessage,
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from pydantic import Field, field_validator
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage, AnyMessage
 
 from models.base import BaseDocument, PydanticUUID
 from utils.logging import logger
@@ -29,13 +35,13 @@ class Message(BaseDocument):
     message: AnyMessage = Field(..., description="Actual message from LangChain")
     metadata: Dict = Field(default_factory=dict, description="Additional metadata for the message")
 
-    @field_validator('message', mode='before')
+    @field_validator("message", mode="before")
     def validate_message(cls, message_dict, info):
         """Deserialize the message before model validation."""
         # Get the role from the validation context
         values = info.data
-        role = values.get('role')
-        
+        role = values.get("role")
+
         if role == MessageRole.HUMAN:
             return HumanMessage.model_validate(message_dict)
         elif role == MessageRole.ASSISTANT:
@@ -46,13 +52,13 @@ class Message(BaseDocument):
             return ToolMessage.model_validate(message_dict)
         else:
             raise ValueError(f"Invalid message role: {role}")
-    
+
     async def get_image_urls(self) -> None:
         """Process image media in human messages and update content with presigned URLs."""
         # Only process human messages with media
         if self.role != MessageRole.HUMAN or not self.metadata or self.metadata.get("media_count", 0) <= 0:
             return
-        
+
         # Log when media is present
         media_count = self.metadata["media_count"]
         logger.info(f"Processing message with {media_count} media item(s)")

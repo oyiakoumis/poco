@@ -1,5 +1,7 @@
 """Dataset manager for MongoDB operations."""
+
 from __future__ import annotations
+
 from asyncio import sleep
 from datetime import datetime, timezone
 from enum import Enum
@@ -889,10 +891,10 @@ class DatasetManager:
                             "dataset_id": str(dataset_id),
                         }
                     ).to_list(None)
-                    
+
                     existing_ids = {str(record["_id"]) for record in existing_records}
                     missing_ids = [record_id for record_id in record_ids if str(record_id) not in existing_ids]
-                    
+
                     if missing_ids:
                         if len(missing_ids) == 1:
                             raise RecordNotFoundError(f"Record {missing_ids[0]} not found")
