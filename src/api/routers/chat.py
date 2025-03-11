@@ -5,11 +5,11 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Form, Header, Request, Response
 from langchain_core.messages import HumanMessage, SystemMessage
-from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
 
+from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
 from config import settings
 from database.conversation_store.models.message import MessageRole
 from database.manager import DatabaseManager
@@ -139,10 +139,7 @@ async def process_whatsapp_message(
         await conversation_db.create_messages(
             user_id=user_id,
             conversation_id=conversation_id,
-            messages=[
-                SystemMessage(ASSISTANT_SYSTEM_MESSAGE),
-                HumanMessage(content=Body)
-            ],
+            messages=[SystemMessage(ASSISTANT_SYSTEM_MESSAGE), HumanMessage(content=Body)],
             metadata=metadata,
         )
     else:

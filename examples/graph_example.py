@@ -1,7 +1,9 @@
 import asyncio
-from langchain.schema import HumanMessage
+
+from langchain.schema import SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
+from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
 from agents.graph import setup_graph
 from agents.print_event import print_event
 
@@ -12,13 +14,14 @@ async def main():
         # Configuration for the graph
         config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25)
 
-        messages = [HumanMessage(content="Show me all my movies in my watch list with longer than 100 minutes")]
+        messages = [HumanMessage(content="Add milk, water, bread, and cheese to my grocery list.")]
 
         for message in messages:
-            input_messages = {"messages": [message]}
-            print_event((), {"Human": input_messages})
+            print_event((), {"Human": {"messages": [message]}})
 
-            async for namespace, event in graph.astream(input_messages, config, stream_mode="updates", subgraphs=True):
+            async for namespace, event in graph.astream(
+                {"messages": [SystemMessage(content=ASSISTANT_SYSTEM_MESSAGE), message]}, config, stream_mode="updates", subgraphs=True
+            ):
                 print_event(namespace, event)
     finally:
         client.close()
