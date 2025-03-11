@@ -238,8 +238,8 @@ class ConversationManager:
                 id=str(message_id),
                 user_id=user_id,
                 conversation_id=str(conversation_id),
-                message=message,
                 role=role,
+                message=message,
                 metadata=metadata or {},
             )
 

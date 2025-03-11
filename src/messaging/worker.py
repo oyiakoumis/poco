@@ -5,7 +5,7 @@ import sys
 from typing import Dict, List
 from uuid import UUID, uuid4
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, AnyMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from twilio.rest import Client
@@ -32,14 +32,9 @@ async def get_conversation_history(conversation_id: UUID, user_id: str, conversa
         logger.error(f"No messages found for conversation {conversation_id}")
         raise InvalidConversationError(f"No messages found for conversation {conversation_id}")
 
-    # Convert to LangChain messages
-    langchain_messages = []
-    for msg in messages:
-        langchain_msg = await convert_message_to_langchain_format(msg)
-        if langchain_msg:
-            langchain_messages.append(langchain_msg)
+    await asyncio.gather(*[message.get_image_urls() for message in messages])
 
-    return langchain_messages
+    return [message.message for message in messages]
 
 
 async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, str]:
@@ -77,25 +72,20 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         result = await graph.ainvoke({"messages": messages}, config)
         logger.info(f"Graph processing completed - Thread: {message.conversation_id}")
 
-        # Extract the assistant's response from the result
-        if result and "messages" in result and result["messages"] and isinstance(result["messages"][-1], AIMessage):
-            response_content = result["messages"][-1].content
-        else:
-            logger.warning(f"No valid response generated from graph - Thread: {message.conversation_id}")
-            response_content = "I apologize, but I couldn't process your request."
+        response: AnyMessage = result["messages"][-1]
 
         # Store the assistant's response
         assistant_message_id = uuid4()
         await conversation_db.create_message(
             user_id=message.user_id,
             conversation_id=message.conversation_id,
-            message=response_content,
+            message=response,
             role=MessageRole.ASSISTANT,
             message_id=assistant_message_id,
         )
 
         # Format the response with the user's message
-        formatted_response = format_message(message.body, response_content)
+        formatted_response = format_message(message.body, response.content)
 
         # Send response using the already initialized Twilio client
         twilio_message = twilio_client.messages.create(body=formatted_response, from_=api_settings.twilio_phone_number, to=message.from_number)

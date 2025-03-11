@@ -7,6 +7,7 @@ from fastapi import APIRouter, Form, Header, Request, Response
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
+from langchain_core.messages import HumanMessage
 
 from config import settings
 from database.conversation_store.models.message import MessageRole
@@ -134,7 +135,7 @@ async def process_whatsapp_message(
     await conversation_db.create_message(
         user_id=user_id,
         conversation_id=conversation_id,
-        message=Body,
+        message=HumanMessage(content=Body),
         role=MessageRole.HUMAN,
         message_id=message_id,
         metadata=metadata,
