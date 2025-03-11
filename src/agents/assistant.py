@@ -187,9 +187,8 @@ class Assistant:
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=0)
 
         logger.debug("Trimming messages to token limit")
-        messages = [SystemMessage(ASSISTANT_SYSTEM_MESSAGE)] + state.messages
         trimmed_messages: List[AnyMessage] = trim_messages(
-            messages,
+            state.messages,
             strategy="last",
             token_counter=llm,
             max_tokens=self.TOKEN_LIMIT,

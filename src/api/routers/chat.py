@@ -4,7 +4,8 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Form, Header, Request, Response
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
+from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
@@ -91,6 +92,7 @@ async def process_whatsapp_message(
         # Create a title based on the user's profile name or number
         logger.info(f"Creating new WhatsApp conversation: {conversation_id}")
         await conversation_db.create_conversation(user_id, str(conversation_id), conversation_id)
+        new_conversation_created = True
 
     # Create a message ID for the incoming message
     message_id = uuid4()
@@ -131,15 +133,28 @@ async def process_whatsapp_message(
         "unsupported_media": unsupported_media,
     }
 
-    # Store user message
-    await conversation_db.create_message(
-        user_id=user_id,
-        conversation_id=conversation_id,
-        message=HumanMessage(content=Body),
-        role=MessageRole.HUMAN,
-        message_id=message_id,
-        metadata=metadata,
-    )
+    # Store messages
+    if new_conversation_created:
+        # For new conversations, create both system and human messages together
+        await conversation_db.create_messages(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            messages=[
+                SystemMessage(ASSISTANT_SYSTEM_MESSAGE),
+                HumanMessage(content=Body)
+            ],
+            metadata=metadata,
+        )
+    else:
+        # For existing conversations, just create the human message
+        await conversation_db.create_message(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message=HumanMessage(content=Body),
+            role=MessageRole.HUMAN,
+            message_id=message_id,
+            metadata=metadata,
+        )
 
     try:
         # Create queue message

@@ -16,7 +16,6 @@ from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.exceptions import (
     InvalidConversationError,
 )
-from database.conversation_store.models.message import Message, MessageRole
 from database.manager import DatabaseManager
 from messaging.consumer import WhatsAppMessageConsumer
 from messaging.models import WhatsAppQueueMessage
