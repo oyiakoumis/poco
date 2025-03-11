@@ -17,14 +17,14 @@ class WhatsAppMessageProducer:
         """Initialize the producer with settings."""
         self.client = ServiceBusClient.from_connection_string(conn_str=settings.connection_string)
 
-    async def send_message(self, message: WhatsAppQueueMessage):
+    async def send_message(self, message: WhatsAppQueueMessage, session_id: str):
         """Send a message to the Azure Service Bus queue."""
         logger.info(f"Sending message to queue: {settings.queue_name}")
 
         async with self.client:
             sender = self.client.get_queue_sender(queue_name=settings.queue_name)
             message_json = json.dumps(message.model_dump())
-            sb_message = ServiceBusMessage(message_json)
+            sb_message = ServiceBusMessage(message_json, session_id=session_id)
 
             try:
                 await sender.send_messages(sb_message)

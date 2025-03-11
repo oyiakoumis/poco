@@ -121,7 +121,7 @@ async def run_worker():
     try:
         while True:
             await consumer.process_messages()
-            await asyncio.sleep(1)  # Prevent CPU spinning
+            await asyncio.sleep(0.1)  # Prevent CPU spinning
     except KeyboardInterrupt:
         logger.info("Worker process stopped")
     except Exception as e:

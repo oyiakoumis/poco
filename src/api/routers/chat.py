@@ -170,9 +170,9 @@ async def process_whatsapp_message(
             unsupported_media=unsupported_media,
         )
 
-        # Send to Azure Service Bus
+        # Send to Azure Service Bus with conversation_id as session_id
         producer = WhatsAppMessageProducer()
-        await producer.send_message(queue_message)
+        await producer.send_message(queue_message, session_id=str(conversation_id))
 
         logger.info(f"WhatsApp message queued - Thread: {conversation_id}")
 
