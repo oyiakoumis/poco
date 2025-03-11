@@ -36,9 +36,9 @@ async def get_conversation_history(conversation_id: UUID, user_id: str, conversa
     return [message.message for message in messages]
 
 
-async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, str]:
+async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[str, str]:
     """Process a WhatsApp message from the queue."""
-    logger.info(f"Processing WhatsApp message from queue: {message.sms_message_sid}")
+    logger.info(f"Processing WhatsApp message from queue: {input_message.sms_message_sid}")
 
     # Get database managers
     database_manager = DatabaseManager()
@@ -50,7 +50,7 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
 
     try:
         # Get conversation history - our updated function will handle multimodal messages
-        messages = await get_conversation_history(message.conversation_id, message.user_id, conversation_db)
+        messages = await get_conversation_history(input_message.conversation_id, input_message.user_id, conversation_db)
 
         # Get IDs of existing messages
         existing_message_ids = {msg.id for msg in messages}
@@ -62,8 +62,8 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         # Configuration for the graph
         config = RunnableConfig(
             configurable={
-                "thread_id": str(message.conversation_id),
-                "user_id": message.user_id,
+                "thread_id": str(input_message.conversation_id),
+                "user_id": input_message.user_id,
                 "time_zone": "UTC",
                 "first_day_of_the_week": 0,
             },
@@ -72,15 +72,15 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
 
         # Process the message through the graph
         result = await graph.ainvoke({"messages": messages}, config)
-        logger.info(f"Graph processing completed - Thread: {message.conversation_id}")
+        logger.info(f"Graph processing completed - Thread: {input_message.conversation_id}")
 
         # Identify new messages by comparing IDs
         new_messages = [msg for msg in result["messages"] if msg.id not in existing_message_ids]
 
         # Store all new messages
         await conversation_db.create_messages(
-            user_id=message.user_id,
-            conversation_id=message.conversation_id,
+            user_id=input_message.user_id,
+            conversation_id=input_message.conversation_id,
             messages=new_messages,
         )
 
@@ -88,12 +88,12 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         response: AnyMessage = result["messages"][-1]
 
         # Format the response with the user's message
-        formatted_response = format_message(message.body, response.content)
+        formatted_response = format_message(input_message.body, response.content)
 
         # Send response using the already initialized Twilio client
-        twilio_message = twilio_client.messages.create(body=formatted_response, from_=api_settings.twilio_phone_number, to=message.from_number)
+        twilio_message = twilio_client.messages.create(body=formatted_response, from_=api_settings.twilio_phone_number, to=input_message.from_number)
 
-        logger.info(f"Message processing completed and sent via WhatsApp - Thread: {message.conversation_id}, SID: {twilio_message.sid}")
+        logger.info(f"Message processing completed and sent via WhatsApp - Thread: {input_message.conversation_id}, SID: {twilio_message.sid}")
 
         return {"status": "success", "message_sid": twilio_message.sid}
 
@@ -102,13 +102,13 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
 
         # Create a more informative error message
         error_message = "We're experiencing technical difficulties processing your request. Our team has been notified and is working on it."
-        formatted_error = format_message(message.body, error_message, is_error=True)
+        formatted_error = format_message(input_message.body, error_message, is_error=True)
 
         # Send error message via WhatsApp without storing in conversation
         try:
             # Reuse the already initialized Twilio client
-            twilio_message = twilio_client.messages.create(body=formatted_error, from_=api_settings.twilio_phone_number, to=message.from_number)
-            logger.info(f"Error notification sent via WhatsApp - Thread: {message.conversation_id}, SID: {twilio_message.sid}")
+            twilio_message = twilio_client.messages.create(body=formatted_error, from_=api_settings.twilio_phone_number, to=input_message.from_number)
+            logger.info(f"Error notification sent via WhatsApp - Thread: {input_message.conversation_id}, SID: {twilio_message.sid}")
             return {"status": "error", "message_sid": twilio_message.sid}
         except Exception as twilio_e:
             logger.error(f"Failed to send WhatsApp error notification: {str(twilio_e)}")

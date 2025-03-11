@@ -1,8 +1,9 @@
 """Message models for Azure Service Bus."""
 
-from typing import Dict, List, Optional
+from datetime import datetime, timezone
+from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from models.base import PydanticUUID
 
@@ -29,3 +30,4 @@ class WhatsAppQueueMessage(BaseModel):
     media_count: int = 0
     media_items: List[MediaItem] = []
     unsupported_media: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
