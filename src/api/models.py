@@ -19,15 +19,6 @@ class ChatRequest(BaseModel):
     time_zone: str = Field(default="UTC", description="User's timezone")
     first_day_of_week: int = Field(default=0, description="First day of week (0=Sunday, 1=Monday, etc.)", ge=0, le=6)
 
-    @property
-    def thread_id(self) -> str:
-        """Get thread_id from conversation_id."""
-        return str(self.conversation_id)
-
-    def to_messages(self) -> List[HumanMessage]:
-        """Convert request to LangChain messages."""
-        return [HumanMessage(content=self.message)]
-
 
 class ChatResponse(BaseModel):
     """Chat response model."""

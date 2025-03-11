@@ -88,7 +88,7 @@ async def main():
         assistant_message_id = await manager.create_message(
             user_id=user_id,
             conversation_id=conversation_id,
-            message=AIMessage("Hello! I'm an AI assistant. How can I help you today?"),
+            message=AIMessage("Hello! I'm an AI assistant. How can I help you today?", id=assistant_message_id),
             role=MessageRole.ASSISTANT,
             message_id=assistant_message_id,
         )
@@ -101,7 +101,7 @@ async def main():
         user_message_id = await manager.create_message(
             user_id=user_id,
             conversation_id=conversation_id,
-            message=HumanMessage("Can you help me with a Python question?"),
+            message=HumanMessage("Can you help me with a Python question?", id=user_message_id),
             role=MessageRole.HUMAN,
             message_id=user_message_id,
             metadata={"source": "web", "browser": "Chrome"},
@@ -169,7 +169,7 @@ async def main():
             msg_id = await manager.create_message(
                 user_id=user_id,
                 conversation_id=conversation_id,
-                message=HumanMessage(f"Additional message {i+1}") if i % 2 == 0 else AIMessage(f"Response {i+1}"),
+                message=HumanMessage(f"Additional message {i+1}", id=msg_id_uuid) if i % 2 == 0 else AIMessage(f"Response {i+1}", id=msg_id_uuid),
                 role=MessageRole.HUMAN if i % 2 == 0 else MessageRole.ASSISTANT,
                 message_id=msg_id_uuid,
             )

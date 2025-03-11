@@ -9,7 +9,7 @@ from pydantic_core import core_schema
 
 
 class PydanticUUID(UUID):
-    """UUID field for Pydantic models."""
+    """UUID field for Pydantic models that defaults to UUID v4."""
 
     @classmethod
     def __get_validators__(cls):
@@ -42,6 +42,9 @@ class PydanticUUID(UUID):
                 return UUID(v)
             except Exception:
                 raise ValueError("Invalid UUID format")
+        if v is None:
+            # Generate a UUID v4 when no input is provided
+            return uuid4()
         raise ValueError("Invalid UUID")
 
 

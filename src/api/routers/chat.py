@@ -150,7 +150,7 @@ async def process_whatsapp_message(
         await conversation_db.create_message(
             user_id=user_id,
             conversation_id=conversation_id,
-            message=HumanMessage(content=Body),
+            message=HumanMessage(content=Body, id=message_id),
             role=MessageRole.HUMAN,
             message_id=message_id,
             metadata=metadata,

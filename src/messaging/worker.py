@@ -52,8 +52,8 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         # Get conversation history - our updated function will handle multimodal messages
         messages = await get_conversation_history(message.conversation_id, message.user_id, conversation_db)
 
-        # Get initial message count to identify new messages later
-        initial_message_count = len(messages)
+        # Get IDs of existing messages
+        existing_message_ids = {msg.id for msg in messages}
 
         # Get the graph
         graph = create_graph(dataset_db)
@@ -74,8 +74,8 @@ async def process_whatsapp_message(message: WhatsAppQueueMessage) -> Dict[str, s
         result = await graph.ainvoke({"messages": messages}, config)
         logger.info(f"Graph processing completed - Thread: {message.conversation_id}")
 
-        # Identify new messages (all messages after the initial count)
-        new_messages = result["messages"][initial_message_count:]
+        # Identify new messages by comparing IDs
+        new_messages = [msg for msg in result["messages"] if msg.id not in existing_message_ids]
 
         # Store all new messages
         await conversation_db.create_messages(

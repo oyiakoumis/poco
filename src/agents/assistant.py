@@ -193,23 +193,23 @@ class Assistant:
             token_counter=llm,
             max_tokens=self.TOKEN_LIMIT,
             start_on="human",
-            end_on=("human", "tool"),
+            end_on="human",
             include_system=True,
             allow_partial=False,
         )
         runnable = create_react_agent(llm, self.tools)
 
         # Get a valid response using the retry mechanism
-        result = await self._get_valid_response(trimmed_messages, runnable)
+        result = await self.force_response(trimmed_messages, runnable)
 
         logger.debug("LLM response received")
         return {"messages": result["messages"]}
 
-    async def _get_valid_response(self, messages: List[AnyMessage], runnable: CompiledGraph) -> AIMessage:
+    async def force_response(self, messages: List[AnyMessage], runnable: CompiledGraph) -> AIMessage:
         """Attempt to get a valid response with retry logic."""
         for attempt in range(self.MAX_RETRIES):
             logger.debug(f"Invoking LLM (attempt {attempt+1}/{self.MAX_RETRIES})")
-            result: AIMessage = await runnable.ainvoke({"messages": messages})
+            result: List[AnyMessage] = await runnable.ainvoke({"messages": messages})
             last_message: AnyMessage = result["messages"][-1]
 
             if not isinstance(last_message, ToolMessage) and last_message.content.strip():

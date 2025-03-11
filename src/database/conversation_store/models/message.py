@@ -40,17 +40,25 @@ class Message(BaseDocument):
         # Get the role from the validation context
         values = info.data
         role = values.get("role")
+        id = values.get("id")
 
         if role == MessageRole.HUMAN:
-            return HumanMessage.model_validate(message_dict)
+            message = HumanMessage.model_validate(message_dict)
         elif role == MessageRole.ASSISTANT:
-            return AIMessage.model_validate(message_dict)
+            message = AIMessage.model_validate(message_dict)
         elif role == MessageRole.SYSTEM:
-            return SystemMessage.model_validate(message_dict)
+            message = SystemMessage.model_validate(message_dict)
         elif role == MessageRole.TOOL:
-            return ToolMessage.model_validate(message_dict)
+            message = ToolMessage.model_validate(message_dict)
         else:
             raise ValueError(f"Invalid message role: {role}")
+
+        if message.id is None:
+            message.id = str(id)
+
+        message.id = str(message.id)
+
+        return message
 
     async def get_image_urls(self) -> None:
         """Process image media in human messages and update content with presigned URLs."""
