@@ -20,6 +20,7 @@ class SchemaField(BaseModel):
     )
     type: FieldType = Field(description="Data type of the field", json_schema_extra={"examples": [FieldType.INTEGER]})
     required: bool = Field(default=False, description="Whether this field must be present in all records", json_schema_extra={"examples": [True]})
+    unique: bool = Field(default=False, description="Whether this field's values must be unique across all records", json_schema_extra={"examples": [True]})
     default: Optional[Any] = Field(default=None, description="Default value for the field", json_schema_extra={"examples": [0]})
     options: Optional[List[str]] = Field(
         default=None, description="List of allowed values for select/multi-select fields", json_schema_extra={"examples": [["option1", "option2"]]}
