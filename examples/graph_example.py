@@ -1,6 +1,6 @@
 import asyncio
 
-from langchain.schema import SystemMessage, HumanMessage
+from langchain.schema import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from agents.assistant import ASSISTANT_SYSTEM_MESSAGE

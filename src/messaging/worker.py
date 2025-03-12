@@ -1,7 +1,6 @@
 """Worker process for consuming WhatsApp messages from Azure Service Bus."""
 
 import asyncio
-import sys
 from typing import Dict, List
 from uuid import UUID, uuid4
 
@@ -17,7 +16,6 @@ from database.conversation_store.exceptions import (
     InvalidConversationError,
 )
 from database.manager import DatabaseManager
-from messaging.consumer import WhatsAppMessageConsumer
 from messaging.models import WhatsAppQueueMessage
 from utils.logging import logger
 from utils.text import format_message
@@ -113,21 +111,3 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
         except Exception as twilio_e:
             logger.error(f"Failed to send WhatsApp error notification: {str(twilio_e)}")
             return {"status": "error", "message": "Failed to send WhatsApp notification"}
-
-
-async def run_worker():
-    """Run the worker process to consume messages from the queue."""
-    consumer = WhatsAppMessageConsumer(process_whatsapp_message)
-    try:
-        while True:
-            await consumer.process_messages()
-            await asyncio.sleep(0.1)  # Prevent CPU spinning
-    except KeyboardInterrupt:
-        logger.info("Worker process stopped")
-    except Exception as e:
-        logger.error(f"Worker process error: {str(e)}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    asyncio.run(run_worker())

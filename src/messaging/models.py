@@ -1,7 +1,7 @@
 """Message models for Azure Service Bus."""
 
 from datetime import datetime, timezone
-from typing import List, Optional, Annotated
+from typing import Annotated, List, Optional
 
 from pydantic import BaseModel, Field, field_serializer
 
@@ -31,8 +31,8 @@ class WhatsAppQueueMessage(BaseModel):
     media_items: List[MediaItem] = []
     unsupported_media: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
-    @field_serializer('created_at')
+
+    @field_serializer("created_at")
     def serialize_dt(self, dt: datetime):
         """Serialize datetime to ISO format string."""
         return dt.isoformat()

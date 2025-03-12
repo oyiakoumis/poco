@@ -2,12 +2,14 @@
 
 import asyncio
 import time
-from typing import Dict, List, Tuple, TypeVar, Generic
+from typing import Dict, Generic, List, Tuple, TypeVar
 
 from azure.servicebus import ServiceBusMessage
+
 from utils.logging import logger
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class MessageBuffer(Generic[T]):
     """Buffer for collecting messages for a specified time before processing."""

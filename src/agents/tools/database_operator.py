@@ -5,8 +5,6 @@ from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from utils.logging import logger
-
 from database.document_store import DatasetManager
 from database.document_store.models.dataset import Dataset
 from database.document_store.models.field import SchemaField
@@ -14,6 +12,7 @@ from database.document_store.models.query import RecordQuery
 from database.document_store.models.record import RecordData
 from database.document_store.models.schema import DatasetSchema
 from models.base import PydanticUUID
+from utils.logging import logger
 
 
 class DatasetArgs(BaseModel):

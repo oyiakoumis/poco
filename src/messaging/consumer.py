@@ -4,8 +4,8 @@ import asyncio
 import json
 from typing import Awaitable, Callable, Dict, List, Optional
 
-from azure.servicebus.aio import ServiceBusClient, ServiceBusReceiver
 from azure.servicebus import NEXT_AVAILABLE_SESSION, ServiceBusMessage
+from azure.servicebus.aio import ServiceBusClient, ServiceBusReceiver
 from azure.servicebus.exceptions import OperationTimeoutError
 from twilio.rest import Client
 
