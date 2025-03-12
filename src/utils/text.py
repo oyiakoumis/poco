@@ -1,6 +1,8 @@
 """Text utility functions."""
 
+import json
 from enum import Enum
+from typing import Dict, List, Optional
 
 
 def trim_message(message: str, max_length: int = 50) -> str:

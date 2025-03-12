@@ -1,15 +1,17 @@
 """Worker process for consuming WhatsApp messages from Azure Service Bus."""
 
 import asyncio
+import json
 from typing import Dict, List
 from uuid import UUID, uuid4
 
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from twilio.rest import Client
 
 from agents.graph import create_graph
+from agents.tools.tool_operation_tracker import ToolOperationTracker
 from config import settings as api_settings
 from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.exceptions import (
@@ -84,9 +86,34 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
 
         # Get the last message for the WhatsApp response
         response: AnyMessage = result["messages"][-1]
-
+        
+        # Track tool operations and generate summary
+        tracker = ToolOperationTracker()
+        
+        # Filter for tool messages with successful operations
+        tool_messages = [
+            msg for msg in new_messages 
+            if isinstance(msg, ToolMessage) 
+            and hasattr(msg, "name") 
+            and msg.name in tracker.get_supported_tools()
+            and hasattr(msg, "status") 
+            and msg.status == "success"
+        ]
+        
+        # Track each tool message
+        for msg in tool_messages:
+            tracker.track_tool_message(msg.name, msg.content)
+        
+        # Generate summary
+        tool_summary = tracker.build_tool_summary_string()
+        
+        # Include summary in response if not empty
+        response_content = response.content
+        if tool_summary:
+            response_content = f"{response_content}\n\n`{tool_summary}`"
+        
         # Format the response with the user's message
-        formatted_response = format_message(input_message.body, response.content)
+        formatted_response = format_message(input_message.body, response_content)
 
         # Send response using the already initialized Twilio client
         twilio_message = twilio_client.messages.create(body=formatted_response, from_=api_settings.twilio_phone_number, to=input_message.from_number)
