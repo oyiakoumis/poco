@@ -5,6 +5,8 @@ from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from utils.logging import logger
+
 from database.document_store import DatasetManager
 from database.document_store.models.dataset import Dataset
 from database.document_store.models.field import SchemaField
@@ -132,9 +134,13 @@ class ListDatasetsOperator(BaseDBOperator):
     description: str = "List all datasets"
 
     async def _arun(self, config: RunnableConfig) -> List[Dict[str, Any]]:
-        user_id = config.get("configurable", {}).get("user_id")
-        datasets = await self.db.list_datasets(user_id)
-        return [{"id": str(dataset.id), "name": dataset.name, "description": dataset.description} for dataset in datasets]
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            datasets = await self.db.list_datasets(user_id)
+            return [{"id": str(dataset.id), "name": dataset.name, "description": dataset.description} for dataset in datasets]
+        except Exception as e:
+            logger.error(f"Error in ListDatasetsOperator: {str(e)}", exc_info=True)
+            raise
 
 
 # Get Dataset Operator
@@ -144,10 +150,14 @@ class GetDatasetOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = DatasetArgs(**kwargs)
-        dataset = await self.db.get_dataset(user_id, args.dataset_id)
-        return dataset.model_dump()
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = DatasetArgs(**kwargs)
+            dataset = await self.db.get_dataset(user_id, args.dataset_id)
+            return dataset.model_dump()
+        except Exception as e:
+            logger.error(f"Error in GetDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 # Create Dataset Operator
@@ -157,10 +167,14 @@ class CreateDatasetOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = CreateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = CreateDatasetArgs(**kwargs)
-        result = await self.db.create_dataset(user_id, args.name, args.description, args.dataset_schema)
-        return {"dataset_id": result}
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = CreateDatasetArgs(**kwargs)
+            result = await self.db.create_dataset(user_id, args.name, args.description, args.dataset_schema)
+            return {"dataset_id": result}
+        except Exception as e:
+            logger.error(f"Error in CreateDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 # Update Dataset Operator
@@ -170,9 +184,13 @@ class UpdateDatasetOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = UpdateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = UpdateDatasetArgs(**kwargs)
-        await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = UpdateDatasetArgs(**kwargs)
+            await self.db.update_dataset(user_id, args.dataset_id, args.name, args.description)
+        except Exception as e:
+            logger.error(f"Error in UpdateDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class DeleteDatasetOperator(BaseDBOperator):
@@ -181,9 +199,13 @@ class DeleteDatasetOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = DatasetArgs(**kwargs)
-        await self.db.delete_dataset(user_id, args.dataset_id)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = DatasetArgs(**kwargs)
+            await self.db.delete_dataset(user_id, args.dataset_id)
+        except Exception as e:
+            logger.error(f"Error in DeleteDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class CreateRecordOperator(BaseDBOperator):
@@ -194,10 +216,14 @@ class CreateRecordOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = CreateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = CreateRecordArgs(**kwargs)
-        result = await self.db.create_record(user_id, args.dataset_id, args.data)
-        return {"record_id": result}
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = CreateRecordArgs(**kwargs)
+            result = await self.db.create_record(user_id, args.dataset_id, args.data)
+            return {"record_id": result}
+        except Exception as e:
+            logger.error(f"Error in CreateRecordOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class UpdateRecordOperator(BaseDBOperator):
@@ -208,9 +234,13 @@ class UpdateRecordOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = UpdateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = UpdateRecordArgs(**kwargs)
-        await self.db.update_record(user_id, args.dataset_id, args.record_id, args.data)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = UpdateRecordArgs(**kwargs)
+            await self.db.update_record(user_id, args.dataset_id, args.record_id, args.data)
+        except Exception as e:
+            logger.error(f"Error in UpdateRecordOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class DeleteRecordOperator(BaseDBOperator):
@@ -219,9 +249,13 @@ class DeleteRecordOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = RecordArgs(**kwargs)
-        await self.db.delete_record(user_id, args.dataset_id, args.record_id)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = RecordArgs(**kwargs)
+            await self.db.delete_record(user_id, args.dataset_id, args.record_id)
+        except Exception as e:
+            logger.error(f"Error in DeleteRecordOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class GetRecordOperator(BaseDBOperator):
@@ -230,10 +264,14 @@ class GetRecordOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = RecordArgs(**kwargs)
-        record = await self.db.get_record(user_id, args.dataset_id, args.record_id)
-        return record.model_dump()
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = RecordArgs(**kwargs)
+            record = await self.db.get_record(user_id, args.dataset_id, args.record_id)
+            return record.model_dump()
+        except Exception as e:
+            logger.error(f"Error in GetRecordOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class QueryRecordsOperator(BaseDBOperator):
@@ -242,14 +280,18 @@ class QueryRecordsOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = QueryRecordsArgs(**kwargs)
-        result = await self.db.query_records(user_id, args.dataset_id, args.query)
-        if not result:
-            return []
-        if isinstance(result[0], dict):
-            return result
-        return [record.model_dump() for record in result]
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = QueryRecordsArgs(**kwargs)
+            result = await self.db.query_records(user_id, args.dataset_id, args.query)
+            if not result:
+                return []
+            if isinstance(result[0], dict):
+                return result
+            return [record.model_dump() for record in result]
+        except Exception as e:
+            logger.error(f"Error in QueryRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class UpdateFieldOperator(BaseDBOperator):
@@ -258,9 +300,13 @@ class UpdateFieldOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = UpdateFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = UpdateFieldArgs(**kwargs)
-        await self.db.update_field(user_id, args.dataset_id, args.field_name, args.field_update)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = UpdateFieldArgs(**kwargs)
+            await self.db.update_field(user_id, args.dataset_id, args.field_name, args.field_update)
+        except Exception as e:
+            logger.error(f"Error in UpdateFieldOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class DeleteFieldOperator(BaseDBOperator):
@@ -269,9 +315,13 @@ class DeleteFieldOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = DeleteFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = DeleteFieldArgs(**kwargs)
-        await self.db.delete_field(user_id, args.dataset_id, args.field_name)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = DeleteFieldArgs(**kwargs)
+            await self.db.delete_field(user_id, args.dataset_id, args.field_name)
+        except Exception as e:
+            logger.error(f"Error in DeleteFieldOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class AddFieldOperator(BaseDBOperator):
@@ -280,9 +330,13 @@ class AddFieldOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = AddFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = AddFieldArgs(**kwargs)
-        await self.db.add_field(user_id, args.dataset_id, args.field)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = AddFieldArgs(**kwargs)
+            await self.db.add_field(user_id, args.dataset_id, args.field)
+        except Exception as e:
+            logger.error(f"Error in AddFieldOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class BatchCreateRecordsOperator(BaseDBOperator):
@@ -293,10 +347,14 @@ class BatchCreateRecordsOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = BatchCreateRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, List[str]]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = BatchCreateRecordsArgs(**kwargs)
-        record_ids = await self.db.batch_create_records(user_id, args.dataset_id, args.records)
-        return {"record_ids": [str(record_id) for record_id in record_ids]}
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = BatchCreateRecordsArgs(**kwargs)
+            record_ids = await self.db.batch_create_records(user_id, args.dataset_id, args.records)
+            return {"record_ids": [str(record_id) for record_id in record_ids]}
+        except Exception as e:
+            logger.error(f"Error in BatchCreateRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class BatchUpdateRecordsOperator(BaseDBOperator):
@@ -307,14 +365,18 @@ class BatchUpdateRecordsOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = BatchUpdateRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = BatchUpdateRecordsArgs(**kwargs)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = BatchUpdateRecordsArgs(**kwargs)
 
-        # Convert RecordUpdate objects to the dictionary format expected by batch_update_records
-        record_updates = [{"record_id": record_update.record_id, "data": record_update.data} for record_update in args.records]
+            # Convert RecordUpdate objects to the dictionary format expected by batch_update_records
+            record_updates = [{"record_id": record_update.record_id, "data": record_update.data} for record_update in args.records]
 
-        updated_ids = await self.db.batch_update_records(user_id, args.dataset_id, record_updates)
-        return {"updated_record_ids": [str(record_id) for record_id in updated_ids]}
+            updated_ids = await self.db.batch_update_records(user_id, args.dataset_id, record_updates)
+            return {"updated_record_ids": [str(record_id) for record_id in updated_ids]}
+        except Exception as e:
+            logger.error(f"Error in BatchUpdateRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class BatchDeleteRecordsOperator(BaseDBOperator):
@@ -325,11 +387,15 @@ class BatchDeleteRecordsOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = BatchDeleteRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = BatchDeleteRecordsArgs(**kwargs)
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = BatchDeleteRecordsArgs(**kwargs)
 
-        deleted_ids = await self.db.batch_delete_records(user_id, args.dataset_id, args.record_ids)
-        return {"deleted_record_ids": [str(record_id) for record_id in deleted_ids]}
+            deleted_ids = await self.db.batch_delete_records(user_id, args.dataset_id, args.record_ids)
+            return {"deleted_record_ids": [str(record_id) for record_id in deleted_ids]}
+        except Exception as e:
+            logger.error(f"Error in BatchDeleteRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class SearchSimilarDatasetsArgs(BaseModel):
@@ -342,10 +408,14 @@ class GetAllRecordsOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = DatasetArgs(**kwargs)
-        records = await self.db.get_all_records(user_id, args.dataset_id)
-        return [record.model_dump() for record in records]
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = DatasetArgs(**kwargs)
+            records = await self.db.get_all_records(user_id, args.dataset_id)
+            return [record.model_dump() for record in records]
+        except Exception as e:
+            logger.error(f"Error in GetAllRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
 
 
 class SearchSimilarDatasetsOperator(BaseDBOperator):
@@ -354,7 +424,11 @@ class SearchSimilarDatasetsOperator(BaseDBOperator):
     args_schema: Type[BaseModel] = SearchSimilarDatasetsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
-        user_id = config.get("configurable", {}).get("user_id")
-        args = SearchSimilarDatasetsArgs(**kwargs)
-        results = await self.db.search_similar_datasets(user_id, args.dataset)
-        return [dataset.model_dump() for dataset in results]
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = SearchSimilarDatasetsArgs(**kwargs)
+            results = await self.db.search_similar_datasets(user_id, args.dataset)
+            return [dataset.model_dump() for dataset in results]
+        except Exception as e:
+            logger.error(f"Error in SearchSimilarDatasetsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise

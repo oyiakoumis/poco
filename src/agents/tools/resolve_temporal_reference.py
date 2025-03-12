@@ -8,6 +8,8 @@ from langchain_core.runnables.config import RunnableConfig
 from pydantic import BaseModel, Field
 from pytz import timezone
 
+from utils.logging import logger
+
 
 class SnapConfig(BaseModel):
     type: Literal["weekday", "month"] = Field(description="Type of snap adjustment to apply - either 'weekday' or 'month'")
@@ -110,53 +112,58 @@ class TemporalReferenceTool(BaseTool):
         """
         Core implementation of the temporal reference resolution tool.
         """
-        # Extract configuration values
-        configurable = config.get("configurable", {})
-        tz = configurable.get("time_zone", "UTC")
-        first_day_of_week = configurable.get("first_day_of_the_week", 0)
+        try:
+            # Extract configuration values
+            configurable = config.get("configurable", {})
+            tz = configurable.get("time_zone", "UTC")
+            first_day_of_week = configurable.get("first_day_of_the_week", 0)
 
-        tz_obj = timezone(tz)
-        # Localize the reference datetime (or use now)
-        if reference:
-            ref = reference if reference.tzinfo else tz_obj.localize(reference)
-            ref = ref.astimezone(tz_obj)
-        else:
-            ref = datetime.now(tz_obj)
+            tz_obj = timezone(tz)
+            # Localize the reference datetime (or use now)
+            if reference:
+                ref = reference if reference.tzinfo else tz_obj.localize(reference)
+                ref = ref.astimezone(tz_obj)
+            else:
+                ref = datetime.now(tz_obj)
 
-        # Convert start/end configs to dicts for compatibility
-        start_cfg = start.model_dump(exclude_none=True) if start else {}
-        end_cfg = end.model_dump(exclude_none=True) if end else {}
+            # Convert start/end configs to dicts for compatibility
+            start_cfg = start.model_dump(exclude_none=True) if start else {}
+            end_cfg = end.model_dump(exclude_none=True) if end else {}
 
-        # Compute the raw dates with offsets
-        start_dt = ref + relativedelta(**(start_cfg.get("offset", {}))) if start_cfg.get("offset") else ref
-        end_dt = ref + relativedelta(**(end_cfg.get("offset", {}))) if end_cfg.get("offset") else ref
+            # Compute the raw dates with offsets
+            start_dt = ref + relativedelta(**(start_cfg.get("offset", {}))) if start_cfg.get("offset") else ref
+            end_dt = ref + relativedelta(**(end_cfg.get("offset", {}))) if end_cfg.get("offset") else ref
 
-        # Apply boundary adjustments
-        if "boundary" in start_cfg:
-            start_dt = self._adjust_datetime_boundary(start_dt, start_cfg["boundary"], first_day_of_week)
-        if "boundary" in end_cfg:
-            end_dt = self._adjust_datetime_boundary(end_dt, end_cfg["boundary"], first_day_of_week)
+            # Apply boundary adjustments
+            if "boundary" in start_cfg:
+                start_dt = self._adjust_datetime_boundary(start_dt, start_cfg["boundary"], first_day_of_week)
+            if "boundary" in end_cfg:
+                end_dt = self._adjust_datetime_boundary(end_dt, end_cfg["boundary"], first_day_of_week)
 
-        # Apply "snap" adjustments if provided
-        if "snap" in start_cfg:
-            snap = start_cfg["snap"]
-            modifier = snap.get("modifier", "this")
-            if snap["type"] == "weekday":
-                start_dt = self._adjust_to_weekday(start_dt, snap["target"], modifier)
-            elif snap["type"] == "month":
-                start_dt = self._adjust_to_month(start_dt, snap["target"], modifier)
+            # Apply "snap" adjustments if provided
+            if "snap" in start_cfg:
+                snap = start_cfg["snap"]
+                modifier = snap.get("modifier", "this")
+                if snap["type"] == "weekday":
+                    start_dt = self._adjust_to_weekday(start_dt, snap["target"], modifier)
+                elif snap["type"] == "month":
+                    start_dt = self._adjust_to_month(start_dt, snap["target"], modifier)
 
-        if "snap" in end_cfg:
-            snap = end_cfg["snap"]
-            modifier = snap.get("modifier", "this")
-            if snap["type"] == "weekday":
-                end_dt = self._adjust_to_weekday(end_dt, snap["target"], modifier)
-            elif snap["type"] == "month":
-                end_dt = self._adjust_to_month(end_dt, snap["target"], modifier)
+            if "snap" in end_cfg:
+                snap = end_cfg["snap"]
+                modifier = snap.get("modifier", "this")
+                if snap["type"] == "weekday":
+                    end_dt = self._adjust_to_weekday(end_dt, snap["target"], modifier)
+                elif snap["type"] == "month":
+                    end_dt = self._adjust_to_month(end_dt, snap["target"], modifier)
 
-        if single_day_mode:
-            if start_dt.date() != end_dt.date():
-                raise ValueError("single_day_mode is True, but start and end dates differ.")
-            return (start_dt.strftime("%Y-%m-%d"), None)
+            if single_day_mode:
+                if start_dt.date() != end_dt.date():
+                    raise ValueError("single_day_mode is True, but start and end dates differ.")
+                return (start_dt.strftime("%Y-%m-%d"), None)
 
-        return (start_dt.strftime("%Y-%m-%d %H:%M:%S"), end_dt.strftime("%Y-%m-%d %H:%M:%S"))
+            return (start_dt.strftime("%Y-%m-%d %H:%M:%S"), end_dt.strftime("%Y-%m-%d %H:%M:%S"))
+        except Exception as e:
+            args_str = f"reference={reference}, start={start}, end={end}, single_day_mode={single_day_mode}"
+            logger.error(f"Error in TemporalReferenceTool._run with args {args_str}: {str(e)}", exc_info=True)
+            raise
