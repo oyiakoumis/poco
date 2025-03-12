@@ -46,7 +46,7 @@
             "name": "Debug API",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/run.py",
+            "program": "${workspaceFolder}/src/run_api.py",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src"
