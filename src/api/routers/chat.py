@@ -13,10 +13,11 @@ from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
 from config import settings
 from database.conversation_store.models.message import MessageRole
 from database.manager import DatabaseManager
-from messaging.models import MediaItem, WhatsAppQueueMessage
+from messaging.models import MediaItem, MessageStatus, WhatsAppQueueMessage
 from messaging.producer import WhatsAppMessageProducer
 from utils.logging import logger
 from utils.media_storage import upload_to_blob_storage
+from utils.redis_lock import RedLockManager
 from utils.text import (
     Command,
     build_notification_string,
@@ -154,6 +155,20 @@ async def process_whatsapp_message(
         )
 
     try:
+        # Check if the conversation is locked (being processed)
+        redis_lock_manager = RedLockManager()
+        if redis_lock_manager.is_locked(conversation_id):
+            logger.info(f"Conversation {conversation_id} is locked, returning busy message")
+
+            # Create busy message TwiML response
+            error_message = "Assistant is currently busy processing another message. This message will be ignored."
+            formatted_error = format_message(Body, error_message, is_error=True)
+
+            twiml_response = MessagingResponse()
+            twiml_response.message(formatted_error)
+
+            return Response(content=str(twiml_response), media_type="application/xml")
+
         # Create queue message
         queue_message = WhatsAppQueueMessage(
             from_number=From,

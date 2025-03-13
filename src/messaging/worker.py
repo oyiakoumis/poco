@@ -18,8 +18,9 @@ from database.conversation_store.exceptions import (
     InvalidConversationError,
 )
 from database.manager import DatabaseManager
-from messaging.models import WhatsAppQueueMessage
+from messaging.models import MessageStatus, WhatsAppQueueMessage
 from utils.logging import logger
+from utils.redis_lock import RedLockManager
 from utils.text import format_message
 
 
@@ -47,6 +48,27 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
 
     # Initialize Twilio client
     twilio_client = Client(api_settings.twilio_account_sid, api_settings.twilio_auth_token)
+
+    # Initialize Redis lock manager
+    redis_lock_manager = RedLockManager()
+
+    # Try to acquire a lock for this conversation
+    lock = redis_lock_manager.acquire_lock(input_message.conversation_id)
+
+    if not lock:
+        logger.info(f"Conversation {input_message.conversation_id} is already being processed, skipping")
+
+        # Send message to user that their message is being ignored due to ongoing processing
+        error_message = "Assistant is currently busy processing another message. This message will be ignored."
+        formatted_error = format_message(input_message.body, error_message, is_error=True)
+
+        try:
+            twilio_message = twilio_client.messages.create(body=formatted_error, from_=api_settings.twilio_phone_number, to=input_message.from_number)
+            logger.info(f"Busy notification sent via WhatsApp - Thread: {input_message.conversation_id}, SID: {twilio_message.sid}")
+            return {"status": MessageStatus.LOCKED, "reason": "conversation_locked", "message_sid": twilio_message.sid}
+        except Exception as twilio_e:
+            logger.error(f"Failed to send WhatsApp busy notification: {str(twilio_e)}")
+            return {"status": MessageStatus.LOCKED, "reason": "conversation_locked", "error": str(twilio_e)}
 
     try:
         # Get conversation history - our updated function will handle multimodal messages
@@ -86,32 +108,33 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
 
         # Get the last message for the WhatsApp response
         response: AnyMessage = result["messages"][-1]
-        
+
         # Track tool operations and generate summary
         tracker = ToolOperationTracker()
-        
+
         # Filter for tool messages with successful operations
         tool_messages = [
-            msg for msg in new_messages 
-            if isinstance(msg, ToolMessage) 
-            and hasattr(msg, "name") 
+            msg
+            for msg in new_messages
+            if isinstance(msg, ToolMessage)
+            and hasattr(msg, "name")
             and msg.name in tracker.get_supported_tools()
-            and hasattr(msg, "status") 
+            and hasattr(msg, "status")
             and msg.status == "success"
         ]
-        
+
         # Track each tool message
         for msg in tool_messages:
             tracker.track_tool_message(msg.name, msg.content)
-        
+
         # Generate summary
         tool_summary = tracker.build_tool_summary_string()
-        
+
         # Include summary in response if not empty
         response_content = response.content
         if tool_summary:
             response_content = f"{response_content}\n\n`{tool_summary}`"
-        
+
         # Format the response with the user's message
         formatted_response = format_message(input_message.body, response_content)
 
@@ -120,7 +143,7 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
 
         logger.info(f"Message processing completed and sent via WhatsApp - Thread: {input_message.conversation_id}, SID: {twilio_message.sid}")
 
-        return {"status": "success", "message_sid": twilio_message.sid}
+        return {"status": MessageStatus.SUCCESS, "message_sid": twilio_message.sid}
 
     except Exception as e:
         logger.error(f"Error processing WhatsApp message: {str(e)}", exc_info=True)
@@ -134,7 +157,12 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
             # Reuse the already initialized Twilio client
             twilio_message = twilio_client.messages.create(body=formatted_error, from_=api_settings.twilio_phone_number, to=input_message.from_number)
             logger.info(f"Error notification sent via WhatsApp - Thread: {input_message.conversation_id}, SID: {twilio_message.sid}")
-            return {"status": "error", "message_sid": twilio_message.sid}
+            return {"status": MessageStatus.ERROR, "message_sid": twilio_message.sid}
         except Exception as twilio_e:
             logger.error(f"Failed to send WhatsApp error notification: {str(twilio_e)}")
-            return {"status": "error", "message": "Failed to send WhatsApp notification"}
+            return {"status": MessageStatus.ERROR, "message": "Failed to send WhatsApp notification"}
+    finally:
+        # Release the lock if we acquired it
+        if lock:
+            redis_lock_manager.release_lock(lock)
+            logger.info(f"Released lock for conversation {input_message.conversation_id}")

@@ -1,11 +1,22 @@
 """Message models for Azure Service Bus."""
 
 from datetime import datetime, timezone
+from enum import Enum, auto
 from typing import Annotated, List, Optional
 
 from pydantic import BaseModel, Field, field_serializer
 
 from models.base import PydanticUUID
+
+
+class MessageStatus(str, Enum):
+    """Status of a message processing."""
+    
+    SUCCESS = "success"
+    ERROR = "error"
+    SKIPPED = "skipped"
+    LOCKED = "locked"
+    UNKNOWN = "unknown"
 
 
 class MediaItem(BaseModel):

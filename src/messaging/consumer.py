@@ -12,7 +12,7 @@ from twilio.rest import Client
 from config import settings
 from config import settings as api_settings
 from messaging.buffer import MessageBuffer
-from messaging.models import WhatsAppQueueMessage
+from messaging.models import MessageStatus, WhatsAppQueueMessage
 from utils.logging import logger
 
 
@@ -36,7 +36,7 @@ class WhatsAppMessageConsumer:
                     async with self.client.get_queue_receiver(
                         queue_name=settings.queue_name,
                         session_id=NEXT_AVAILABLE_SESSION,
-                        max_session_lock_renewal_duration=300,  # Renew lock for up to 5 minutes
+                        max_session_lock_renewal_duration=60,  # Renew lock for up to 1 minute
                     ) as receiver:
                         # Only proceed if we have a valid receiver with a session
                         if receiver.session:
@@ -131,8 +131,8 @@ class WhatsAppMessageConsumer:
 
                 # Process the message
                 result = await self.process_func(earliest_whatsapp_msg)
-
-                logger.info(f"Earliest message processed with status: {result.get('status', 'unknown')}, SID: {result.get('message_sid', 'N/A')}")
+                
+                logger.info(f"Earliest message processed with status: {result.get('status', MessageStatus.UNKNOWN)}, SID: {result.get('message_sid', 'N/A')}")
 
                 # Complete the message
                 await receiver.complete_message(earliest_msg)

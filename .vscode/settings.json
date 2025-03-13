@@ -19,6 +19,7 @@
     "levelname",
     "levelno",
     "multimodal",
+    "redlock",
     "relativedelta",
     "servicebus",
     "sseclient",
