@@ -9,6 +9,10 @@ from pydantic import BaseModel, Field
 from models.base import PydanticUUID
 
 
+class MediaItem(BaseModel):
+    blob_name: str = Field(..., description="Blob name")
+    content_type: str = Field(..., description="Content type")
+
 class ChatRequest(BaseModel):
     """Chat request model."""
 

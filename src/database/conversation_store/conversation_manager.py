@@ -230,10 +230,16 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to delete conversation: {str(e)}")
 
-    async def create_messages(self, user_id: str, conversation_id: UUID, messages: List[AnyMessage], metadata: Optional[Dict] = None) -> List[UUID]:
+    async def create_messages(self, user_id: str, messages: List[Message]) -> List[UUID]:
         """Creates multiple messages in a conversation in a single transaction."""
         try:
             logger.info(f"Creating {len(messages)} messages in conversation {conversation_id} for user {user_id}")
+
+            # Validate messages
+            assert all(message.user_id == user_id for message in messages), "All messages must belong to the same user"
+            conversation_id = messages[0].conversation_id
+            assert all(message.conversation_id == conversation_id for message in messages), "All messages must belong to the same conversation"
+
             # Verify conversation exists and belongs to user
             if not await self.conversation_exists(user_id, conversation_id):
                 raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
@@ -246,36 +252,17 @@ class ConversationManager:
 
             # Prepare all message documents with incrementing timestamps
             for i, message in enumerate(messages):
-                message_id = uuid4()
-                message_ids.append(message_id)
-
-                # Determine role based on message type
-                if isinstance(message, AIMessage):
-                    message_role = MessageRole.ASSISTANT
-                elif isinstance(message, HumanMessage):
-                    message_role = MessageRole.HUMAN
-                elif isinstance(message, SystemMessage):
-                    message_role = MessageRole.SYSTEM
-                elif isinstance(message, ToolMessage):
-                    message_role = MessageRole.TOOL
-                else:
-                    raise InvalidMessageError(f"Invalid message type: {type(message)}")
-
                 # Create timestamp with 1 millisecond increment for each message to ensure order
                 message_timestamp = base_timestamp + timedelta(milliseconds=i)
 
-                message_obj = Message(
-                    id=str(message_id),
-                    user_id=user_id,
-                    conversation_id=str(conversation_id),
-                    role=message_role,
-                    message=message,
-                    metadata=metadata or {},
-                    created_at=message_timestamp,
-                    updated_at=message_timestamp,
-                )
+                # Update timestamps
+                message.created_at = message_timestamp
+                message.updated_at = message_timestamp
 
-                message_documents.append(message_obj.model_dump(by_alias=True))
+                # Add message ID to the list
+                message_ids.append(message.id)
+
+                message_documents.append(message.model_dump(by_alias=True))
 
             # Insert all messages and update conversation timestamp in a transaction
             async with await self.client.start_session() as session:
@@ -301,25 +288,17 @@ class ConversationManager:
         except Exception as e:
             raise InvalidMessageError(f"Failed to create messages: {str(e)}")
 
-    async def create_message(
-        self, user_id: str, conversation_id: UUID, message: AnyMessage, role: MessageRole, message_id: UUID, metadata: Optional[Dict] = None
-    ) -> UUID:
+    async def create_message(self, user_id: str, message: Message) -> UUID:
         """Creates a new message in a conversation."""
         try:
-            logger.info(f"Creating message in conversation {conversation_id} for user {user_id}")
-            # Verify conversation exists and belongs to user
-            if not await self.conversation_exists(user_id, conversation_id):
-                raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
+            logger.info(f"Creating message in conversation {message.conversation_id} for user {user_id}")
 
-            # Create message with provided UUID
-            message = Message(
-                id=str(message_id),
-                user_id=user_id,
-                conversation_id=str(conversation_id),
-                role=role,
-                message=message,
-                metadata=metadata or {},
-            )
+            # Verify message belongs to user
+            assert message.user_id == user_id, "Message must belong to the user"
+
+            # Verify conversation exists and belongs to user
+            if not await self.conversation_exists(user_id, message.conversation_id):
+                raise ConversationNotFoundError(f"Conversation {message.conversation_id} not found")
 
             # Insert message and update conversation timestamp in a transaction
             async with await self.client.start_session() as session:
@@ -331,13 +310,13 @@ class ConversationManager:
 
                     # Update conversation timestamp
                     await self._conversations.update_one(
-                        {"_id": str(conversation_id), "user_id": user_id},
+                        {"_id": str(message.conversation_id), "user_id": user_id},
                         {"$set": {"updated_at": datetime.now(tz=timezone.utc)}},
                         session=session,
                     )
 
-            logger.info(f"Message created with ID: {message_id}")
-            return message_id
+            logger.info(f"Message created with ID: {message.id}")
+            return message.id
 
         except ConversationNotFoundError:
             raise

@@ -4,7 +4,7 @@ import asyncio
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from config import settings
+from settings import settings
 from database.conversation_store.conversation_manager import ConversationManager
 from database.document_store.dataset_manager import DatasetManager
 from utils.logging import logger

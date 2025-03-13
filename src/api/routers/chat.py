@@ -1,20 +1,25 @@
 """Chat router for handling message processing."""
 
-from typing import Optional
+import asyncio
+import json
+from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Form, Header, Request, Response
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import MemorySaver
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
 
 from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
-from config import settings
-from database.conversation_store.models.message import MessageRole
+from agents.graph import create_graph
+from agents.tools.tool_operation_tracker import ToolOperationTracker
+from api.models import MediaItem
+from settings import settings
+from database.conversation_store.models.message import Message, MessageRole
 from database.manager import DatabaseManager
-from messaging.models import MediaItem, WhatsAppQueueMessage
-from messaging.producer import WhatsAppMessageProducer
 from utils.azure_blob_lock import AzureBlobLockManager
 from utils.logging import logger
 from utils.media_storage import upload_to_blob_storage
@@ -83,10 +88,13 @@ async def process_whatsapp_message(
 
     user_id = From  # Use the WhatsApp number as the user ID
     conversation_id = None
-    try:
+    lock = None
 
+    try:
+        # Get database managers
         database_manager = DatabaseManager()
         conversation_db = await database_manager.setup_conversation_manager()
+        dataset_db = await database_manager.setup_dataset_manager()
 
         # Flag to track if a new conversation was created by command
         new_conversation_created = False
@@ -109,19 +117,9 @@ async def process_whatsapp_message(
             await conversation_db.create_conversation(user_id, str(conversation_id), conversation_id)
             new_conversation_created = True
 
-        # Check if the conversation is locked (being processed)
+        # Initialize Azure Blob lock manager and try to acquire a lock
         blob_lock_manager = AzureBlobLockManager()
-        if blob_lock_manager.is_locked(conversation_id):
-            logger.info(f"Conversation {conversation_id} is locked, returning busy message")
-
-            # Create busy message TwiML response
-            error_message = "Assistant is currently busy processing another message. This message will be ignored."
-            formatted_error = format_message(Body, error_message, is_error=True)
-
-            twiml_response = MessagingResponse()
-            twiml_response.message(formatted_error)
-
-            return Response(content=str(twiml_response), media_type="application/xml")
+        lock = blob_lock_manager.acquire_lock(conversation_id)
 
         # Create a message ID for the incoming message
         message_id = uuid4()
@@ -153,59 +151,7 @@ async def process_whatsapp_message(
                     unsupported_media = True
                     logger.info(f"Unsupported media type received: {media_type}")
 
-        # WhatsApp-specific metadata
-        metadata = {
-            "whatsapp_id": WaId,
-            "sms_message_sid": SmsMessageSid,
-            "media_count": len(media_items),
-            "media_items": media_items,
-            "unsupported_media": unsupported_media,
-        }
-
-        # Store messages
-        if new_conversation_created:
-            # For new conversations, create both system and human messages together
-            await conversation_db.create_messages(
-                user_id=user_id,
-                conversation_id=conversation_id,
-                messages=[SystemMessage(ASSISTANT_SYSTEM_MESSAGE), HumanMessage(content=Body)],
-                metadata=metadata,
-            )
-        else:
-            # For existing conversations, just create the human message
-            await conversation_db.create_message(
-                user_id=user_id,
-                conversation_id=conversation_id,
-                message=HumanMessage(content=Body, id=message_id),
-                role=MessageRole.HUMAN,
-                message_id=message_id,
-                metadata=metadata,
-            )
-
-        # Create queue message
-        queue_message = WhatsAppQueueMessage(
-            from_number=From,
-            body=Body,
-            profile_name=ProfileName,
-            wa_id=WaId,
-            sms_message_sid=SmsMessageSid,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            message_id=message_id,
-            request_url=request_url,
-            media_count=len(media_items),
-            media_items=media_items,
-            unsupported_media=unsupported_media,
-        )
-
-        # Send to Azure Service Bus with conversation_id as session_id
-        producer = WhatsAppMessageProducer()
-        await producer.send_message(queue_message, session_id=str(conversation_id))
-
-        logger.info(f"WhatsApp message queued - Thread: {conversation_id}")
-
-        # Create immediate TwiML response
-        twiml_response = MessagingResponse()
+        # Send immediate acknowledgment via Twilio
         response_message = "Got it! Give me just a second..."
 
         # Build concise notification string if needed
@@ -214,14 +160,130 @@ async def process_whatsapp_message(
         if notification_str:
             response_message += f"\n\n`{notification_str}`"
 
-        # Use format_message to include a reference to the user's message
+        # Format the response with the user's message
         formatted_response = format_message(Body, response_message)
-        twiml_response.message(formatted_response)
 
-        return Response(content=str(twiml_response), media_type="application/xml")
+        # If we couldn't acquire the lock, send a busy message and return
+        if not lock:
+            logger.info(f"Conversation {conversation_id} is already being processed, skipping")
+
+            # Send message to user that their message is being ignored due to ongoing processing
+            error_message = "Assistant is currently busy processing another message. This message will be ignored."
+            formatted_error = format_message(Body, error_message, is_error=True)
+
+            # Return API response
+            return Response(content=formatted_error, media_type="application/xml")
+
+        # Send the acknowledgment message
+        try:
+            twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+            ack_message = twilio_client.messages.create(body=formatted_response, from_=settings.twilio_phone_number, to=From)
+            logger.info(f"Acknowledgment sent via WhatsApp - Thread: {conversation_id}, SID: {ack_message.sid}")
+        except Exception as twilio_e:
+            logger.error(f"Failed to send WhatsApp acknowledgment: {str(twilio_e)}")
+            # Continue processing even if acknowledgment fails
+
+        input_messages = []
+        if new_conversation_created:
+            input_messages += [
+                Message(user_id=user_id, conversation_id=conversation_id, role=MessageRole.SYSTEM, message=SystemMessage(content=ASSISTANT_SYSTEM_MESSAGE))
+            ]
+
+        input_messages += [
+            Message(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                role=MessageRole.HUMAN,
+                message=HumanMessage(content=Body),
+                metadata={
+                    "whatsapp_id": WaId,
+                    "sms_message_sid": SmsMessageSid,
+                    "media_count": len(media_items),
+                    "media_items": media_items,
+                    "unsupported_media": unsupported_media,
+                },
+            )
+        ]
+
+        # Get conversation history
+        conversation_history = []
+        if not new_conversation_created:
+            conversation_history = await conversation_db.list_messages(user_id, conversation_id)
+
+        # Get IDs of existing messages
+        existing_message_ids = {msg.id for msg in conversation_history}
+
+        # Combine input messages with existing conversation history
+        conversation_history += input_messages
+
+        # Get image URLs for all messages
+        await asyncio.gather(*[message.get_image_urls() for message in conversation_history])
+
+        # Get the graph
+        graph = create_graph(dataset_db)
+        graph = graph.compile(checkpointer=MemorySaver())
+
+        # Configuration for the graph
+        config = RunnableConfig(
+            configurable={
+                "thread_id": str(conversation_id),
+                "user_id": user_id,
+                "time_zone": "UTC",
+                "first_day_of_the_week": 0,
+            },
+            recursion_limit=25,
+        )
+
+        # Process the message through the graph
+        result = await graph.ainvoke({"messages": [message.message for message in conversation_history]}, config)
+        logger.info(f"Graph processing completed - Thread: {conversation_id}")
+
+        # Identify new messages by comparing IDs
+        output_messages: List[AnyMessage] = [msg for msg in result["messages"] if msg.id not in existing_message_ids]
+
+        # Messages to store in the database
+        messages_to_store = input_messages + [Message(user_id=user_id, conversation_id=conversation_id, message=msg) for msg in output_messages]
+
+        # Store all new messages
+        await conversation_db.create_messages(user_id, messages_to_store)
+
+        # Get the last message for the WhatsApp response
+        response: AnyMessage = result["messages"][-1]
+
+        # Track tool operations and generate summary
+        tracker = ToolOperationTracker()
+
+        # Filter for tool messages with successful operations
+        tool_messages = [
+            msg
+            for msg in output_messages
+            if isinstance(msg, ToolMessage)
+            and hasattr(msg, "name")
+            and msg.name in tracker.get_supported_tools()
+            and hasattr(msg, "status")
+            and msg.status == "success"
+        ]
+
+        # Track each tool message
+        for msg in tool_messages:
+            tracker.track_tool_message(msg.name, msg.content)
+
+        # Generate summary
+        tool_summary = tracker.build_tool_summary_string()
+
+        # Include summary in response if not empty
+        response_content = response.content
+        if tool_summary:
+            response_content = f"{response_content}\n\n`{tool_summary}`"
+
+        # Format the response with the user's message
+        formatted_response = format_message(Body, response_content)
+
+        # Return API response
+        return Response(content=formatted_response, media_type="application/xml")
 
     except Exception as e:
-        logger.error(f"Error queuing WhatsApp message: {str(e)}", exc_info=True)
+        logger.error(f"Error processing WhatsApp message: {str(e)}", exc_info=True)
 
         # Create error message TwiML response
         error_message = "We're experiencing technical difficulties processing your message. Our team has been notified."
@@ -230,6 +292,9 @@ async def process_whatsapp_message(
         twiml_response = MessagingResponse()
         twiml_response.message(formatted_error)
 
-        logger.info(f"WhatsApp error notification sent - Thread: {conversation_id}")
-
         return Response(content=str(twiml_response), status_code=500, media_type="application/xml")
+    finally:
+        # Release the lock if we acquired it
+        if lock:
+            blob_lock_manager.release_lock(lock)
+            logger.info(f"Released lock for conversation {conversation_id}")

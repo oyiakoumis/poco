@@ -4,7 +4,7 @@ import multiprocessing
 
 import uvicorn
 
-from config import settings
+from settings import settings
 
 if __name__ == "__main__":
     # Calculate optimal number of workers based on CPU cores

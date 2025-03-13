@@ -1,12 +1,10 @@
-"""Azure Service Bus and Blob Storage configuration."""
+"""App settings."""
 
 from pydantic_settings import BaseSettings
 
 from constants import (
     API_URL,
     AZURE_BLOB_CONTAINER_NAME,
-    AZURE_SERVICEBUS_CONNECTION_STRING,
-    AZURE_SERVICEBUS_QUEUE_NAME,
     AZURE_STORAGE_ACCOUNT_KEY,
     AZURE_STORAGE_CONNECTION_STRING,
     DATABASE_CONNECTION_STRING,
@@ -18,8 +16,6 @@ from constants import (
 
 
 class Settings(BaseSettings):
-    """Azure Service Bus settings."""
-
     # API settings
     api_title: str = "Task Management API"
     api_version: str = "1.0.0"
@@ -33,10 +29,6 @@ class Settings(BaseSettings):
     # Logging
     logging_level: int = LOGGING_LEVEL
 
-    # Azure Service Bus
-    connection_string: str = AZURE_SERVICEBUS_CONNECTION_STRING
-    queue_name: str = AZURE_SERVICEBUS_QUEUE_NAME
-
     # Twilio settings
     api_url: str = API_URL
     twilio_account_sid: str = TWILIO_ACCOUNT_SID
@@ -47,5 +39,6 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = AZURE_STORAGE_CONNECTION_STRING
     azure_storage_account_key: str = AZURE_STORAGE_ACCOUNT_KEY
     azure_blob_container_name: str = AZURE_BLOB_CONTAINER_NAME
+
 
 settings = Settings()

@@ -6,7 +6,7 @@ from uuid import UUID
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient, ContentSettings
 
-from config import settings
+from settings import settings
 from utils.logging import logger
 from utils.singleton import Singleton
 

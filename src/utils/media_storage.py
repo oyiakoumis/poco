@@ -8,7 +8,7 @@ import httpx
 from azure.storage.blob import BlobSasPermissions, ContentSettings, generate_blob_sas
 from azure.storage.blob.aio import BlobServiceClient
 
-from config import settings
+from settings import settings
 from utils.logging import logger
 
 

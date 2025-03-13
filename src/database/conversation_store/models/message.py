@@ -35,23 +35,37 @@ class Message(BaseDocument):
     metadata: Dict = Field(default_factory=dict, description="Additional metadata for the message")
 
     @field_validator("message", mode="before")
-    def validate_message(cls, message_dict, info):
+    def validate_message(cls, message, info):
         """Deserialize the message before model validation."""
         # Get the role from the validation context
         values = info.data
         role = values.get("role")
         id = values.get("id")
 
-        if role == MessageRole.HUMAN:
-            message = HumanMessage.model_validate(message_dict)
-        elif role == MessageRole.ASSISTANT:
-            message = AIMessage.model_validate(message_dict)
-        elif role == MessageRole.SYSTEM:
-            message = SystemMessage.model_validate(message_dict)
-        elif role == MessageRole.TOOL:
-            message = ToolMessage.model_validate(message_dict)
+        if isinstance(message, dict):
+            if role == MessageRole.HUMAN:
+                message = HumanMessage.model_validate(message)
+            elif role == MessageRole.ASSISTANT:
+                message = AIMessage.model_validate(message)
+            elif role == MessageRole.SYSTEM:
+                message = SystemMessage.model_validate(message)
+            elif role == MessageRole.TOOL:
+                message = ToolMessage.model_validate(message)
+            else:
+                raise ValueError(f"Invalid message role: {role}")
+        elif isinstance(message, AnyMessage):
+            if isinstance(message, HumanMessage):
+                assert role == MessageRole.HUMAN
+            if isinstance(message, AIMessage):
+                assert role == MessageRole.ASSISTANT
+            if isinstance(message, SystemMessage):
+                assert role == MessageRole.SYSTEM
+            if isinstance(message, ToolMessage):
+                assert role == MessageRole.TOOL
+            else:
+                raise TypeError(f"Invalid message type: {type(message)}")
         else:
-            raise ValueError(f"Invalid message role: {role}")
+            raise TypeError(f"Invalid message type: {type(message)}")
 
         if message.id is None:
             message.id = str(id)
