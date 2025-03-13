@@ -11,4 +11,9 @@ if __name__ == "__main__":
     num_cores = multiprocessing.cpu_count()
     num_workers = (2 * num_cores) + 1
 
-    uvicorn.run("api.main:app", host=settings.host, port=settings.port, workers=num_workers)
+    uvicorn.run(
+        "api.main:app",
+        host=settings.host,
+        port=settings.port,
+        # workers=num_workers,  # Comment to debug
+    )

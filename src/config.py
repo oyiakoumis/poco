@@ -11,9 +11,11 @@ from constants import (
     AZURE_STORAGE_CONNECTION_STRING,
     DATABASE_CONNECTION_STRING,
     LOGGING_LEVEL,
-    REDIS_CONNECTION_STRINGS,
+    REDIS_HOSTS,
     REDIS_LOCK_TIMEOUT_MS,
+    REDIS_PASSWORDS,
     REDIS_PORT,
+    REDIS_USERNAME,
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
     TWILIO_PHONE_NUMBER,
@@ -50,9 +52,11 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = AZURE_STORAGE_CONNECTION_STRING
     azure_storage_account_key: str = AZURE_STORAGE_ACCOUNT_KEY
     azure_blob_container_name: str = AZURE_BLOB_CONTAINER_NAME
-    
+
     # Redis settings
-    redis_connection_strings: str = REDIS_CONNECTION_STRINGS
+    redis_hosts: list = REDIS_HOSTS
+    redis_username: str = REDIS_USERNAME
+    redis_passwords: str = REDIS_PASSWORDS
     redis_port: int = REDIS_PORT
     redis_lock_timeout_ms: int = REDIS_LOCK_TIMEOUT_MS
 
