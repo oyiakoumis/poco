@@ -29,6 +29,9 @@ def format_message(user_message: str, response: str, is_error: bool = False) -> 
     first_line = user_message.split("\n")[0] if user_message else ""
     trimmed_user_message = trim_message(first_line)
 
+    if not trimmed_user_message:
+        trimmed_user_message = "_empty message_" 
+
     formatted_message = f"> {trimmed_user_message}\n"
 
     if is_error:

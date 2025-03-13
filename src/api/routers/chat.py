@@ -50,6 +50,19 @@ async def process_whatsapp_message(
     """Process incoming WhatsApp messages from Twilio."""
     logger.info(f"WhatsApp message received from {From}, SID: {SmsMessageSid}")
 
+    # Check if the message body is empty
+    if not Body or Body.strip() == "":
+        logger.info(f"Empty message received from {From}, SID: {SmsMessageSid}")
+
+        # Create error message TwiML response
+        error_message = "Message's body cannot be empty."
+        formatted_error = format_message("", error_message, is_error=True)
+
+        twiml_response = MessagingResponse()
+        twiml_response.message(formatted_error)
+
+        return Response(content=str(twiml_response), media_type="application/xml")
+
     # Validate the request is coming from Twilio
     if False and settings.twilio_auth_token and x_twilio_signature:  # TODO: Enable Twilio validation later
         # Create a dictionary of form fields for Twilio validation
