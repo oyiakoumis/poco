@@ -551,21 +551,15 @@ class DatasetManager:
             # If there's a default value, we can use that for null values
             if field_update.default is not None:
                 return
-                
+
             # Check if any records have null values for this field
-            query = {
-                "user_id": user_id,
-                "dataset_id": str(dataset_id),
-                f"data.{field_name}": {"$exists": False}  # Field doesn't exist or is null
-            }
-            
+            query = {"user_id": user_id, "dataset_id": str(dataset_id), f"data.{field_name}": {"$exists": False}}  # Field doesn't exist or is null
+
             # Count records with null values
             count = await self._records.count_documents(query, session=session)
             if count > 0:
-                raise InvalidRecordDataError(
-                    f"Cannot change field '{field_name}' to required: {count} records have null values for this field"
-                )
-    
+                raise InvalidRecordDataError(f"Cannot change field '{field_name}' to required: {count} records have null values for this field")
+
     async def _validate_unique_field_update(
         self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
     ) -> None:
@@ -583,19 +577,17 @@ class DatasetManager:
                 # Only include groups with more than one record (duplicates)
                 {"$match": {"count": {"$gt": 1}}},
                 # Limit to just one result for efficiency
-                {"$limit": 1}
+                {"$limit": 1},
             ]
-            
+
             # Execute pipeline
             cursor = self._records.aggregate(pipeline, session=session)
             duplicates = await cursor.to_list(length=1)
-            
+
             if duplicates:
                 duplicate_value = duplicates[0]["_id"]
                 duplicate_count = duplicates[0]["count"]
-                raise InvalidRecordDataError(
-                    f"Cannot change field '{field_name}' to unique: {duplicate_count} records have the value '{duplicate_value}'"
-                )
+                raise InvalidRecordDataError(f"Cannot change field '{field_name}' to unique: {duplicate_count} records have the value '{duplicate_value}'")
 
     async def update_field(
         self,
@@ -621,7 +613,7 @@ class DatasetManager:
                     # Validate required and unique constraints
                     await self._validate_required_field_update(user_id, dataset_id, field_name, old_field, field_update, session)
                     await self._validate_unique_field_update(user_id, dataset_id, field_name, old_field, field_update, session)
-                    
+
                     # Update dataset schema and regenerate embedding
                     updated = Dataset(
                         id=dataset_id,
@@ -666,47 +658,39 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to update field: {str(e)}")
 
-    async def _check_value_exists(self, user_id: str, dataset_id: UUID, field_name: str, 
-                                value: Any, exclude_record_id: Optional[UUID] = None) -> bool:
+    async def _check_value_exists(self, user_id: str, dataset_id: UUID, field_name: str, value: Any, exclude_record_id: Optional[UUID] = None) -> bool:
         """Check if a value already exists for a unique field in any record.
         Returns True if the value exists, False otherwise."""
         try:
-            query = {
-                "user_id": user_id,
-                "dataset_id": str(dataset_id),
-                f"data.{field_name}": value
-            }
-            
+            query = {"user_id": user_id, "dataset_id": str(dataset_id), f"data.{field_name}": value}
+
             # Exclude the current record if updating
             if exclude_record_id:
                 query["_id"] = {"$ne": str(exclude_record_id)}
-                
+
             # Use count_documents with limit=1 for efficiency
             count = await self._records.count_documents(query, limit=1)
             return count > 0
-                
+
         except Exception as e:
             raise DatabaseError(f"Failed to check value existence: {str(e)}")
-    
-    async def _validate_uniqueness(self, user_id: str, dataset_id: UUID, data: RecordData, 
-                                 dataset_schema: DatasetSchema, exclude_record_id: Optional[UUID] = None) -> None:
+
+    async def _validate_uniqueness(
+        self, user_id: str, dataset_id: UUID, data: RecordData, dataset_schema: DatasetSchema, exclude_record_id: Optional[UUID] = None
+    ) -> None:
         """Validate that data doesn't violate uniqueness constraints."""
         # Get unique fields from schema
         unique_fields = [field for field in dataset_schema.fields if field.unique]
-        
+
         # Check each unique field
         for field in unique_fields:
             field_name = field.field_name
             if field_name in data:
                 # Check if value already exists in another record
-                exists = await self._check_value_exists(
-                    user_id, dataset_id, field_name, data[field_name], exclude_record_id
-                )
+                exists = await self._check_value_exists(user_id, dataset_id, field_name, data[field_name], exclude_record_id)
                 if exists:
-                    raise InvalidRecordDataError(
-                        f"Value '{data[field_name]}' for field '{field_name}' already exists in another record"
-                    )
-    
+                    raise InvalidRecordDataError(f"Value '{data[field_name]}' for field '{field_name}' already exists in another record")
+
     async def create_record(self, user_id: str, dataset_id: UUID, data: RecordData) -> UUID:
         """Creates a new record in the specified dataset."""
         try:
@@ -716,7 +700,7 @@ class DatasetManager:
 
             # Validate and convert data
             validated_data = Record.validate_data(data, dataset.dataset_schema)
-            
+
             # Check uniqueness constraints
             await self._validate_uniqueness(user_id, dataset_id, validated_data, dataset.dataset_schema)
 
@@ -745,7 +729,7 @@ class DatasetManager:
 
             # Validate and convert data
             validated_data = Record.validate_data(data, dataset.dataset_schema)
-            
+
             # Check uniqueness constraints
             await self._validate_uniqueness(user_id, dataset_id, validated_data, dataset.dataset_schema, record_id)
 
@@ -914,18 +898,17 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to get all records: {str(e)}")
 
-    async def _validate_batch_uniqueness(self, user_id: str, dataset_id: UUID, 
-                                       records_data: List[RecordData], dataset_schema: DatasetSchema) -> None:
+    async def _validate_batch_uniqueness(self, user_id: str, dataset_id: UUID, records_data: List[RecordData], dataset_schema: DatasetSchema) -> None:
         """Validate uniqueness constraints for a batch of records."""
         # Get unique fields from schema
         unique_fields = [field for field in dataset_schema.fields if field.unique]
         if not unique_fields:
             return  # No unique fields to check
-            
+
         # For each unique field
         for field in unique_fields:
             field_name = field.field_name
-            
+
             # Collect all values for this field from the batch
             batch_values = {}
             for i, data in enumerate(records_data):
@@ -933,34 +916,26 @@ class DatasetManager:
                     value = data[field_name]
                     if value in batch_values:
                         # Duplicate within the batch itself
-                        raise InvalidRecordDataError(
-                            f"Duplicate value '{value}' for unique field '{field_name}' within the batch"
-                        )
+                        raise InvalidRecordDataError(f"Duplicate value '{value}' for unique field '{field_name}' within the batch")
                     batch_values[value] = i
-                    
+
             if not batch_values:
                 continue
-                
+
             # Check if any values already exist in the database
-            query = {
-                "user_id": user_id,
-                "dataset_id": str(dataset_id),
-                f"data.{field_name}": {"$in": list(batch_values.keys())}
-            }
-                
+            query = {"user_id": user_id, "dataset_id": str(dataset_id), f"data.{field_name}": {"$in": list(batch_values.keys())}}
+
             # Find existing records with these values
             existing_values = set()
             async for doc in self._records.find(query, {f"data.{field_name}": 1}):
                 if field_name in doc.get("data", {}):
                     existing_values.add(doc["data"][field_name])
-                
+
             # Check for conflicts
             for value in existing_values:
                 if value in batch_values:
-                    raise InvalidRecordDataError(
-                        f"Value '{value}' for field '{field_name}' already exists in another record"
-                    )
-    
+                    raise InvalidRecordDataError(f"Value '{value}' for field '{field_name}' already exists in another record")
+
     async def batch_create_records(self, user_id: str, dataset_id: UUID, records_data: List[RecordData]) -> List[UUID]:
         """Creates multiple records in the specified dataset."""
         try:
@@ -980,7 +955,7 @@ class DatasetManager:
                     data=validated_data,
                 )
                 validated_records.append(record.model_dump(by_alias=True))
-            
+
             # Check uniqueness constraints for the batch
             await self._validate_batch_uniqueness(user_id, dataset_id, validated_records_data, dataset.dataset_schema)
 
@@ -994,69 +969,67 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to batch create records: {str(e)}")
 
-    async def _validate_batch_updates_uniqueness(self, user_id: str, dataset_id: UUID, 
-                                              records_updates: List["RecordUpdate"], 
-                                              dataset_schema: DatasetSchema) -> None:
+    async def _validate_batch_updates_uniqueness(
+        self, user_id: str, dataset_id: UUID, records_updates: List["RecordUpdate"], dataset_schema: DatasetSchema
+    ) -> None:
         """Validate uniqueness constraints for a batch of record updates."""
         # Get unique fields from schema
         unique_fields = [field for field in dataset_schema.fields if field.unique]
         if not unique_fields:
             return  # No unique fields to check
-            
+
         # For each unique field
         for field in unique_fields:
             field_name = field.field_name
-            
+
             # Collect all values and record IDs for this field from the batch
             batch_values = {}  # Maps values to record IDs
             for update in records_updates:
                 record_id = update.get("record_id")
                 data = update.get("data")
-                
+
                 if field_name in data:
                     value = data[field_name]
                     # Convert record_id to string for consistent comparison
                     str_record_id = str(record_id)
-                    
+
                     if value in batch_values:
                         # Another record in the batch is being updated to the same value
                         # Convert the stored record_id to string for comparison
                         stored_record_id = str(batch_values[value])
-                        
+
                         if stored_record_id != str_record_id:
                             # Duplicate within the batch itself (different records)
                             raise InvalidRecordDataError(
                                 f"Duplicate value '{value}' for unique field '{field_name}' within the batch. "
                                 f"Records {stored_record_id} and {str_record_id} would have the same value."
                             )
-                    
+
                     batch_values[value] = record_id
-                    
+
             if not batch_values:
                 continue
-                
+
             # Check if any values already exist in the database (excluding the records being updated)
             str_record_ids = [str(record_id) for record_id in batch_values.values()]
             query = {
                 "user_id": user_id,
                 "dataset_id": str(dataset_id),
                 f"data.{field_name}": {"$in": list(batch_values.keys())},
-                "_id": {"$nin": str_record_ids}  # Exclude records being updated
+                "_id": {"$nin": str_record_ids},  # Exclude records being updated
             }
-                
+
             # Find existing records with these values
             existing_values = {}  # Maps values to record IDs
             async for doc in self._records.find(query, {f"data.{field_name}": 1, "_id": 1}):
                 if field_name in doc.get("data", {}):
                     existing_values[doc["data"][field_name]] = doc["_id"]
-                
+
             # Check for conflicts
             for value, existing_id in existing_values.items():
                 if value in batch_values:
-                    raise InvalidRecordDataError(
-                        f"Value '{value}' for field '{field_name}' already exists in record {existing_id}"
-                    )
-    
+                    raise InvalidRecordDataError(f"Value '{value}' for field '{field_name}' already exists in record {existing_id}")
+
     async def batch_update_records(self, user_id: str, dataset_id: UUID, records_updates: List["RecordUpdate"]) -> List[UUID]:
         """Updates multiple existing records."""
         try:
@@ -1067,7 +1040,7 @@ class DatasetManager:
             # Validate and convert all data first
             validated_updates = []
             record_ids = []
-            
+
             for update in records_updates:
                 record_id = update.get("record_id")
                 data = update.get("data")
@@ -1079,16 +1052,16 @@ class DatasetManager:
                 validated_data = Record.validate_data(data, dataset.dataset_schema)
                 validated_updates.append({"record_id": record_id, "data": validated_data})
                 record_ids.append(record_id)
-            
+
             # Check uniqueness constraints for the batch
             await self._validate_batch_updates_uniqueness(user_id, dataset_id, validated_updates, dataset.dataset_schema)
-            
+
             # Prepare bulk operations
             operations = []
             for update in validated_updates:
                 record_id = update["record_id"]
                 validated_data = update["data"]
-                
+
                 # Add to operations
                 operations.append(
                     pymongo.UpdateOne(

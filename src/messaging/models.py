@@ -11,7 +11,7 @@ from models.base import PydanticUUID
 
 class MessageStatus(str, Enum):
     """Status of a message processing."""
-    
+
     SUCCESS = "success"
     ERROR = "error"
     SKIPPED = "skipped"

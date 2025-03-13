@@ -26,13 +26,13 @@ def trim_message(message: str, max_length: int = 50) -> str:
 def format_message(user_message: str, response: str, is_error: bool = False) -> str:
     """Format a message with the user's message and the response"""
     # Split at first line break and take only the first line for WhatsApp quote
-    first_line = user_message.split('\n')[0] if user_message else ""
+    first_line = user_message.split("\n")[0] if user_message else ""
     trimmed_user_message = trim_message(first_line)
 
     formatted_message = f"> {trimmed_user_message}\n"
 
     if is_error:
-        formatted_message += f"🔧 {response}"
+        formatted_message += f"`❌ {response}`"
     else:
         formatted_message += f"{response}"
 

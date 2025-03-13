@@ -131,7 +131,7 @@ class WhatsAppMessageConsumer:
 
                 # Process the message
                 result = await self.process_func(earliest_whatsapp_msg)
-                
+
                 logger.info(f"Earliest message processed with status: {result.get('status', MessageStatus.UNKNOWN)}, SID: {result.get('message_sid', 'N/A')}")
 
                 # Complete the message

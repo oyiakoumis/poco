@@ -19,8 +19,8 @@ from database.conversation_store.exceptions import (
 )
 from database.manager import DatabaseManager
 from messaging.models import MessageStatus, WhatsAppQueueMessage
+from utils.azure_blob_lock import AzureBlobLockManager
 from utils.logging import logger
-from utils.redis_lock import RedLockManager
 from utils.text import format_message
 
 
@@ -49,11 +49,11 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
     # Initialize Twilio client
     twilio_client = Client(api_settings.twilio_account_sid, api_settings.twilio_auth_token)
 
-    # Initialize Redis lock manager
-    redis_lock_manager = RedLockManager()
+    # Initialize Azure Blob lock manager
+    blob_lock_manager = AzureBlobLockManager()
 
     # Try to acquire a lock for this conversation
-    lock = redis_lock_manager.acquire_lock(input_message.conversation_id)
+    lock = blob_lock_manager.acquire_lock(input_message.conversation_id)
 
     if not lock:
         logger.info(f"Conversation {input_message.conversation_id} is already being processed, skipping")
@@ -164,5 +164,5 @@ async def process_whatsapp_message(input_message: WhatsAppQueueMessage) -> Dict[
     finally:
         # Release the lock if we acquired it
         if lock:
-            redis_lock_manager.release_lock(lock)
+            blob_lock_manager.release_lock(lock)
             logger.info(f"Released lock for conversation {input_message.conversation_id}")

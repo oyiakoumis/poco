@@ -20,5 +20,3 @@ python-multipart
 azure-servicebus
 azure-storage-blob
 httpx
-redis
-redlock-py
