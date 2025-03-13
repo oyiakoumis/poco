@@ -542,6 +542,61 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to add field: {str(e)}")
 
+    async def _validate_required_field_update(
+        self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
+    ) -> None:
+        """Validate that changing a field to required doesn't violate existing records."""
+        # Only check if changing from not required to required
+        if not old_field.required and field_update.required:
+            # If there's a default value, we can use that for null values
+            if field_update.default is not None:
+                return
+                
+            # Check if any records have null values for this field
+            query = {
+                "user_id": user_id,
+                "dataset_id": str(dataset_id),
+                f"data.{field_name}": {"$exists": False}  # Field doesn't exist or is null
+            }
+            
+            # Count records with null values
+            count = await self._records.count_documents(query, session=session)
+            if count > 0:
+                raise InvalidRecordDataError(
+                    f"Cannot change field '{field_name}' to required: {count} records have null values for this field"
+                )
+    
+    async def _validate_unique_field_update(
+        self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
+    ) -> None:
+        """Validate that changing a field to unique doesn't violate existing records."""
+        # Only check if changing from not unique to unique
+        if not old_field.unique and field_update.unique:
+            # Check for duplicate values in existing records
+            pipeline = [
+                # Match records in this dataset
+                {"$match": {"user_id": user_id, "dataset_id": str(dataset_id)}},
+                # Only include records that have this field
+                {"$match": {f"data.{field_name}": {"$exists": True}}},
+                # Group by field value and count occurrences
+                {"$group": {"_id": f"$data.{field_name}", "count": {"$sum": 1}}},
+                # Only include groups with more than one record (duplicates)
+                {"$match": {"count": {"$gt": 1}}},
+                # Limit to just one result for efficiency
+                {"$limit": 1}
+            ]
+            
+            # Execute pipeline
+            cursor = self._records.aggregate(pipeline, session=session)
+            duplicates = await cursor.to_list(length=1)
+            
+            if duplicates:
+                duplicate_value = duplicates[0]["_id"]
+                duplicate_count = duplicates[0]["count"]
+                raise InvalidRecordDataError(
+                    f"Cannot change field '{field_name}' to unique: {duplicate_count} records have the value '{duplicate_value}'"
+                )
+
     async def update_field(
         self,
         user_id: str,
@@ -563,6 +618,10 @@ class DatasetManager:
             # Start transaction
             async with await self.client.start_session() as session:
                 async with session.start_transaction():
+                    # Validate required and unique constraints
+                    await self._validate_required_field_update(user_id, dataset_id, field_name, old_field, field_update, session)
+                    await self._validate_unique_field_update(user_id, dataset_id, field_name, old_field, field_update, session)
+                    
                     # Update dataset schema and regenerate embedding
                     updated = Dataset(
                         id=dataset_id,

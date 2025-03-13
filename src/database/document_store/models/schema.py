@@ -113,13 +113,7 @@ class DatasetSchema(BaseModel):
             if field.field_name == field_name:
                 old_field = field
                 # Check if anything changed
-                if (
-                    field.type == field_update.type
-                    and field.description == field_update.description
-                    and field.required == field_update.required
-                    and field.default == field_update.default
-                    and field.options == field_update.options
-                ):
+                if field == field_update:
                     # No changes needed
                     return None, None
 
