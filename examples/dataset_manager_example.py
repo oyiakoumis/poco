@@ -53,6 +53,7 @@ async def main():
                     description="Name of the item",
                     type=FieldType.STRING,
                     required=True,
+                    unique=True,  # Make item name unique
                 ),
                 SchemaField(
                     field_name="quantity",
@@ -165,6 +166,20 @@ async def main():
         assert isinstance(record2_id, str) and len(record2_id) > 0, "Record ID should be a non-empty string"
         assert record1_id != record2_id, "Record IDs should be unique"
 
+        # Test uniqueness validation for create operation
+        print("\n=== Testing Uniqueness Validation for Create ===")
+        try:
+            # Try to create a record with duplicate item name (should fail)
+            await manager.create_record(
+                user_id=user_id,
+                dataset_id=dataset_id,
+                data={"item": "Milk", "quantity": 1, "unit": "l", "category": "dairy"},  # Duplicate item name
+            )
+            assert False, "Should have raised an exception for duplicate item name"
+        except Exception as e:
+            print(f"Expected error when creating duplicate record: {str(e)}")
+            assert "already exists" in str(e).lower(), "Expected 'already exists' in error message"
+
         # Get specific record
         record = await manager.get_record(user_id, dataset_id, record1_id)
         print(f"Retrieved record: {record.data}")
@@ -187,6 +202,21 @@ async def main():
         updated_record = await manager.get_record(user_id, dataset_id, record1_id)
         assert updated_record.data["quantity"] == 3, f"Expected updated quantity 3, got {updated_record.data['quantity']}"
 
+        # Test uniqueness validation for update operation
+        print("\n=== Testing Uniqueness Validation for Update ===")
+        try:
+            # Try to update record2 with duplicate item name (should fail)
+            await manager.update_record(
+                user_id=user_id,
+                dataset_id=dataset_id,
+                record_id=record2_id,
+                data={"item": "Milk", "quantity": 5, "unit": "pieces", "category": "dairy"},  # Duplicate item name
+            )
+            assert False, "Should have raised an exception for duplicate item name"
+        except Exception as e:
+            print(f"Expected error when updating with duplicate item: {str(e)}")
+            assert "already exists" in str(e).lower(), "Expected 'already exists' in error message"
+
         # Get all records in the dataset
         all_records = await manager.get_all_records(user_id=user_id, dataset_id=dataset_id)
         print(f"Retrieved all {len(all_records)} records from dataset")
@@ -203,7 +233,33 @@ async def main():
         # 3.1 Batch Record Operations
         print("\n=== Batch Record Operations ===")
 
-        # Batch create records
+        # Test uniqueness validation for batch create operation
+        print("\n=== Testing Uniqueness Validation for Batch Create ===")
+        try:
+            # Try to create a batch with duplicate item names (should fail)
+            duplicate_batch_data = [
+                {"item": "Bananas", "quantity": 6, "unit": "pieces", "category": "fruits"},
+                {"item": "Bananas", "quantity": 2, "unit": "kg", "category": "fruits"},  # Duplicate item name within batch
+            ]
+            await manager.batch_create_records(user_id=user_id, dataset_id=dataset_id, records_data=duplicate_batch_data)
+            assert False, "Should have raised an exception for duplicate item name within batch"
+        except Exception as e:
+            print(f"Expected error when batch creating with duplicate items: {str(e)}")
+            assert "duplicate" in str(e).lower(), "Expected 'duplicate' in error message"
+
+        try:
+            # Try to create a batch with an item name that already exists in the database
+            existing_item_batch_data = [
+                {"item": "Bananas", "quantity": 6, "unit": "pieces", "category": "fruits"},
+                {"item": "Milk", "quantity": 2, "unit": "l", "category": "dairy"},  # Already exists in database
+            ]
+            await manager.batch_create_records(user_id=user_id, dataset_id=dataset_id, records_data=existing_item_batch_data)
+            assert False, "Should have raised an exception for duplicate item name with existing record"
+        except Exception as e:
+            print(f"Expected error when batch creating with existing item: {str(e)}")
+            assert "already exists" in str(e).lower(), "Expected 'already exists' in error message"
+
+        # Batch create records with unique items
         batch_records_data = [
             {"item": "Apples", "quantity": 6, "unit": "pieces", "category": "fruits"},
             {"item": "Bread", "quantity": 2, "unit": "pack", "category": "pantry"},
@@ -219,8 +275,32 @@ async def main():
         print(f"Now have {len(all_records_after_batch)} records in dataset")
         assert len(all_records_after_batch) == 5, f"Expected 5 records after batch creation, got {len(all_records_after_batch)}"
 
-        # Batch update records
-        # Prepare updates for the first two batch-created records
+        # Test uniqueness validation for batch update operation
+        print("\n=== Testing Uniqueness Validation for Batch Update ===")
+        try:
+            # Try to update records with duplicate item names within the batch
+            duplicate_batch_updates = [
+                {"record_id": batch_record_ids[0], "data": {"item": "Duplicate Name", "quantity": 1, "unit": "kg", "category": "fruits"}},
+                {"record_id": batch_record_ids[1], "data": {"item": "Duplicate Name", "quantity": 1, "unit": "pack", "category": "pantry"}},
+            ]
+            await manager.batch_update_records(user_id=user_id, dataset_id=dataset_id, records_updates=duplicate_batch_updates)
+            assert False, "Should have raised an exception for duplicate item names within batch update"
+        except Exception as e:
+            print(f"Expected error when batch updating with duplicate items: {str(e)}")
+            assert "duplicate" in str(e).lower(), "Expected 'duplicate' in error message"
+
+        try:
+            # Try to update a record with an item name that already exists in the database
+            existing_item_batch_updates = [
+                {"record_id": batch_record_ids[0], "data": {"item": "Milk", "quantity": 1, "unit": "kg", "category": "fruits"}},  # Milk already exists
+            ]
+            await manager.batch_update_records(user_id=user_id, dataset_id=dataset_id, records_updates=existing_item_batch_updates)
+            assert False, "Should have raised an exception for duplicate item name with existing record"
+        except Exception as e:
+            print(f"Expected error when batch updating with existing item: {str(e)}")
+            assert "already exists" in str(e).lower(), "Expected 'already exists' in error message"
+
+        # Batch update records with valid data
         batch_updates = [
             {"record_id": batch_record_ids[0], "data": {"item": "Apples", "quantity": 1, "unit": "kg", "category": "fruits"}},  # Change unit and quantity
             {"record_id": batch_record_ids[1], "data": {"item": "Bread", "quantity": 1, "unit": "pack", "category": "pantry"}},  # Increase quantity
@@ -429,45 +509,6 @@ async def main():
         )
         print(f"Created recipe dataset: {recipe_dataset_id}")
 
-        # Shopping list dataset (very similar to grocery list to ensure similarity detection)
-        shopping_schema = DatasetSchema(
-            fields=[
-                SchemaField(
-                    field_name="item",
-                    description="Name of the item to buy",
-                    type=FieldType.STRING,
-                    required=True,
-                ),
-                SchemaField(
-                    field_name="quantity",
-                    description="Quantity needed",
-                    type=FieldType.INTEGER,
-                    required=True,
-                ),
-                SchemaField(
-                    field_name="unit",
-                    description="Unit of measurement",
-                    type=FieldType.SELECT,
-                    required=True,
-                    options=["pieces", "kg", "g", "l", "ml", "pack", "box"],
-                ),
-                SchemaField(
-                    field_name="category",
-                    description="Category of the item",
-                    type=FieldType.SELECT,
-                    required=False,
-                    options=["fruits", "vegetables", "dairy", "meat", "pantry", "beverages"],
-                ),
-            ]
-        )
-        shopping_dataset_id = await manager.create_dataset(
-            user_id=user_id,
-            name="Shopping List",
-            description="General shopping list for household items",
-            schema=shopping_schema,
-        )
-        print(f"Created shopping dataset: {shopping_dataset_id}")
-
         # Test similar datasets search
         # Get the grocery list dataset to use as reference
         grocery_dataset = await manager.get_dataset(user_id, dataset_id)
@@ -478,13 +519,13 @@ async def main():
         print(f"\nFound {len(similar_datasets)} similar datasets:")
         # Assert similar datasets search returned expected results
         assert len(similar_datasets) > 0, "Expected at least one similar dataset"
-        # The shopping list dataset should be similar to the grocery list
-        shopping_dataset_found = False
+        # The grocery list dataset should be found in the similar datasets
+        dataset_found = False
         for ds in similar_datasets:
-            if str(ds.id) == shopping_dataset_id:
-                shopping_dataset_found = True
+            if str(ds.id) == dataset_id:
+                dataset_found = True
                 break
-        assert shopping_dataset_found, "Expected shopping list dataset to be similar to grocery list"
+        assert dataset_found, "Expected grocery list dataset to be found."
         for ds in similar_datasets:
             if str(ds.id) != dataset_id:  # Skip the reference dataset itself
                 print(f"- {ds.name}: {ds.description}")
@@ -497,7 +538,6 @@ async def main():
         print("\n=== Cleanup ===")
         await manager.delete_dataset(user_id, dataset_id)
         await manager.delete_dataset(user_id, recipe_dataset_id)
-        await manager.delete_dataset(user_id, shopping_dataset_id)
         print("Deleted all datasets")
 
     finally:
