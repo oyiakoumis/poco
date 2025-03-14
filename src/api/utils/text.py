@@ -1,8 +1,6 @@
 """Text utility functions."""
 
-import json
 from enum import Enum
-from typing import Dict, List, Optional
 
 
 def trim_message(message: str, max_length: int = 50) -> str:
@@ -30,7 +28,7 @@ def format_message(user_message: str, response: str, is_error: bool = False) -> 
     trimmed_user_message = trim_message(first_line)
 
     if not trimmed_user_message:
-        trimmed_user_message = "_empty message_" 
+        trimmed_user_message = "_empty message_"
 
     formatted_message = f"> {trimmed_user_message}\n"
 

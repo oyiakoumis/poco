@@ -1,42 +1,21 @@
 """Chat router for handling message processing."""
 
-import asyncio
-from typing import List, Optional
-from uuid import uuid4
+from typing import Optional
 
-from fastapi import APIRouter, Form, Header, Request, Response
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.memory import MemorySaver
-from twilio.request_validator import RequestValidator
-from twilio.rest import Client
-from twilio.twiml.messaging_response import MessagingResponse
+from fastapi import APIRouter, Depends, Form, Header, Request, Response, status
+from fastapi.exceptions import HTTPException
 
-from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
-from agents.graph import create_graph
-from agents.tools.tool_operation_tracker import ToolOperationTracker
-from api.models import MediaItem
-from settings import settings
-from database.conversation_store.models.message import Message, MessageRole
+from api.routers.dependencies import get_blob_lock_manager, get_database_manager, validate_twilio_signature
+from api.services.conversation_service import ConversationService
+from api.services.media_service import MediaService
+from api.services.message_processor import MessageProcessor
+from api.utils.response_formatter import ResponseFormatter
 from database.manager import DatabaseManager
+from settings import settings
 from utils.azure_blob_lock import AzureBlobLockManager
 from utils.logging import logger
-from utils.media_storage import upload_to_blob_storage
-from utils.text import (
-    Command,
-    build_notification_string,
-    extract_message_after_command,
-    format_message,
-    is_command,
-)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-
-def validate_twilio_request(request_data: dict, signature: str, url: str) -> bool:
-    """Validate that the request is coming from Twilio."""
-    validator = RequestValidator(settings.twilio_auth_token)
-    return validator.validate(url, request_data, signature)
 
 
 @router.post("/whatsapp", response_class=Response)
@@ -50,40 +29,30 @@ async def process_whatsapp_message(
     NumMedia: Optional[int] = Form(0),
     x_twilio_signature: str = Header(None),
     request_url: str = Header(None, alias="X-Original-URL"),
+    db_manager: DatabaseManager = Depends(get_database_manager),
+    lock_manager: AzureBlobLockManager = Depends(get_blob_lock_manager),
+    twilio_valid: bool = Depends(validate_twilio_signature),
 ) -> Response:
-    """Process incoming WhatsApp messages from Twilio."""
+    """Process incoming WhatsApp messages from Twilio.
+
+    This endpoint handles incoming WhatsApp messages, processes them through
+    the LangGraph, and returns a response to the user.
+    """
     logger.info(f"WhatsApp message received from {From}, SID: {SmsMessageSid}")
 
-    assert From, "From field is required"
-    twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+    # Initialize services
+    response_formatter = ResponseFormatter()
 
     # Check if the message body is empty
     if not Body or Body.strip() == "":
         logger.info(f"Empty message received from {From}, SID: {SmsMessageSid}")
+        response_formatter.send_error(From, "", "Message's body cannot be empty.")
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
 
-        # Create error message TwiML response
-        error_message = "Message's body cannot be empty."
-        formatted_error = format_message("", error_message, is_error=True)
-
-        twilio_client.messages.create(body=formatted_error, from_=settings.twilio_phone_number, to=From)
-
-    # Validate the request is coming from Twilio
-    if False and settings.twilio_auth_token and x_twilio_signature:  # TODO: Enable Twilio validation later
-        # Create a dictionary of form fields for Twilio validation
-        request_data = {
-            "From": From,
-            "Body": Body,
-            "ProfileName": ProfileName or "",
-            "WaId": WaId,
-            "SmsMessageSid": SmsMessageSid,
-            "NumMedia": str(NumMedia) if NumMedia is not None else "0",
-        }
-        # If request_url is not provided, construct it from the settings
-        url = request_url or f"https://{settings.api_url}:{settings.port}/chat/whatsapp"
-
-        if not validate_twilio_request(request_data, x_twilio_signature, url):
-            logger.warning(f"Invalid Twilio signature: {x_twilio_signature}")
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Twilio signature")
+    # Validate the request is coming from Twilio (currently disabled with TODO)
+    if not twilio_valid:
+        logger.warning(f"Invalid Twilio signature: {x_twilio_signature}")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Twilio signature")
 
     user_id = From  # Use the WhatsApp number as the user ID
     conversation_id = None
@@ -91,189 +60,84 @@ async def process_whatsapp_message(
 
     try:
         # Get database managers
-        database_manager = DatabaseManager()
-        conversation_db = await database_manager.setup_conversation_manager()
+        conversation_db = await db_manager.setup_conversation_manager()
+        dataset_db = await db_manager.setup_dataset_manager()
 
-        # Flag to track if a new conversation was created by command
-        new_conversation_created = False
+        # Initialize services
+        conversation_service = ConversationService(conversation_db, lock_manager)
+        media_service = MediaService()
+        message_processor = MessageProcessor(dataset_db)
 
-        # Check if the user wants to start a new conversation
-        if is_command(Body, Command.NEW_CONVERSATION):
-            conversation_id = uuid4()
-            await conversation_db.create_conversation(user_id, str(conversation_id), conversation_id)
-
-            # Remove the command from the message body for processing
-            Body = extract_message_after_command(Body, Command.NEW_CONVERSATION)
-            new_conversation_created = True
-
-        # Use the latest conversation if it exists
-        elif latest_conversation := await conversation_db.get_latest_conversation(user_id):
-            conversation_id = latest_conversation.id
-
-        # Else create a new conversation
-        else:
-            conversation_id = uuid4()
-            await conversation_db.create_conversation(user_id, str(conversation_id), conversation_id)
-            new_conversation_created = True
+        # Get or create conversation
+        conversation_id, new_conversation_created, processed_body = await conversation_service.get_or_create_conversation(user_id, Body)
 
         # Initialize Azure Blob lock manager and try to acquire a lock
-        blob_lock_manager = AzureBlobLockManager()
-        lock = blob_lock_manager.acquire_lock(conversation_id)
+        lock = await conversation_service.acquire_conversation_lock(conversation_id)
 
         # If we couldn't acquire the lock, send a busy message and return
         if not lock:
             logger.info(f"Conversation {conversation_id} is already being processed, skipping")
-
-            # Send message to user that their message is being ignored due to ongoing processing
-            error_message = "I am a little busy right now processing your current message. Please send your next message right after."
-            formatted_error = format_message(Body, error_message, is_error=True)
-            twilio_client.messages.create(body=formatted_error, from_=settings.twilio_phone_number, to=From)
-            return Response(status_code=503)
-
-        # Send immediate acknowledgment via Twilio
-        response_message = "`Got it! Just give me just a second...`"
-
-        # Build concise notification string if needed
-        num_media = int(NumMedia) if NumMedia is not None else 0
-        unsupported_media = any(not form_data.get(f"MediaContentType{i}").startswith("image/") for i in range(num_media))
-        notification_str = build_notification_string({"new_conversation": new_conversation_created, "unsupported_media": unsupported_media})
-        if notification_str:
-            response_message += f"\n\n`{notification_str}`"
-
-        # Format the response with the user's message
-        formatted_response = format_message(Body, response_message)
-
-        # Send the acknowledgment message
-        twilio_client.messages.create(body=formatted_response, from_=settings.twilio_phone_number, to=From)
-
-        # Extract media information (images only)
-        media_items = []
-        for i in range(num_media):
-            form_data = await request.form()
-            media_url = form_data.get(f"MediaUrl{i}")
-            media_type = form_data.get(f"MediaContentType{i}")
-
-            if media_url and media_type and media_type.startswith("image/"):
-                try:
-                    # Upload image to Azure Blob Storage
-                    blob_name = await upload_to_blob_storage(media_url, media_type)
-
-                    # Store blob name instead of URL
-                    media_items.append(MediaItem(blob_name=blob_name, content_type=media_type))
-                    logger.info(f"Image uploaded to Azure Blob Storage: {blob_name}")
-                except Exception as e:
-                    logger.error(f"Error uploading image to Azure Blob Storage: {str(e)}")
-
-        # Prepare input messages
-        new_messages = (
-            [Message(user_id=user_id, conversation_id=conversation_id, role=MessageRole.SYSTEM, message=SystemMessage(content=ASSISTANT_SYSTEM_MESSAGE))]
-            if new_conversation_created
-            else []
-        ) + [
-            Message(
-                user_id=user_id,
-                conversation_id=conversation_id,
-                role=MessageRole.HUMAN,
-                message=HumanMessage(content=Body),
-                metadata={
-                    "whatsapp_id": WaId,
-                    "sms_message_sid": SmsMessageSid,
-                    "media_count": len(media_items),
-                    "media_items": media_items,
-                    "unsupported_media": unsupported_media,
-                },
+            response_formatter.send_error(
+                From, Body, "I am a little busy right now processing your current message. Please send your next message right after."
             )
-        ]
+            return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        # Process media
+        num_media = int(NumMedia) if NumMedia is not None else 0
+
+        # Check for unsupported media
+        unsupported_media = await media_service.has_unsupported_media(request, num_media)
+
+        # Send immediate acknowledgment
+        response_formatter.send_acknowledgment(From, Body, new_conversation=new_conversation_created, unsupported_media=unsupported_media)
+
+        # Process media
+        media_items = await media_service.process_media(request, num_media)
+
+        # Prepare metadata
+        metadata = {
+            "whatsapp_id": WaId,
+            "sms_message_sid": SmsMessageSid,
+            "media_count": len(media_items),
+            "media_items": media_items,
+            "unsupported_media": unsupported_media,
+        }
+
+        # Prepare new messages
+        new_messages = await conversation_service.prepare_messages(user_id, conversation_id, processed_body, new_conversation_created, metadata)
 
         # Get conversation history
-        conversation_history = []
-        if not new_conversation_created:
-            conversation_history = await conversation_db.list_messages(user_id, conversation_id)
+        conversation_history = await conversation_service.get_conversation_history(user_id, conversation_id, new_conversation_created)
 
-        # Combine input messages with existing conversation history
-        conversation_history += new_messages
+        # Process image URLs for all messages
+        await conversation_service.process_image_urls(conversation_history + new_messages)
 
-        # Get image URLs for all messages
-        await asyncio.gather(*[message.get_image_urls() for message in conversation_history])
-
-        # Get the graph
-        dataset_db = await database_manager.setup_dataset_manager()
-        graph = create_graph(dataset_db)
-        graph = graph.compile(checkpointer=MemorySaver())
-
-        # Configuration for the graph
-        config = RunnableConfig(
-            configurable={
-                "thread_id": str(conversation_id),
-                "user_id": user_id,
-                "time_zone": "UTC",
-                "first_day_of_the_week": 0,
-            },
-            recursion_limit=25,
-        )
-
-        # Process the message through the graph
-        result = await graph.ainvoke({"messages": [message.message for message in conversation_history]}, config)
-        logger.info(f"Graph processing completed - Thread: {conversation_id}")
-
-        # Get the IDs of all messages in the conversation history
-        input_ids = {str(msg.id) for msg in conversation_history}
-
-        # Identify new messages by comparing IDs
-
-        output_messages: List[Message] = [Message(user_id=user_id, conversation_id=conversation_id, message=msg) for msg in result["messages"] if msg.id not in input_ids]
-
-        # Messages to store in the database
-        messages_to_store = new_messages + output_messages
-
-        # Store all new messages
-        await conversation_db.create_messages(user_id, messages_to_store)
-
-        # Get the last message for the WhatsApp response
-        response: AnyMessage = result["messages"][-1]
-
-        # Track tool operations and generate summary
-        tracker = ToolOperationTracker()
-
-        # Filter for tool messages with successful operations
-        tool_messages = [
-            msg.message
-            for msg in output_messages
-            if isinstance(msg.message, ToolMessage)
-            and hasattr(msg.message, "name")
-            and msg.message.name in tracker.get_supported_tools()
-            and hasattr(msg.message, "status")
-            and msg.message.status == "success"
-        ]
-
-        # Track each tool message
-        for msg in tool_messages:
-            tracker.track_tool_message(msg.name, msg.content)
-
-        # Generate summary
-        tool_summary = tracker.build_tool_summary_string()
+        # Process messages through the graph
+        output_messages, response, tool_summary = await message_processor.process_messages(conversation_history, new_messages, user_id, conversation_id)
 
         # Include summary in response if not empty
         response_content = response.content + (f"\n\n`{tool_summary}`" if tool_summary else "")
 
-        # Format the response with the user's message
-        formatted_response = format_message(Body, response_content)
+        # Store all new messages
+        await conversation_service.store_messages(user_id, new_messages + output_messages)
 
-        # Return API response
-        twilio_client.messages.create(body=formatted_response, from_=settings.twilio_phone_number, to=From)
-        return Response(status_code=200)
+        # Send the response
+        response_formatter.send_response(From, Body, response_content)
+
+        return Response(status_code=status.HTTP_200_OK)
 
     except Exception as e:
         logger.error(f"Error processing WhatsApp message: {str(e)}", exc_info=True)
 
-        # Create error message TwiML response
-        error_message = "We're experiencing technical difficulties processing your message. Our team has been notified."
-        formatted_error = format_message(Body, error_message, is_error=True)
+        # Send error message
+        response_formatter = ResponseFormatter()
+        response_formatter.send_error(From, Body, "We're experiencing technical difficulties processing your message. Our team has been notified.")
 
-        twilio_client.messages.create(body=formatted_error, from_=settings.twilio_phone_number, to=From)
-        return Response(status_code=500)
+        return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     finally:
         # Release the lock if we acquired it
-        if lock:
-            blob_lock_manager.release_lock(lock)
+        if lock and conversation_id:
+            conversation_service = ConversationService(await db_manager.setup_conversation_manager(), lock_manager)
+            conversation_service.release_conversation_lock(lock)
             logger.info(f"Released lock for conversation {conversation_id}")

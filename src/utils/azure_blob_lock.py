@@ -4,7 +4,12 @@ from typing import List, Optional, Union
 from uuid import UUID
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient, ContentSettings
+from azure.storage.blob import (
+    BlobClient,
+    BlobLeaseClient,
+    BlobServiceClient,
+    ContentSettings,
+)
 
 from settings import settings
 from utils.logging import logger

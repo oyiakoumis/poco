@@ -7,9 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from api.routers import chat
-from settings import settings
 from database.conversation_store.conversation_manager import ConversationManager
 from database.document_store.dataset_manager import DatasetManager
+from settings import settings
 
 
 @asynccontextmanager
