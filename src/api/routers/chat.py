@@ -71,6 +71,9 @@ async def process_whatsapp_message(
         # Get or create conversation
         conversation_id, new_conversation_created, processed_body = await conversation_service.get_or_create_conversation(user_id, Body)
 
+        # Replace body with processed body
+        Body = processed_body
+
         # Initialize Azure Blob lock manager and try to acquire a lock
         lock = await conversation_service.acquire_conversation_lock(conversation_id)
 
@@ -104,7 +107,7 @@ async def process_whatsapp_message(
         }
 
         # Prepare new messages
-        new_messages = await conversation_service.prepare_messages(user_id, conversation_id, processed_body, new_conversation_created, metadata)
+        new_messages = await conversation_service.prepare_messages(user_id, conversation_id, Body, new_conversation_created, metadata)
 
         # Get conversation history
         conversation_history = await conversation_service.get_conversation_history(user_id, conversation_id, new_conversation_created)
