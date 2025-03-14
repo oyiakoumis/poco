@@ -1,7 +1,7 @@
 """Tool operation tracking and summary generation."""
 
 import json
-from typing import Dict, List, Optional
+from typing import List
 
 
 class ToolOperationTracker:

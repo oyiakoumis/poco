@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
 from agents.graph import create_graph
-from agents.tools.tool_operation_tracker import ToolOperationTracker
+from api.utils.tool_operation_tracker import ToolOperationTracker
 from database.conversation_store.models.message import Message
 from database.document_store.dataset_manager import DatasetManager
 from utils.logging import logger
