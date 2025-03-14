@@ -153,11 +153,10 @@ class ConversationService:
         """
         await asyncio.gather(*[message.get_image_urls() for message in messages])
 
-    async def store_messages(self, user_id: str, messages: List[Message]) -> None:
+    async def store_messages(self, messages: List[Message]) -> None:
         """Store messages in the database.
 
         Args:
-            user_id: The user ID
             messages: The messages to store
         """
-        await self.conversation_db.create_messages(user_id, messages)
+        await self.conversation_db.create_messages(messages)

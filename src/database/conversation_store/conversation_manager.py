@@ -152,7 +152,7 @@ class ConversationManager:
         """Gets the most recently updated conversation for a user."""
         try:
             logger.info(f"Getting latest conversation for user {user_id}")
-            doc = await self._conversations.find_one({"user_id": user_id}, sort=[("updated_at", -1)])  # Sort by last updated, newest first
+            doc = await self._conversations.find_one({"user_id": user_id}, sort=[("created_at", -1)])  # Sort by last updated, newest first
 
             if not doc:
                 logger.info(f"No conversations found for user {user_id}")
@@ -230,11 +230,14 @@ class ConversationManager:
         except Exception as e:
             raise InvalidConversationError(f"Failed to delete conversation: {str(e)}")
 
-    async def create_messages(self, user_id: str, messages: List[Message]) -> List[UUID]:
+    async def create_messages(self, messages: List[Message]) -> List[UUID]:
         """Creates multiple messages in a conversation in a single transaction."""
         try:
-            # Validate messages
+            # Extract and validate user ID
+            user_id = messages[0].user_id
             assert all(message.user_id == user_id for message in messages), "All messages must belong to the same user"
+
+            # Extract and validate conversation ID
             conversation_id = messages[0].conversation_id
             assert all(message.conversation_id == conversation_id for message in messages), "All messages must belong to the same conversation"
 
@@ -288,17 +291,18 @@ class ConversationManager:
         except Exception as e:
             raise InvalidMessageError(f"Failed to create messages: {str(e)}")
 
-    async def create_message(self, user_id: str, message: Message) -> UUID:
+    async def create_message(self, message: Message) -> UUID:
         """Creates a new message in a conversation."""
         try:
-            logger.info(f"Creating message in conversation {message.conversation_id} for user {user_id}")
+            # Extract user and conversation IDs
+            user_id = message.user_id
+            conversation_id = message.conversation_id
 
-            # Verify message belongs to user
-            assert message.user_id == user_id, "Message must belong to the user"
+            logger.info(f"Creating message in conversation {conversation_id} for user {user_id}")
 
             # Verify conversation exists and belongs to user
-            if not await self.conversation_exists(user_id, message.conversation_id):
-                raise ConversationNotFoundError(f"Conversation {message.conversation_id} not found")
+            if not await self.conversation_exists(user_id, conversation_id):
+                raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
 
             # Insert message and update conversation timestamp in a transaction
             async with await self.client.start_session() as session:
@@ -310,7 +314,7 @@ class ConversationManager:
 
                     # Update conversation timestamp
                     await self._conversations.update_one(
-                        {"_id": str(message.conversation_id), "user_id": user_id},
+                        {"_id": str(conversation_id), "user_id": user_id},
                         {"$set": {"updated_at": datetime.now(tz=timezone.utc)}},
                         session=session,
                     )

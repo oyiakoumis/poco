@@ -8,7 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from constants import DATABASE_CONNECTION_STRING
 from database.conversation_store.conversation_manager import ConversationManager
-from database.conversation_store.models.message import MessageRole
+from database.conversation_store.models.message import Message, MessageRole
 
 
 class ExampleConversationManager(ConversationManager):
@@ -85,12 +85,15 @@ async def main():
 
         # Create assistant message with UUID
         assistant_message_id = uuid4()
-        assistant_message_id = await manager.create_message(
+        assistant_message = Message(
+            id=assistant_message_id,
             user_id=user_id,
             conversation_id=conversation_id,
-            message=AIMessage("Hello! I'm an AI assistant. How can I help you today?", id=assistant_message_id),
+            message=AIMessage("Hello! I'm an AI assistant. How can I help you today?", id=str(assistant_message_id)),
             role=MessageRole.ASSISTANT,
-            message_id=assistant_message_id,
+        )
+        assistant_message_id = await manager.create_message(
+            message=assistant_message,
         )
         print(f"Created assistant message: {assistant_message_id}")
         assert assistant_message_id is not None, "Message ID should not be None"
@@ -98,13 +101,16 @@ async def main():
 
         # Create user message with metadata and UUID
         user_message_id = uuid4()
-        user_message_id = await manager.create_message(
+        user_message = Message(
+            id=user_message_id,
             user_id=user_id,
             conversation_id=conversation_id,
-            message=HumanMessage("Can you help me with a Python question?", id=user_message_id),
+            message=HumanMessage("Can you help me with a Python question?", id=str(user_message_id)),
             role=MessageRole.HUMAN,
-            message_id=user_message_id,
             metadata={"source": "web", "browser": "Chrome"},
+        )
+        user_message_id = await manager.create_message(
+            message=user_message,
         )
         print(f"Created user message with metadata: {user_message_id}")
         assert user_message_id is not None, "Message ID should not be None"
@@ -131,18 +137,53 @@ async def main():
 
         # Demonstrate create_messages method for creating multiple messages at once
         print("\n=== Batch Message Creation ===")
-        batch_messages = [
-            HumanMessage("Can you explain how to use Python's asyncio?"),
-            AIMessage("Asyncio is a library to write concurrent code using the async/await syntax."),
-            HumanMessage("Can you show me an example?"),
-            AIMessage(
-                "Sure! Here's a simple example:\n\n```python\nimport asyncio\n\nasync def main():\n    print('Hello')\n    await asyncio.sleep(1)\n    print('World')\n\nasyncio.run(main())\n```"
-            ),
-        ]
-
-        batch_message_ids = await manager.create_messages(
+        # Create Message objects for each message in the batch
+        batch_messages = []
+        
+        # First message - Human
+        msg1_id = uuid4()
+        msg1 = Message(
+            id=msg1_id,
             user_id=user_id,
             conversation_id=conversation_id,
+            message=HumanMessage("Can you explain how to use Python's asyncio?", id=str(msg1_id)),
+        )
+        batch_messages.append(msg1)
+        
+        # Second message - AI
+        msg2_id = uuid4()
+        msg2 = Message(
+            id=msg2_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message=AIMessage("Asyncio is a library to write concurrent code using the async/await syntax.", id=str(msg2_id)),
+        )
+        batch_messages.append(msg2)
+        
+        # Third message - Human
+        msg3_id = uuid4()
+        msg3 = Message(
+            id=msg3_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message=HumanMessage("Can you show me an example?", id=str(msg3_id)),
+        )
+        batch_messages.append(msg3)
+        
+        # Fourth message - AI
+        msg4_id = uuid4()
+        msg4 = Message(
+            id=msg4_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message=AIMessage(
+                "Sure! Here's a simple example:\n\n```python\nimport asyncio\n\nasync def main():\n    print('Hello')\n    await asyncio.sleep(1)\n    print('World')\n\nasyncio.run(main())\n```",
+                id=str(msg4_id)
+            ),
+        )
+        batch_messages.append(msg4)
+
+        batch_message_ids = await manager.create_messages(
             messages=batch_messages,
         )
         print(f"Created {len(batch_message_ids)} messages in a single batch operation")
@@ -168,12 +209,27 @@ async def main():
         additional_message_ids = []
         for i in range(3):
             msg_id_uuid = uuid4()
+            
+            # Create the appropriate message based on index
+            if i % 2 == 0:
+                message_obj = Message(
+                    id=msg_id_uuid,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message=HumanMessage(f"Additional message {i+1}", id=str(msg_id_uuid)),
+                    role=MessageRole.HUMAN,
+                )
+            else:
+                message_obj = Message(
+                    id=msg_id_uuid,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message=AIMessage(f"Response {i+1}", id=str(msg_id_uuid)),
+                    role=MessageRole.ASSISTANT,
+                )
+                
             msg_id = await manager.create_message(
-                user_id=user_id,
-                conversation_id=conversation_id,
-                message=HumanMessage(f"Additional message {i+1}", id=msg_id_uuid) if i % 2 == 0 else AIMessage(f"Response {i+1}", id=msg_id_uuid),
-                role=MessageRole.HUMAN if i % 2 == 0 else MessageRole.ASSISTANT,
-                message_id=msg_id_uuid,
+                message=message_obj,
             )
             additional_message_ids.append(msg_id)
             assert msg_id is not None, f"Additional message {i+1} ID should not be None"

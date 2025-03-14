@@ -32,7 +32,6 @@ from agents.tools.database_operator import (
     UpdateFieldOperator,
     UpdateRecordOperator,
 )
-from agents.tools.output_formatter import output_formatter
 from agents.tools.resolve_temporal_reference import TemporalReferenceTool
 from database.document_store.dataset_manager import DatasetManager
 from utils.logging import logger

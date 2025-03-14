@@ -119,7 +119,7 @@ async def process_whatsapp_message(
         response_content = response.content + (f"\n\n`{tool_summary}`" if tool_summary else "")
 
         # Store all new messages
-        await conversation_service.store_messages(user_id, new_messages + output_messages)
+        await conversation_service.store_messages(new_messages + output_messages)
 
         # Send the response
         response_formatter.send_response(From, Body, response_content)
