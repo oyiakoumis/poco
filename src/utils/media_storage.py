@@ -12,13 +12,13 @@ from settings import settings
 from utils.logging import logger
 
 
-async def upload_to_blob_storage(media_url: str, content_type: str, message_id: uuid4) -> str:
+async def upload_to_blob_storage(media_url: str, content_type: str) -> str:
     """Upload media from Twilio URL to Azure Blob Storage."""
     # Generate a unique blob name using message_id and timestamp
     file_extension = content_type.split("/")[-1]
     if file_extension == "jpeg":
         file_extension = "jpg"  # Standardize jpeg extension
-    blob_name = f"{message_id}_{int(time.time())}.{file_extension}"
+    blob_name = f"{uuid4()}.{file_extension}"
 
     # Initialize Azure Blob Storage client
     async with BlobServiceClient.from_connection_string(settings.azure_storage_connection_string) as blob_service_client:

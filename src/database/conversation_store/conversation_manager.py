@@ -233,12 +233,12 @@ class ConversationManager:
     async def create_messages(self, user_id: str, messages: List[Message]) -> List[UUID]:
         """Creates multiple messages in a conversation in a single transaction."""
         try:
-            logger.info(f"Creating {len(messages)} messages in conversation {conversation_id} for user {user_id}")
-
             # Validate messages
             assert all(message.user_id == user_id for message in messages), "All messages must belong to the same user"
             conversation_id = messages[0].conversation_id
             assert all(message.conversation_id == conversation_id for message in messages), "All messages must belong to the same conversation"
+
+            logger.info(f"Creating {len(messages)} messages in conversation {conversation_id} for user {user_id}")
 
             # Verify conversation exists and belongs to user
             if not await self.conversation_exists(user_id, conversation_id):

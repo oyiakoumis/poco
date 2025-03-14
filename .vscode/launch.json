@@ -52,30 +52,6 @@
                 "PYTHONPATH": "${workspaceFolder}/src"
             },
             "justMyCode": false
-        },
-        {
-            "name": "Debug WhatsApp Worker",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/run_whatsapp_worker.py",
-            "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}/src"
-            },
-            "justMyCode": false
-        }
-    ],
-    "compounds": [
-        {
-            "name": "API + WhatsApp Worker",
-            "configurations": ["Debug API", "Debug WhatsApp Worker"],
-            "stopAll": true,
-            "preLaunchTask": "",
-            "presentation": {
-                "hidden": false,
-                "group": "API Services",
-                "order": 1
-            }
         }
     ]
 }

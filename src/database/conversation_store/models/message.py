@@ -1,7 +1,8 @@
 """Message model for chat history."""
 
 from enum import Enum
-from typing import Dict
+from typing import Dict, Optional
+from uuid import uuid4
 
 from langchain_core.messages import (
     AIMessage,
@@ -10,7 +11,7 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
-from pydantic import Field, field_validator
+from pydantic import Field, model_validator
 
 from models.base import BaseDocument, PydanticUUID
 from utils.logging import logger
@@ -30,19 +31,37 @@ class Message(BaseDocument):
     """Model representing a chat message."""
 
     conversation_id: PydanticUUID = Field(..., description="ID of the conversation this message belongs to")
-    role: MessageRole = Field(..., description="Role of the message sender")
+    role: Optional[MessageRole] = Field(default=None, description="Role of the message sender")
     message: AnyMessage = Field(..., description="Actual message from LangChain")
     metadata: Dict = Field(default_factory=dict, description="Additional metadata for the message")
 
-    @field_validator("message", mode="before")
-    def validate_message(cls, message, info):
-        """Deserialize the message before model validation."""
-        # Get the role from the validation context
-        values = info.data
-        role = values.get("role")
-        id = values.get("id")
+    def model_post_init(self, __context) -> None:
+        """Ensure message ID matches document ID after initialization."""
+        # Set message.id to match the document ID
+        if hasattr(self, "message") and hasattr(self, "id"):
+            self.message.id = str(self.id)
 
+    @model_validator(mode="before")
+    def validate_role_and_message(cls, data):
+        """Validate and process role and message together to avoid circular dependencies."""
+        role = data.get("role")
+        message = data.get("message")
+
+        # Map message types to corresponding roles
+        message_type_to_role = {
+            HumanMessage: MessageRole.HUMAN,
+            AIMessage: MessageRole.ASSISTANT,
+            SystemMessage: MessageRole.SYSTEM,
+            ToolMessage: MessageRole.TOOL,
+        }
+
+        # Handle dict message case
         if isinstance(message, dict):
+            # If message is a dict, role must be provided
+            if role is None:
+                raise ValueError("Role must be provided if message is a dict")
+
+            # Deserialize message based on role
             if role == MessageRole.HUMAN:
                 message = HumanMessage.model_validate(message)
             elif role == MessageRole.ASSISTANT:
@@ -53,26 +72,24 @@ class Message(BaseDocument):
                 message = ToolMessage.model_validate(message)
             else:
                 raise ValueError(f"Invalid message role: {role}")
-        elif isinstance(message, AnyMessage):
-            if isinstance(message, HumanMessage):
-                assert role == MessageRole.HUMAN
-            if isinstance(message, AIMessage):
-                assert role == MessageRole.ASSISTANT
-            if isinstance(message, SystemMessage):
-                assert role == MessageRole.SYSTEM
-            if isinstance(message, ToolMessage):
-                assert role == MessageRole.TOOL
-            else:
-                raise TypeError(f"Invalid message type: {type(message)}")
+        elif isinstance(message, (HumanMessage, AIMessage, SystemMessage, ToolMessage)):
+            # Check if message is one of the recognized types and handle role
+            for message_type, corresponding_role in message_type_to_role.items():
+                if isinstance(message, message_type):
+                    # If role is not provided, infer it from message type
+                    if role is None:
+                        role = corresponding_role
+                    # If role is provided, ensure it matches the message type
+                    elif role != corresponding_role:
+                        raise ValueError(f"Role mismatch: {role} provided but message is of type {message_type.__name__}")
+                    break
         else:
-            raise TypeError(f"Invalid message type: {type(message)}")
+            raise ValueError("Message must be a dict or an instance of HumanMessage, AIMessage, SystemMessage, or ToolMessage")
 
-        if message.id is None:
-            message.id = str(id)
-
-        message.id = str(message.id)
-
-        return message
+        # Update the data with our processed values
+        data["role"] = role
+        data["message"] = message
+        return data
 
     async def get_image_urls(self) -> None:
         """Process image media in human messages and update content with presigned URLs."""
