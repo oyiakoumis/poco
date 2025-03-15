@@ -18,7 +18,7 @@ from utils.logging import logger
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-@router.post("/whatsapp", response_class=Response)
+@router.post("/", response_class=Response)
 async def process_whatsapp_message(
     request: Request,
     From: str = Form(...),
@@ -80,9 +80,7 @@ async def process_whatsapp_message(
         # If we couldn't acquire the lock, send a busy message and return
         if not lock:
             logger.info(f"Conversation {conversation_id} is already being processed, skipping")
-            response_formatter.send_error(
-                From, Body, "I am a little busy right now processing your current message. Please send your next message right after."
-            )
+            response_formatter.send_processing(From, Body, "I'm still processing your last message. Please send your next message right after.")
             return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         # Process media

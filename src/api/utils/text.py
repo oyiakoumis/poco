@@ -1,6 +1,6 @@
 """Text utility functions."""
 
-from enum import Enum
+from enum import Enum, auto
 
 
 def trim_message(message: str, max_length: int = 50) -> str:
@@ -21,7 +21,14 @@ def trim_message(message: str, max_length: int = 50) -> str:
     return f"{trimmed} [...]"
 
 
-def format_message(user_message: str, response: str, is_error: bool = False) -> str:
+class MessageType(Enum):
+    """Enum for message types."""
+    NORMAL = auto()
+    ERROR = auto()
+    PROCESSING = auto()
+
+
+def format_message(user_message: str, response: str, message_type: MessageType = MessageType.NORMAL) -> str:
     """Format a message with the user's message and the response"""
     # Split at first line break and take only the first line for WhatsApp quote
     first_line = user_message.split("\n")[0] if user_message else ""
@@ -32,7 +39,9 @@ def format_message(user_message: str, response: str, is_error: bool = False) -> 
 
     formatted_message = f"> {trimmed_user_message}\n"
 
-    if is_error:
+    if message_type == MessageType.PROCESSING:
+        formatted_message += f"`🔄 {response}`"
+    elif message_type == MessageType.ERROR:
         formatted_message += f"`❌ {response}`"
     else:
         formatted_message += f"{response}"

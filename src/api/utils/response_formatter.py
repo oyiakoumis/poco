@@ -5,7 +5,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 
 from settings import settings
 from utils.logging import logger
-from api.utils.text import build_notification_string, format_message
+from api.utils.text import MessageType, build_notification_string, format_message
 
 
 class ResponseFormatter:
@@ -46,8 +46,19 @@ class ResponseFormatter:
             user_message: The original user message
             error_message: The error message to send
         """
-        formatted_error = format_message(user_message, error_message, is_error=True)
+        formatted_error = format_message(user_message, error_message, message_type=MessageType.ERROR)
         self._send_message(to_number, formatted_error)
+        
+    def send_processing(self, to_number: str, user_message: str, processing_message: str) -> None:
+        """Send a processing status message to the user.
+
+        Args:
+            to_number: The phone number to send the message to
+            user_message: The original user message
+            processing_message: The processing message to send
+        """
+        formatted_message = format_message(user_message, processing_message, message_type=MessageType.PROCESSING)
+        self._send_message(to_number, formatted_message)
 
     def send_response(self, to_number: str, user_message: str, response_content: str) -> None:
         """Send a response message to the user.
