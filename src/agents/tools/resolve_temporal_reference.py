@@ -113,6 +113,8 @@ class TemporalReferenceTool(BaseTool):
         Core implementation of the temporal reference resolution tool.
         """
         try:
+            logger.info(f"temporal_reference_resolver called with reference={reference}, single_day_mode={single_day_mode}")
+
             # Extract configuration values
             configurable = config.get("configurable", {})
             tz = configurable.get("time_zone", "UTC")
