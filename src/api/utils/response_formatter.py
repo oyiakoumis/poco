@@ -1,7 +1,7 @@
 """Response formatting utilities for WhatsApp messages."""
 
 from twilio.rest import Client
-from twilio.twiml.messaging_response import MessagingResponse
+from twilio.base.exceptions import TwilioRestException
 
 from agents.assistant import Assistant
 from api.utils.text import MessageType, build_notification_string, format_message
@@ -69,23 +69,97 @@ class ResponseFormatter:
             user_message: The original user message
             response_content: The response content to send
             total_tokens: The total tokens used in the conversation
-        """        
+        """
         # Add long chat notification if tokens exceed the limit
         if total_tokens > Assistant.TOKEN_LIMIT:
             notification_str = build_notification_string({"long_chat": True})
             response_content += f"\n\n`{notification_str}`"
-                
+
         formatted_response = format_message(user_message, response_content)
         self._send_message(to_number, formatted_response)
 
-    def _send_message(self, to_number: str, message_body: str) -> None:
+    def _split_message(self, message: str, max_length: int = 1600, max_parts: int = 10) -> list:
+        """Split a message into multiple parts if it exceeds the maximum length.
+
+        Args:
+            message: The message to split
+            max_length: The maximum length of each part
+            max_parts: The maximum number of parts to split into
+
+        Returns:
+            A list of message parts
+        """
+        if len(message) <= max_length:
+            return [message]
+
+        parts = []
+        remaining = message
+        part_count = 0
+
+        while remaining and part_count < max_parts:
+            part_count += 1
+
+            # If this is the last allowed part or the remaining text fits in one part
+            if part_count == max_parts or len(remaining) <= max_length:
+                # For the last part, if we're truncating, add an indicator
+                if part_count == max_parts and len(remaining) > max_length:
+                    part = remaining[: max_length - 30] + "... (message truncated)"
+                else:
+                    part = remaining[:max_length]
+                parts.append(part)
+                break
+
+            # Find a good breaking point (preferably at a paragraph or sentence)
+            cut_point = min(max_length, len(remaining))
+
+            # Try to break at a paragraph
+            paragraph_break = remaining[:cut_point].rfind("\n\n")
+            if paragraph_break > max_length * 0.5:  # Only use if it's not too short
+                cut_point = paragraph_break + 2  # Include the newlines
+            else:
+                # Try to break at a sentence
+                sentence_break = remaining[:cut_point].rfind(". ")
+                if sentence_break > max_length * 0.5:  # Only use if it's not too short
+                    cut_point = sentence_break + 2  # Include the period and space
+                else:
+                    # Fall back to breaking at a space
+                    space_break = remaining[:cut_point].rfind(" ")
+                    if space_break > 0:
+                        cut_point = space_break + 1  # Include the space
+
+            part = remaining[:cut_point]
+            # Add part number indicator
+            part += f" ({part_count}/{max_parts if len(remaining) > max_length else part_count + (len(remaining) - cut_point + max_length - 1) // max_length})"
+            parts.append(part)
+            remaining = remaining[cut_point:]
+
+        return parts
+
+    def _send_message(self, to_number: str, message_body: str) -> dict:
         """Send a message using the Twilio client.
 
         Args:
             to_number: The phone number to send the message to
             message_body: The message body to send
         """
+
         try:
-            self.twilio_client.messages.create(body=message_body, from_=settings.twilio_phone_number, to=to_number)
-        except Exception as e:
-            logger.error(f"Error sending message to {to_number}: {str(e)}")
+            # Check message length before sending
+            if len(message_body) > settings.twilio_max_message_length:
+                logger.warning(f"Message exceeds Twilio's 1600 character limit: {len(message_body)} chars")
+
+                # Split the message into multiple parts (max 10)
+                message_parts = self._split_message(message_body, max_length=settings.twilio_max_message_length, max_parts=10)
+                logger.info(f"Splitting message into {len(message_parts)} parts")
+
+                # Send each part
+                for i, part in enumerate(message_parts):
+                    self.twilio_client.messages.create(body=part, from_=settings.twilio_phone_number, to=to_number)
+                    logger.info(f"Sent part {i+1}/{len(message_parts)} to {to_number}")
+
+            else:
+                # Send as a single message
+                self.twilio_client.messages.create(body=message_body, from_=settings.twilio_phone_number, to=to_number)
+        except TwilioRestException as e:
+            logger.error(f"Error sending message to {to_number}: {e.msg}")
+            raise

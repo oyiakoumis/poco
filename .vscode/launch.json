@@ -43,6 +43,16 @@
             }
         },
         {
+            "name": "Debug load_test_data.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/load_test_data.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
             "name": "Debug API",
             "type": "debugpy",
             "request": "launch",

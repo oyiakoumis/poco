@@ -34,6 +34,7 @@ class Settings:
     twilio_account_sid: str = TWILIO_ACCOUNT_SID
     twilio_auth_token: str = TWILIO_AUTH_TOKEN
     twilio_phone_number: str = TWILIO_PHONE_NUMBER
+    twilio_max_message_length: int = 1600
 
     # Azure Blob Storage settings
     azure_storage_connection_string: str = AZURE_STORAGE_CONNECTION_STRING
