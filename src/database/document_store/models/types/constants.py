@@ -7,14 +7,14 @@ from typing import Dict, Set
 class FieldType(str, Enum):
     """Supported field types for dataset schema."""
 
-    INTEGER = "int"
-    FLOAT = "float"
-    STRING = "str"
-    BOOLEAN = "bool"
-    DATE = "date"
-    DATETIME = "datetime"
-    SELECT = "select"
-    MULTI_SELECT = "multi_select"
+    INTEGER = "Integer"
+    FLOAT = "Float"
+    STRING = "String"
+    BOOLEAN = "Boolean"
+    DATE = "Date"
+    DATETIME = "Datetime"
+    SELECT = "Select"
+    MULTI_SELECT = "Multi Select"
 
 
 class AggregationType(str, Enum):
