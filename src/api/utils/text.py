@@ -23,6 +23,7 @@ def trim_message(message: str, max_length: int = 50) -> str:
 
 class MessageType(Enum):
     """Enum for message types."""
+
     NORMAL = auto()
     ERROR = auto()
     PROCESSING = auto()
@@ -56,6 +57,7 @@ def build_notification_string(flags: dict) -> str:
         flags: Dictionary of notification flags
             - new_conversation: True if a new conversation was created
             - unsupported_media: True if unsupported media was received
+            - long_chat: True if the chat exceeds the token limit
 
     Returns:
         A concise notification string with icons, or empty string if no notifications
@@ -65,6 +67,8 @@ def build_notification_string(flags: dict) -> str:
         parts.append("🆕 New chat")
     if flags.get("unsupported_media"):
         parts.append("📝 Images only")
+    if flags.get("long_chat"):
+        parts.append("🧵 Long chat")
 
     return " | ".join(parts) if parts else ""
 

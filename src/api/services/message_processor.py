@@ -1,11 +1,11 @@
 """Message processing service for WhatsApp messages."""
 
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 
+from langchain_community.callbacks.openai_info import OpenAICallbackHandler
 from langchain_core.messages import AnyMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.memory import MemorySaver
 
 from agents.graph import create_graph
 from api.utils.tool_operation_tracker import ToolOperationTracker
@@ -46,6 +46,9 @@ class MessageProcessor:
         # Combine input messages with existing conversation history
         all_messages = conversation_history + new_messages
 
+        # Initialize the callback handler
+        callback_handler = OpenAICallbackHandler()
+
         # Configuration for the graph
         config = RunnableConfig(
             configurable={
@@ -54,11 +57,15 @@ class MessageProcessor:
                 "first_day_of_the_week": 0,
             },
             recursion_limit=25,
+            callbacks=[callback_handler],
         )
 
         # Process the message through the graph
         result = await self.graph.ainvoke({"messages": [message.message for message in all_messages]}, config)
         logger.info(f"Graph processing completed - Thread: {conversation_id}")
+
+        # Track total tokens used
+        total_tokens = callback_handler.total_tokens
 
         # Get the IDs of all messages in the conversation history
         input_ids = {str(msg.id) for msg in all_messages}
@@ -72,7 +79,7 @@ class MessageProcessor:
         # Generate tool summary
         tool_summary = self._generate_tool_summary(output_messages)
 
-        return output_messages, response, tool_summary
+        return output_messages, response, tool_summary, total_tokens
 
     def _generate_tool_summary(self, messages: List[Message]) -> Optional[str]:
         """Generate a summary of tool operations.

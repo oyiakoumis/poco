@@ -6,9 +6,9 @@ from uuid import UUID, uuid4
 from langchain_core.messages import AIMessage, HumanMessage
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from constants import DATABASE_CONNECTION_STRING
 from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.models.message import Message, MessageRole
+from settings import settings
 
 
 class ExampleConversationManager(ConversationManager):
@@ -23,7 +23,7 @@ async def main():
     """Run example operations."""
     # Initialize MongoDB client
     # Use the same connection string as the main application
-    client = AsyncIOMotorClient(DATABASE_CONNECTION_STRING)
+    client = AsyncIOMotorClient(settings.database_connection_string)
     client.get_io_loop = asyncio.get_running_loop
 
     try:
@@ -139,7 +139,7 @@ async def main():
         print("\n=== Batch Message Creation ===")
         # Create Message objects for each message in the batch
         batch_messages = []
-        
+
         # First message - Human
         msg1_id = uuid4()
         msg1 = Message(
@@ -149,7 +149,7 @@ async def main():
             message=HumanMessage("Can you explain how to use Python's asyncio?", id=str(msg1_id)),
         )
         batch_messages.append(msg1)
-        
+
         # Second message - AI
         msg2_id = uuid4()
         msg2 = Message(
@@ -159,7 +159,7 @@ async def main():
             message=AIMessage("Asyncio is a library to write concurrent code using the async/await syntax.", id=str(msg2_id)),
         )
         batch_messages.append(msg2)
-        
+
         # Third message - Human
         msg3_id = uuid4()
         msg3 = Message(
@@ -169,7 +169,7 @@ async def main():
             message=HumanMessage("Can you show me an example?", id=str(msg3_id)),
         )
         batch_messages.append(msg3)
-        
+
         # Fourth message - AI
         msg4_id = uuid4()
         msg4 = Message(
@@ -178,7 +178,7 @@ async def main():
             conversation_id=conversation_id,
             message=AIMessage(
                 "Sure! Here's a simple example:\n\n```python\nimport asyncio\n\nasync def main():\n    print('Hello')\n    await asyncio.sleep(1)\n    print('World')\n\nasyncio.run(main())\n```",
-                id=str(msg4_id)
+                id=str(msg4_id),
             ),
         )
         batch_messages.append(msg4)
@@ -209,7 +209,7 @@ async def main():
         additional_message_ids = []
         for i in range(3):
             msg_id_uuid = uuid4()
-            
+
             # Create the appropriate message based on index
             if i % 2 == 0:
                 message_obj = Message(
@@ -227,7 +227,7 @@ async def main():
                     message=AIMessage(f"Response {i+1}", id=str(msg_id_uuid)),
                     role=MessageRole.ASSISTANT,
                 )
-                
+
             msg_id = await manager.create_message(
                 message=message_obj,
             )

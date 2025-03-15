@@ -5,7 +5,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Form, Header, Request, Response, status
 from fastapi.exceptions import HTTPException
 
-from api.routers.dependencies import get_blob_lock_manager, get_database_manager, validate_twilio_signature
+from api.routers.dependencies import (
+    get_blob_lock_manager,
+    get_database_manager,
+    validate_twilio_signature,
+)
 from api.services.conversation_service import ConversationService
 from api.services.media_service import MediaService
 from api.services.message_processor import MessageProcessor
@@ -114,7 +118,9 @@ async def process_whatsapp_message(
         await conversation_service.process_image_urls(conversation_history + new_messages)
 
         # Process messages through the graph
-        output_messages, response, tool_summary = await message_processor.process_messages(conversation_history, new_messages, user_id, conversation_id)
+        output_messages, response, tool_summary, total_tokens = await message_processor.process_messages(
+            conversation_history, new_messages, user_id, conversation_id
+        )
 
         # Include summary in response if not empty
         response_content = response.content + (f"\n\n`{tool_summary}`" if tool_summary else "")

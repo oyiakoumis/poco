@@ -3,11 +3,11 @@
 import logging
 import sys
 
-from constants import LOGGING_LEVEL
+from settings import settings
 
 # Create and configure application logger
 logger = logging.getLogger("poco")
-logger.setLevel(LOGGING_LEVEL)
+logger.setLevel(settings.logging_level)
 
 # Create formatter
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Code to run on shutdown (if any)
-    client = AsyncIOMotorClient(settings.database_url)
+    client = AsyncIOMotorClient(settings.database_connection_string)
     if False:
         # Clear collections on shutdown
         db = client.get_database(DatasetManager.DATABASE)

@@ -1,13 +1,12 @@
 """App settings."""
 
-from pydantic_settings import BaseSettings
-
 from constants import (
     API_URL,
     AZURE_BLOB_CONTAINER_NAME,
     AZURE_STORAGE_ACCOUNT_KEY,
     AZURE_STORAGE_CONNECTION_STRING,
     DATABASE_CONNECTION_STRING,
+    IS_LOCAL,
     LOGGING_LEVEL,
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
@@ -15,16 +14,17 @@ from constants import (
 )
 
 
-class Settings(BaseSettings):
+class Settings:
     # API settings
     api_title: str = "Task Management API"
     api_version: str = "1.0.0"
     api_description: str = "API for task management and scheduling"
     host: str = "0.0.0.0"
     port: int = 8000
+    is_local: bool = IS_LOCAL
 
     # Database settings
-    database_url: str = DATABASE_CONNECTION_STRING
+    database_connection_string: str = DATABASE_CONNECTION_STRING
 
     # Logging
     logging_level: int = LOGGING_LEVEL

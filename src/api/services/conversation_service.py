@@ -8,11 +8,11 @@ from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 
 from agents.assistant import ASSISTANT_SYSTEM_MESSAGE
 from api.models import MediaItem
+from api.utils.text import Command, extract_message_after_command, is_command
 from database.conversation_store.conversation_manager import ConversationManager
 from database.conversation_store.models.message import Message, MessageRole
 from utils.azure_blob_lock import AzureBlobLockManager
 from utils.logging import logger
-from api.utils.text import Command, extract_message_after_command, is_command
 
 
 class ConversationService:

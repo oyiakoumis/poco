@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 
@@ -7,8 +6,27 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def parse_boolean(value, default=False):
+    """Parse a string value into a boolean."""
+    if value is None:
+        return default
+
+    value = str(value).lower().strip()
+
+    if value in ("true", "yes", "1", "t", "y"):
+        return True
+    elif value in ("false", "no", "0", "f", "n"):
+        return False
+
+    return default
+
+
+# App settings
+LOGGING_LEVEL = getattr(logging, os.environ.get("LOGGING_LEVEL", "DEBUG").upper(), logging.DEBUG)
+IS_LOCAL = parse_boolean(os.environ.get("IS_LOCAL"), default=False)
+
+# MongoDB settings
 DATABASE_CONNECTION_STRING = os.environ["DATABASE_CONNECTION_STRING"]
-LOGGING_LEVEL = logging.DEBUG
 
 # Twilio settings
 API_URL = os.environ["API_URL"]

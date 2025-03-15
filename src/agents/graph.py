@@ -6,8 +6,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from agents.assistant import Assistant
 from agents.state import State
-from constants import DATABASE_CONNECTION_STRING
 from database.document_store.dataset_manager import DatasetManager
+from settings import settings
 
 
 def create_graph(db: DatasetManager) -> StateGraph:
@@ -27,7 +27,7 @@ def create_graph(db: DatasetManager) -> StateGraph:
 async def setup_graph():
     """Setup database and create compiled graph."""
     # Connect to the database
-    client = AsyncIOMotorClient(DATABASE_CONNECTION_STRING)
+    client = AsyncIOMotorClient(settings.database_connection_string)
     client.get_io_loop = asyncio.get_running_loop
 
     try:

@@ -18,7 +18,7 @@ class DatabaseManager(metaclass=Singleton):
         """Initialize the database manager."""
         logger.info("Creating new DatabaseManager instance")
         logger.info("Initializing DatabaseManager")
-        self._client = AsyncIOMotorClient(settings.database_url)
+        self._client = AsyncIOMotorClient(settings.database_connection_string)
         self._client.get_io_loop = asyncio.get_running_loop
         self._dataset_manager = None
         self._conversation_manager = None
