@@ -44,6 +44,9 @@ async def process_whatsapp_message(
     """
     logger.info(f"WhatsApp message received from {From}, SID: {SmsMessageSid}")
 
+    # Send recipient as the sender
+    to_number = From
+
     # Initialize services
     response_formatter = ResponseFormatter()
 
@@ -84,7 +87,7 @@ async def process_whatsapp_message(
         # If we couldn't acquire the lock, send a busy message and return
         if not lock:
             logger.info(f"Conversation {conversation_id} is already being processed, skipping")
-            response_formatter.send_processing(From, Body, "I'm still processing your last message. Please send your next message right after.")
+            response_formatter.send_processing(to_number, Body, "I'm still processing your last message. Please send your next message right after.")
             return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         # Process media
@@ -94,7 +97,7 @@ async def process_whatsapp_message(
         unsupported_media = await media_service.has_unsupported_media(request, num_media)
 
         # Send immediate acknowledgment
-        response_formatter.send_acknowledgment(From, Body, new_conversation=new_conversation_created, unsupported_media=unsupported_media)
+        response_formatter.send_acknowledgment(to_number, Body, new_conversation=new_conversation_created, unsupported_media=unsupported_media)
 
         # Process media
         media_items = await media_service.process_media(request, num_media)
@@ -129,7 +132,7 @@ async def process_whatsapp_message(
         await conversation_service.store_messages(new_messages + output_messages)
 
         # Send the response
-        response_formatter.send_response(From, Body, response_content)
+        response_formatter.send_response(to_number, Body, response_content, total_tokens)
 
         return Response(status_code=status.HTTP_200_OK)
 
@@ -138,7 +141,7 @@ async def process_whatsapp_message(
 
         # Send error message
         response_formatter = ResponseFormatter()
-        response_formatter.send_error(From, Body, "We're experiencing technical difficulties processing your message. Our team has been notified.")
+        response_formatter.send_error(to_number, Body, "We're experiencing technical difficulties processing your message. Our team has been notified.")
 
         return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
