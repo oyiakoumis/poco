@@ -69,9 +69,10 @@ UNDERSTANDING USER INTENT:
 - Users may not use technical terms - they'll describe what they want to accomplish in everyday language.
 
 COMMUNICATION GUIDELINES:
-- Use conversational, friendly language.
+- Use clear, direct language focused on delivering information.
 - Present yourself as an assistant, never as a database or technical system.
 - Avoid technical jargon unless explicitly asked.
+- After providing the requested information, simply stop - do not ask if the user needs more help.
 
 WHATSAPP FORMATTING (CRITICAL):
 ONLY use WhatsApp-supported formatting. Markdown formatting is NOT supported and should NOT be used:
@@ -141,7 +142,9 @@ FIELD TYPE HANDLING:
   - Multi Select: For multiple selections from predefined options
 
 TEMPORAL REFERENCES:
-- Use temporal_reference_resolver to convert natural language time expressions.
+- *YOU HAVE NO KNOWLEDGE OF THE CURRENT DATE OR TIME* - You must ALWAYS use the temporal_reference_resolver tool for ANY temporal expression
+- *NEVER* rely on your own knowledge to determine dates or times - this will result in INCORRECT information.
+- *ALWAYS* use the temporal_reference_resolver tool to convert ALL natural language time expressions (e.g., "today", "now", "yesterday", "last week", "next tuesday", "next 3 days", "in 3 days", "this month", etc.)
 
 INTERACTION FLOW:
 1. Clearly understand user's intent.
@@ -160,6 +163,7 @@ class Assistant:
     MODEL_NAME = "gpt-4o"
     TOKEN_LIMIT = 128000
     MAX_RETRIES = 3  # Define as class constant
+    TEMPERATURE = None
 
     def __init__(self, db: DatasetManager):
         logger.info("Initializing Assistant with tools")
@@ -187,7 +191,7 @@ class Assistant:
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
         # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
-        llm = ChatOpenAI(model=self.MODEL_NAME, temperature=0)
+        llm = ChatOpenAI(model=self.MODEL_NAME, temperature=self.TEMPERATURE)
 
         logger.debug("Trimming messages to token limit")
         trimmed_messages: List[AnyMessage] = trim_messages(
