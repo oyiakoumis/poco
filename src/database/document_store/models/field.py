@@ -11,7 +11,7 @@ from database.document_store.models.types import FieldType, TypeRegistry
 class SchemaField(BaseModel):
     """Field definition for dataset schema."""
 
-    field_name: str = Field(description="Name of the field in the dataset schema", min_length=1, max_length=100, json_schema_extra={"examples": ["user_age"]})
+    field_name: str = Field(description="Name of the field in the dataset schema", min_length=1, max_length=128, json_schema_extra={"examples": ["user_age"]})
     description: str = Field(
         description="Detailed description of what this field represents",
         min_length=1,

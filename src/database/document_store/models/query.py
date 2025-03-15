@@ -59,7 +59,12 @@ class AggregationField(BaseModel):
 
     field: str
     operation: AggregationType
-    alias: Optional[str] = None
+    alias: Optional[str] = Field(
+        default=None,
+        description="Optional alias for the aggregation result. Cannot contain the dot (.) character and cannot start with the dollar sign ($) character.",
+        min_length=1,
+        max_length=128
+    )
 
     model_config = {"arbitrary_types_allowed": True}
 
