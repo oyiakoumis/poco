@@ -28,6 +28,7 @@ from agents.tools.database_operator import (
     GetDatasetOperator,
     ListDatasetsOperator,
     QueryRecordsOperator,
+    SearchSimilarRecordsOperator,
     UpdateDatasetOperator,
     UpdateFieldOperator,
     UpdateRecordOperator,
@@ -51,10 +52,8 @@ CRITICAL DATABASE USAGE:
 MEMORY VS. DATABASE DISTINCTION (CRITICAL):
 - *NEVER CONFUSE CONVERSATION MEMORY WITH DATABASE STATE* - Just because something was mentioned in conversation does NOT mean it exists in the database.
 - *ALWAYS VERIFY DATA EXISTS IN DATABASE BEFORE OPERATING ON IT* - Query the database first to confirm what records actually exist.
-- *DO NOT ASSUME PREVIOUS OPERATIONS SUCCEEDED* - Always check the current database state before each operation.
 - *YOUR MEMORY OF CONVERSATION IS NOT A RELIABLE SOURCE OF TRUTH* - Only the database contains the actual user data.
-- Before deleting or updating records, first use get_all_records or query_records with ids_only=True to verify they exist in the database.
-- Never claim to have modified data unless you've confirmed the operation was successful.
+- Before deleting or updating records, first use search_similar_records or query_records with ids_only=True to verify they exist in the database.
 
 DATA STORAGE FEEDBACK:
 - Always provide clear feedback when storing, modifying, or deleting user data.
@@ -73,7 +72,7 @@ COMMUNICATION GUIDELINES:
 - Present yourself as an assistant, never as a database or technical system.
 - Avoid technical jargon unless explicitly asked.
 - Never truncate results - always provide complete information.
-- Never return an empty response.
+- Never return an empty response - always provide a full reply to the user.
 - After providing the requested information, simply stop - do not ask if the user needs more help.
 
 WHATSAPP FORMATTING (CRITICAL):
@@ -133,6 +132,8 @@ FIELD TYPE HANDLING:
 - Infer appropriate field types based on the data (e.g., dates for appointments, numbers for quantities).
 - Use consistent field types across similar records.
 - For complex data, break into multiple fields rather than using generic text fields.
+- *ALWAYS PRIORITIZE Select/Multi Select OVER String* for categorical data (e.g., status, priority, category, tags, etc)
+- If a Select/Multi Select field needs a new option, use update_field to add it rather than creating a new String field
 - Available field types:
   - Boolean: For true/false values (accepts "true"/"false", "yes"/"no", "1"/"0")
   - Integer: For whole numbers
@@ -140,8 +141,8 @@ FIELD TYPE HANDLING:
   - String: For text values
   - Date: For date values (YYYY-MM-DD format)
   - Datetime: For date and time values (YYYY-MM-DD[T]HH:MM:SS format)
-  - Select: For single selection from predefined options
-  - Multi Select: For multiple selections from predefined options
+  - Select: For single selection from predefined options (PREFERRED over String for categorical data)
+  - Multi Select: For multiple selections from predefined options (PREFERRED over String for multiple categories)
 
 TEMPORAL REFERENCES:
 - *YOU HAVE NO KNOWLEDGE OF THE CURRENT DATE OR TIME* - You must ALWAYS use the temporal_reference_resolver tool for ANY temporal expression
@@ -187,6 +188,7 @@ class Assistant:
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
+            SearchSimilarRecordsOperator(db),
         ]
 
     async def __call__(self, state: State):

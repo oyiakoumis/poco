@@ -9,7 +9,7 @@ from database.document_store import DatasetManager
 from database.document_store.models.dataset import Dataset
 from database.document_store.models.field import SchemaField
 from database.document_store.models.query import RecordQuery
-from database.document_store.models.record import RecordData
+from database.document_store.models.record import Record, RecordData
 from database.document_store.models.schema import DatasetSchema
 from models.base import PydanticUUID
 from utils.logging import logger
@@ -409,6 +409,13 @@ class SearchSimilarDatasetsArgs(BaseModel):
     dataset: Dataset = Field(description="Dataset to find similar datasets to")
 
 
+class SearchSimilarRecordsArgs(BaseModel):
+    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
+    record: Record = Field(description="Record to find similar records to")
+    limit: int = Field(default=10, description="Maximum number of similar records to return", ge=1, le=100)
+    min_score: Optional[float] = Field(default=None, description="Minimum similarity score threshold (0.0 to 1.0)", ge=0.0, le=1.0)
+
+
 class GetAllRecordsOperator(BaseDBOperator):
     name: str = "get_all_records"
     description: str = "Get all records in a dataset"
@@ -438,4 +445,26 @@ class SearchSimilarDatasetsOperator(BaseDBOperator):
             return [dataset.model_dump() for dataset in results]
         except Exception as e:
             logger.error(f"Error in SearchSimilarDatasetsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
+
+
+class SearchSimilarRecordsOperator(BaseDBOperator):
+    name: str = "search_similar_records"
+    description: str = "Find similar records within a dataset using vector search"
+    args_schema: Type[BaseModel] = SearchSimilarRecordsArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = SearchSimilarRecordsArgs(**kwargs)
+            results = await self.db.search_similar_records(
+                user_id, 
+                args.dataset_id, 
+                args.record, 
+                limit=args.limit, 
+                min_score=args.min_score
+            )
+            return [record.model_dump() for record in results]
+        except Exception as e:
+            logger.error(f"Error in SearchSimilarRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise
