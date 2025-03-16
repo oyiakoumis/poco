@@ -16,7 +16,7 @@ async def main():
             configurable={"thread_id": "1", "user_id": "whatsapp:+971565312695", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25
         )
 
-        messages = [HumanMessage(content="show me all my tasks incomplete from last april.")]
+        messages = [HumanMessage(content="show me all my tasks incomplete.")]
 
         for message in messages:
             print_event((), {"Human": {"messages": [message]}})

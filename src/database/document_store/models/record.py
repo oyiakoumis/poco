@@ -2,6 +2,7 @@
 
 from typing import Any, Dict
 
+from pydantic import Field
 from database.document_store.exceptions import (
     InvalidFieldValueError,
     InvalidRecordDataError,
@@ -16,8 +17,8 @@ RecordData = Dict[str, Any]
 class Record(BaseDocument):
     """Record model representing a single document in a dataset."""
 
-    dataset_id: PydanticUUID
-    data: RecordData
+    dataset_id: PydanticUUID = Field(description="Identifier of the dataset this record belongs to")
+    data: RecordData = Field(description="The actual record data containing field values according to the dataset schema")
 
     @staticmethod
     def validate_data(data: RecordData, schema: DatasetSchema) -> RecordData:

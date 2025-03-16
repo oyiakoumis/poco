@@ -62,7 +62,7 @@ class DatasetManager:
     VECTOR_SEARCH_CONFIG = {
         "INDEX_NAME": "vector_search_datasets",
         "FIELD_NAME": "embedding",
-        "DIMENSION": 1536,  # text-embedding-3-small dimension
+        "DIMENSION": 1536,
         "NUM_CANDIDATES_MULTIPLIER": 10,
         "MIN_SCORE": 0.7,
     }
@@ -74,7 +74,7 @@ class DatasetManager:
         self._db: AsyncIOMotorDatabase = self.client.get_database(self.DATABASE)
         self._datasets: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_DATASETS)
         self._records: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_RECORDS)
-        self.embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+        self.embeddings_model = OpenAIEmbeddings(model="text-embedding-3-large", dimensions=self.VECTOR_SEARCH_CONFIG["DIMENSION"])
 
     async def _create_vector_search_index(self) -> None:
         """Create vector search index if it doesn't exist and ensure it's ready."""

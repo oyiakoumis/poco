@@ -43,22 +43,22 @@ class FilterCondition(BaseModel):
     """Single field condition."""
 
     field: str = Field(description="Field name to filter on")
-    operator: ComparisonOperator
+    operator: ComparisonOperator = Field(description="Comparison operator to use for filtering")
     value: Any = Field(description="Value to compare against")
 
 
 class FilterExpression(BaseModel):
     """Logical combination of conditions or other expressions."""
 
-    operator: LogicalOperator
-    expressions: List[Union[FilterCondition, "FilterExpression"]]
+    operator: LogicalOperator = Field(description="Logical operator to combine filter expressions")
+    expressions: List[Union[FilterCondition, "FilterExpression"]] = Field(description="List of filter conditions or nested expressions to combine")
 
 
 class AggregationField(BaseModel):
     """Defines an aggregation operation on a field."""
 
-    field: str
-    operation: AggregationType
+    field: str = Field(description="Field name to perform aggregation on")
+    operation: AggregationType = Field(description="Type of aggregation operation to perform")
     alias: Optional[str] = Field(
         default=None,
         description="Optional alias for the aggregation result. Cannot contain the dot (.) character and cannot start with the dollar sign ($) character.",
