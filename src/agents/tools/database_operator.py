@@ -450,20 +450,16 @@ class SearchSimilarDatasetsOperator(BaseDBOperator):
 
 class SearchSimilarRecordsOperator(BaseDBOperator):
     name: str = "search_similar_records"
-    description: str = "Find similar records within a dataset using vector search"
+    description: str = (
+        "Find records based on semantic similarity rather than exact field matching. Use this tool when you don't have exact field values to query with. This tool creates an embedding of a hypothetical record and finds existing records with similar meaning using vector search."
+    )
     args_schema: Type[BaseModel] = SearchSimilarRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = SearchSimilarRecordsArgs(**kwargs)
-            results = await self.db.search_similar_records(
-                user_id, 
-                args.dataset_id, 
-                args.record, 
-                limit=args.limit, 
-                min_score=args.min_score
-            )
+            results = await self.db.search_similar_records(user_id, args.dataset_id, args.record, limit=args.limit, min_score=args.min_score)
             return [record.model_dump() for record in results]
         except Exception as e:
             logger.error(f"Error in SearchSimilarRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
