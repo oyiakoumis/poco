@@ -328,7 +328,7 @@ class DatasetManager:
         try:
             logger.info(f"Deleting dataset {dataset_id} and its records for user {user_id}")
             # Verify dataset exists and belongs to user
-            await self.get_dataset(user_id, dataset_id)
+            await self.dataset_exists(user_id, dataset_id)
 
             async with await self.client.start_session() as session:
                 async with session.start_transaction():
@@ -382,6 +382,20 @@ class DatasetManager:
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to get dataset: {str(e)}")
+
+    async def dataset_exists(self, user_id: str, dataset_id: UUID) -> bool:
+        """Efficiently checks if a dataset exists without retrieving the full document."""
+        try:
+            logger.debug(f"Checking if dataset {dataset_id} exists for user {user_id}")
+            # Use count_documents with limit=1 for efficiency
+            count = await self._datasets.count_documents({"_id": str(dataset_id), "user_id": user_id}, limit=1)
+            if count == 0:
+                raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
+            return True
+        except DatasetNotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to check dataset existence: {str(e)}")
 
     async def _prepare_record_updates(
         self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
@@ -773,7 +787,7 @@ class DatasetManager:
         try:
             logger.info(f"Deleting record {record_id} from dataset {dataset_id}")
             # Verify dataset exists
-            await self.get_dataset(user_id, dataset_id)
+            await self.dataset_exists(user_id, dataset_id)
 
             # Delete record
             result = await self._records.delete_one(
@@ -798,7 +812,7 @@ class DatasetManager:
         try:
             logger.debug(f"Getting record {record_id} from dataset {dataset_id}")
             # Verify dataset exists
-            await self.get_dataset(user_id, dataset_id)
+            await self.dataset_exists(user_id, dataset_id)
 
             # Get record
             doc = await self._records.find_one(
@@ -882,7 +896,7 @@ class DatasetManager:
         try:
             logger.info(f"Getting all records from dataset {dataset_id} for user {user_id}")
             # Verify dataset exists
-            await self.get_dataset(user_id, dataset_id)
+            await self.dataset_exists(user_id, dataset_id)
 
             # Get all records
             records = []
@@ -1120,7 +1134,7 @@ class DatasetManager:
         try:
             logger.info(f"Batch deleting {len(record_ids)} records from dataset {dataset_id}")
             # Verify dataset exists
-            await self.get_dataset(user_id, dataset_id)
+            await self.dataset_exists(user_id, dataset_id)
 
             # Convert record IDs to strings
             str_record_ids = [str(record_id) for record_id in record_ids]
@@ -1142,7 +1156,9 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to batch delete records: {str(e)}")
 
-    async def query_records(self, user_id: str, dataset_id: UUID, query: Optional[RecordQuery] = None) -> Union[List[Record], List[Dict]]:
+    async def query_records(
+        self, user_id: str, dataset_id: UUID, query: Optional[RecordQuery] = None, ids_only: bool = False
+    ) -> Union[List[Record], List[Dict], List[str]]:
         """Query records in the specified dataset."""
         try:
             logger.info(f"Querying records in dataset {dataset_id} for user {user_id}")
@@ -1176,12 +1192,21 @@ class DatasetManager:
                 logger.info(f"Query returned {len(results)} aggregated results")
                 return results
             else:
-                # Simple query - return Record objects
-                records = []
-                async for doc in cursor:
-                    records.append(Record.model_validate(doc))
-                logger.info(f"Query returned {len(records)} records")
-                return records
+                # Simple query - return Record objects or just IDs
+                if ids_only:
+                    # Return only record IDs
+                    record_ids = []
+                    async for doc in cursor:
+                        record_ids.append(doc["_id"])
+                    logger.info(f"Query returned {len(record_ids)} record IDs")
+                    return record_ids
+                else:
+                    # Return full Record objects
+                    records = []
+                    async for doc in cursor:
+                        records.append(Record.model_validate(doc))
+                    logger.info(f"Query returned {len(records)} records")
+                    return records
 
         except (DatasetNotFoundError, InvalidRecordDataError):
             raise

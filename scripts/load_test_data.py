@@ -300,6 +300,36 @@ async def load_expense_batch(db: DatasetManager, user_id: str, dataset_id: str, 
         print(f"Loaded expenses {i+1} to {min(i+batch_size, len(expenses))}")
 
 
+async def empty_dataset_records(db: DatasetManager, user_id: str, dataset_id: str) -> int:
+    """Empty all records from a dataset.
+
+    Args:
+        db: Database manager instance
+        user_id: User ID associated with the dataset
+        dataset_id: Dataset ID to empty
+
+    Returns:
+        Number of records deleted
+    """
+    print(f"Emptying records from dataset {dataset_id}...")
+    
+    # Get all records
+    records = await db.get_all_records(user_id, dataset_id)
+    
+    if not records:
+        print("No records to delete.")
+        return 0
+    
+    # Extract record IDs
+    record_ids = [record.id for record in records]
+    
+    # Delete all records
+    await db.batch_delete_records(user_id, dataset_id, record_ids)
+    
+    print(f"Deleted {len(record_ids)} records from dataset {dataset_id}")
+    return len(record_ids)
+
+
 async def load_test_data(db: DatasetManager, user_id: str, scale: str = "medium") -> Dict[str, Any]:
     """Load test data at different scales.
 
@@ -323,7 +353,14 @@ async def load_test_data(db: DatasetManager, user_id: str, scale: str = "medium"
     # Create datasets if they don't exist
     tasks_dataset_id = await create_tasks_dataset(db, user_id)
     expenses_dataset_id = await create_expenses_dataset(db, user_id)
-
+    
+    # Empty existing records from datasets
+    tasks_deleted = await empty_dataset_records(db, user_id, tasks_dataset_id)
+    expenses_deleted = await empty_dataset_records(db, user_id, expenses_dataset_id)
+    
+    if tasks_deleted > 0 or expenses_deleted > 0:
+        print(f"Cleared existing data: {tasks_deleted} tasks and {expenses_deleted} expenses")
+    
     # Generate and load data
     print(f"Generating {count['tasks']} tasks...")
     tasks = generate_task_batch(count=count["tasks"])

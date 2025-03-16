@@ -101,6 +101,10 @@ class QueryRecordsArgs(DatasetArgs):
         description="Optional query parameters to filter, sort, or aggregate records",
         example={"filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}}, "sort": {"created_at": False}},
     )
+    ids_only: bool = Field(
+        default=False,
+        description="If True, returns only record IDs instead of full records (ignored for aggregation queries)",
+    )
 
 
 class UpdateFieldArgs(DatasetArgs):
@@ -275,19 +279,23 @@ class GetRecordOperator(BaseDBOperator):
 
 class QueryRecordsOperator(BaseDBOperator):
     name: str = "query_records"
-    description: str = "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations."
+    description: str = (
+        "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency)."
+    )
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
-    async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
+    async def _arun(self, config: RunnableConfig, **kwargs) -> Union[List[Dict[str, Any]], List[str]]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = QueryRecordsArgs(**kwargs)
-            result = await self.db.query_records(user_id, args.dataset_id, args.query)
+            result = await self.db.query_records(user_id, args.dataset_id, args.query, args.ids_only)
             if not result:
                 return []
-            if isinstance(result[0], dict):
+            if isinstance(result[0], str):  # Record IDs
                 return result
-            return [record.model_dump() for record in result]
+            if isinstance(result[0], dict):  # Aggregation results
+                return result
+            return [record.model_dump() for record in result]  # Record objects
         except Exception as e:
             logger.error(f"Error in QueryRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise

@@ -53,7 +53,7 @@ MEMORY VS. DATABASE DISTINCTION (CRITICAL):
 - *ALWAYS VERIFY DATA EXISTS IN DATABASE BEFORE OPERATING ON IT* - Query the database first to confirm what records actually exist.
 - *DO NOT ASSUME PREVIOUS OPERATIONS SUCCEEDED* - Always check the current database state before each operation.
 - *YOUR MEMORY OF CONVERSATION IS NOT A RELIABLE SOURCE OF TRUTH* - Only the database contains the actual user data.
-- Before deleting or updating records, first use get_all_records or query_records to verify they exist in the database.
+- Before deleting or updating records, first use get_all_records or query_records with ids_only=True to verify they exist in the database.
 - Never claim to have modified data unless you've confirmed the operation was successful.
 
 DATA STORAGE FEEDBACK:
