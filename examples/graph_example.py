@@ -12,9 +12,11 @@ async def main():
     graph, client = await setup_graph()
     try:
         # Configuration for the graph
-        config = RunnableConfig(configurable={"thread_id": "1", "user_id": "user_123", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25)
+        config = RunnableConfig(
+            configurable={"thread_id": "1", "user_id": "whatsapp:+971565312695", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25
+        )
 
-        messages = [HumanMessage(content="Add milk, water, bread, and cheese to my grocery list.")]
+        messages = [HumanMessage(content="show me all my tasks incomplete from last april.")]
 
         for message in messages:
             print_event((), {"Human": {"messages": [message]}})

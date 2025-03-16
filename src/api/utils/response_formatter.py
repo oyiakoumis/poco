@@ -1,7 +1,7 @@
 """Response formatting utilities for WhatsApp messages."""
 
-from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
+from twilio.rest import Client
 
 from agents.assistant import Assistant
 from api.utils.text import MessageType, build_notification_string, format_message

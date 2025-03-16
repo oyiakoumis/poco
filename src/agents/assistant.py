@@ -163,7 +163,7 @@ class Assistant:
     MODEL_NAME = "gpt-4o"
     TOKEN_LIMIT = 128000
     MAX_RETRIES = 3  # Define as class constant
-    TEMPERATURE = None
+    TEMPERATURE = 0
 
     def __init__(self, db: DatasetManager):
         logger.info("Initializing Assistant with tools")
