@@ -60,9 +60,10 @@ class DatasetManager:
 
     # Vector search configuration
     VECTOR_SEARCH_CONFIG = {
+        "MODEL": "text-embedding-3-small",
         "INDEX_NAME": "vector_search_datasets",
         "FIELD_NAME": "embedding",
-        "DIMENSION": 1536,
+        "DIMENSION": 1536,  # 1536 for text-embedding-3-small and 3072 for text-embedding-3-large
         "NUM_CANDIDATES_MULTIPLIER": 10,
         "MIN_SCORE": 0.7,
     }
@@ -74,43 +75,43 @@ class DatasetManager:
         self._db: AsyncIOMotorDatabase = self.client.get_database(self.DATABASE)
         self._datasets: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_DATASETS)
         self._records: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_RECORDS)
-        self.embeddings_model = OpenAIEmbeddings(model="text-embedding-3-large", dimensions=self.VECTOR_SEARCH_CONFIG["DIMENSION"])
+        self.embeddings_model = OpenAIEmbeddings(model=self.VECTOR_SEARCH_CONFIG["MODEL"], dimensions=self.VECTOR_SEARCH_CONFIG["DIMENSION"])
 
-    async def _create_vector_search_index(self) -> None:
+    async def _create_vector_search_index_generic(self, collection: AsyncIOMotorCollection, index_name: str, entity_type: str, dimension: int) -> None:
         """Create vector search index if it doesn't exist and ensure it's ready."""
         try:
-            logger.info("Checking vector search index status")
+            logger.info(f"Checking {entity_type} vector search index status")
             # Check current index status
-            status = await self._get_index_status()
+            status = await self._get_index_status_generic(collection, index_name, entity_type)
 
             if status == IndexStatus.READY:
-                logger.info("Vector search index is ready")
+                logger.info(f"{entity_type.capitalize()} vector search index is ready")
                 return  # Index exists and is ready
             elif status == IndexStatus.FAILED:
                 # Drop failed index to recreate it
-                logger.warning("Vector search index failed, dropping to recreate")
-                await self._delete_vector_search_index()
+                logger.warning(f"{entity_type.capitalize()} vector search index failed, dropping to recreate")
+                await self._delete_vector_search_index_generic(collection, index_name, entity_type)
             elif status == IndexStatus.STALE:
-                logger.warning("Vector search index is stale, dropping to recreate")
-                await self._delete_vector_search_index()
+                logger.warning(f"{entity_type.capitalize()} vector search index is stale, dropping to recreate")
+                await self._delete_vector_search_index_generic(collection, index_name, entity_type)
             elif status in (IndexStatus.BUILDING, IndexStatus.PENDING):
                 # Wait for existing index to be ready
-                logger.info("Waiting for existing vector search index to be ready")
-                await self._wait_for_index_ready()
+                logger.info(f"Waiting for existing {entity_type} vector search index to be ready")
+                await self._wait_for_index_ready_generic(collection, index_name, entity_type)
                 return
             elif status == IndexStatus.DELETING:
-                logger.info("Waiting for vector search index deletion to complete")
+                logger.info(f"Waiting for {entity_type} vector search index deletion to complete")
                 await sleep(5)  # Wait a bit before creating new index
 
             # Create new index if it doesn't exist or was dropped
-            logger.info("Creating new vector search index")
+            logger.info(f"Creating new {entity_type} vector search index")
             index_definition = {
                 "mappings": {
                     "dynamic": True,
                     "fields": {
                         self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: {
                             "type": "knnVector",
-                            "dimensions": self.VECTOR_SEARCH_CONFIG["DIMENSION"],
+                            "dimensions": dimension,
                             "similarity": "cosine",
                         }
                     },
@@ -118,22 +119,22 @@ class DatasetManager:
             }
 
             # Create index
-            search_index = SearchIndexModel(definition=index_definition, name=self.VECTOR_SEARCH_CONFIG["INDEX_NAME"])
-            await self._datasets.create_search_index(search_index)
+            search_index = SearchIndexModel(definition=index_definition, name=index_name)
+            await collection.create_search_index(search_index)
 
             # Wait for index to be ready
-            logger.info("Waiting for new vector search index to be ready")
-            await self._wait_for_index_ready()
-            logger.info("Vector search index is ready")
+            logger.info(f"Waiting for new {entity_type} vector search index to be ready")
+            await self._wait_for_index_ready_generic(collection, index_name, entity_type)
+            logger.info(f"{entity_type.capitalize()} vector search index is ready")
 
         except Exception as e:
-            raise DatabaseError(f"Failed to create vector search index: {str(e)}")
+            raise DatabaseError(f"Failed to create {entity_type} vector search index: {str(e)}")
 
-    async def _delete_vector_search_index(self) -> None:
+    async def _delete_vector_search_index_generic(self, collection: AsyncIOMotorCollection, index_name: str, entity_type: str) -> None:
         """Delete vector search index and wait until it's confirmed to be deleted."""
         try:
             # Start deletion
-            await self._datasets.drop_search_index(self.VECTOR_SEARCH_CONFIG["INDEX_NAME"])
+            await collection.drop_search_index(index_name)
 
             # Wait for deletion to complete
             MAX_POLL_ATTEMPTS = 30  # 1 minute total
@@ -141,62 +142,79 @@ class DatasetManager:
 
             attempts = 0
             while attempts < MAX_POLL_ATTEMPTS:
-                status = await self._get_index_status()
+                status = await self._get_index_status_generic(collection, index_name, entity_type)
                 if status == IndexStatus.DOES_NOT_EXIST:
                     return
                 elif status == IndexStatus.DELETING:
                     await sleep(POLL_INTERVAL_SECONDS)
                 else:
-                    raise DatabaseError(f"Unexpected index status during deletion: {status}")
+                    raise DatabaseError(f"Unexpected {entity_type} index status during deletion: {status}")
                 attempts += 1
 
-            raise DatabaseError(f"Index deletion not complete after {MAX_POLL_ATTEMPTS} attempts")
+            raise DatabaseError(f"{entity_type.capitalize()} index deletion not complete after {MAX_POLL_ATTEMPTS} attempts")
 
         except Exception as e:
-            raise DatabaseError(f"Failed to delete vector search index: {str(e)}")
+            raise DatabaseError(f"Failed to delete {entity_type} vector search index: {str(e)}")
 
-    async def _get_index_status(self) -> IndexStatus:
+    async def _get_index_status_generic(self, collection: AsyncIOMotorCollection, index_name: str, entity_type: str) -> IndexStatus:
         """Get current status of the vector search index."""
         try:
-            indexes = await self._datasets.list_search_indexes().to_list(None)
+            indexes = await collection.list_search_indexes().to_list(None)
             for index in indexes:
-                if index["name"] == self.VECTOR_SEARCH_CONFIG["INDEX_NAME"]:
+                if index["name"] == index_name:
                     status = index.get("status", "")
                     try:
                         return IndexStatus(status)
                     except ValueError:
-                        print(f"Warning: Unknown index status: {status}")
+                        print(f"Warning: Unknown {entity_type} index status: {status}")
                         return IndexStatus.FAILED
             return IndexStatus.DOES_NOT_EXIST
         except Exception as e:
-            raise DatabaseError(f"Failed to get index status: {str(e)}")
+            raise DatabaseError(f"Failed to get {entity_type} index status: {str(e)}")
 
-    async def _wait_for_index_ready(self) -> None:
+    async def _wait_for_index_ready_generic(self, collection: AsyncIOMotorCollection, index_name: str, entity_type: str) -> None:
         """Poll index status until ready or max attempts reached."""
         MAX_POLL_ATTEMPTS = 30  # 1 minute total
         POLL_INTERVAL_SECONDS = 2
 
         attempts = 0
         while attempts < MAX_POLL_ATTEMPTS:
-            status = await self._get_index_status()
+            status = await self._get_index_status_generic(collection, index_name, entity_type)
 
             if status == IndexStatus.READY:
                 return
             elif status == IndexStatus.FAILED:
-                raise DatabaseError("Vector search index creation failed")
+                raise DatabaseError(f"{entity_type.capitalize()} vector search index creation failed")
             elif status == IndexStatus.STALE:
-                print("Warning: Index is stale, may return out-of-date results")
+                print(f"Warning: {entity_type.capitalize()} index is stale, may return out-of-date results")
                 return
             elif status == IndexStatus.DELETING:
                 await sleep(POLL_INTERVAL_SECONDS * 2)  # Wait longer for deletion
             elif status == IndexStatus.BUILDING or status == IndexStatus.PENDING:
                 await sleep(POLL_INTERVAL_SECONDS)
             else:
-                raise DatabaseError(f"Unexpected index status: {status}")
+                raise DatabaseError(f"Unexpected {entity_type} index status: {status}")
 
             attempts += 1
 
-        raise DatabaseError(f"Index not ready after {MAX_POLL_ATTEMPTS} attempts")
+        raise DatabaseError(f"{entity_type.capitalize()} index not ready after {MAX_POLL_ATTEMPTS} attempts")
+
+    # Wrapper methods for backward compatibility and specific entity types
+
+    async def _create_dataset_vector_search_index(self) -> None:
+        """Create vector search index for datasets if it doesn't exist and ensure it's ready."""
+        await self._create_vector_search_index_generic(
+            collection=self._datasets,
+            index_name=self.VECTOR_SEARCH_CONFIG["INDEX_NAME"],
+            entity_type="dataset",
+            dimension=self.VECTOR_SEARCH_CONFIG["DIMENSION"],
+        )
+
+    async def _create_record_vector_search_index(self) -> None:
+        """Create vector search index for records if it doesn't exist and ensure it's ready."""
+        await self._create_vector_search_index_generic(
+            collection=self._records, index_name="vector_search_records", entity_type="record", dimension=self.VECTOR_SEARCH_CONFIG["DIMENSION"]
+        )
 
     async def _generate_dataset_embedding(self, dataset: Dataset) -> List[float]:
         """Generate embedding from dataset metadata and schema."""
@@ -214,6 +232,26 @@ class DatasetManager:
         Schema Fields:
         {chr(10).join(f'- {desc}' for desc in schema_desc)}
         """
+        return await self.embeddings_model.aembed_query(text_to_embed)
+
+    async def _generate_record_embedding(self, record: Record, dataset_schema: DatasetSchema) -> List[float]:
+        """Generate embedding from record data using dataset schema for context."""
+        # Build a clean representation of the record data
+        content_parts = []
+
+        for field in dataset_schema.fields:
+            field_name = field.field_name
+            if field_name in record.data:
+                value = record.data[field_name]
+                # Format based on field type if needed
+                if field.description:
+                    content_parts.append(f"{field_name} ({field.description}): {value}")
+                else:
+                    content_parts.append(f"{field_name}: {value}")
+
+        # Create a clean text representation focused on the content
+        text_to_embed = "\n".join(content_parts)
+
         return await self.embeddings_model.aembed_query(text_to_embed)
 
     @classmethod
@@ -243,8 +281,9 @@ class DatasetManager:
                 ]
             )
 
-            # Setup vector search index
-            await manager._create_vector_search_index()
+            # Setup vector search indexes
+            await manager._create_dataset_vector_search_index()
+            await manager._create_record_vector_search_index()
 
             return manager
 
@@ -833,26 +872,28 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to get record: {str(e)}")
 
-    async def search_similar_datasets(
+    async def _search_similar_entities_generic(
         self,
+        collection: AsyncIOMotorCollection,
+        index_name: str,
+        entity_type: str,
         user_id: str,
-        dataset: Dataset,
+        query_embedding: List[float],
         limit: int = 10,
         min_score: Optional[float] = None,
         filter_dict: Optional[Dict] = None,
-    ) -> List[Dataset]:
-        """Find similar datasets using vector search."""
+        additional_filters: Optional[Dict] = None,
+        model_class: Any = None,
+    ) -> List[Any]:
+        """Generic method to find similar entities using vector search."""
         try:
-            logger.info(f"Searching similar datasets for user {user_id}")
-            logger.debug("Generating embedding for similarity search")
-            # Generate embedding from dataset
-            query_embedding = await self._generate_dataset_embedding(dataset)
+            logger.info(f"Searching similar {entity_type}s for user {user_id}")
 
             # Build search pipeline
             pipeline = [
                 {
                     "$vectorSearch": {
-                        "index": self.VECTOR_SEARCH_CONFIG["INDEX_NAME"],
+                        "index": index_name,
                         "path": self.VECTOR_SEARCH_CONFIG["FIELD_NAME"],
                         "queryVector": query_embedding,
                         "numCandidates": limit * self.VECTOR_SEARCH_CONFIG["NUM_CANDIDATES_MULTIPLIER"],
@@ -869,7 +910,11 @@ class DatasetManager:
             elif self.VECTOR_SEARCH_CONFIG["MIN_SCORE"] > 0:
                 pipeline.append({"$match": {"score": {"$gte": self.VECTOR_SEARCH_CONFIG["MIN_SCORE"]}}})
 
-            # Add any additional filters first
+            # Add any additional specific filters
+            if additional_filters:
+                pipeline.append({"$match": additional_filters})
+
+            # Add any general filters
             if filter_dict:
                 pipeline.append({"$match": filter_dict})
 
@@ -881,15 +926,88 @@ class DatasetManager:
 
             # Execute search
             results = []
-            async for doc in self._datasets.aggregate(pipeline):
-                dataset = Dataset.model_validate(doc)
-                results.append(dataset)
+            async for doc in collection.aggregate(pipeline):
+                if model_class:
+                    entity = model_class.model_validate(doc)
+                    results.append(entity)
+                else:
+                    results.append(doc)
 
-            logger.info(f"Found {len(results)} similar datasets")
+            logger.info(f"Found {len(results)} similar {entity_type}s")
             return results
 
         except Exception as e:
-            raise DatabaseError(f"Failed to perform vector search: {str(e)}")
+            raise DatabaseError(f"Failed to perform {entity_type} vector search: {str(e)}")
+
+    async def search_similar_datasets(
+        self,
+        user_id: str,
+        dataset: Dataset,
+        limit: int = 10,
+        min_score: Optional[float] = None,
+        filter_dict: Optional[Dict] = None,
+    ) -> List[Dataset]:
+        """Find similar datasets using vector search."""
+        try:
+            logger.debug("Generating dataset embedding for similarity search")
+            # Generate embedding from dataset
+            query_embedding = await self._generate_dataset_embedding(dataset)
+
+            # Use generic search method
+            return await self._search_similar_entities_generic(
+                collection=self._datasets,
+                index_name=self.VECTOR_SEARCH_CONFIG["INDEX_NAME"],
+                entity_type="dataset",
+                user_id=user_id,
+                query_embedding=query_embedding,
+                limit=limit,
+                min_score=min_score,
+                filter_dict=filter_dict,
+                model_class=Dataset,
+            )
+
+        except Exception as e:
+            raise DatabaseError(f"Failed to perform dataset vector search: {str(e)}")
+
+    async def search_similar_records(
+        self,
+        user_id: str,
+        dataset_id: UUID,
+        record: Record,
+        limit: int = 10,
+        min_score: Optional[float] = None,
+        filter_dict: Optional[Dict] = None,
+    ) -> List[Record]:
+        """Find similar records using vector search."""
+        try:
+            # Get dataset to access schema
+            dataset = await self.get_dataset(user_id, dataset_id)
+            
+            logger.debug("Generating record embedding for similarity search")
+            # Generate embedding from record
+            query_embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
+
+            # Additional filter to ensure we only search within the specified dataset
+            dataset_filter = {"dataset_id": str(dataset_id)}
+
+            # Use generic search method
+            return await self._search_similar_entities_generic(
+                collection=self._records,
+                index_name="vector_search_records",
+                entity_type="record",
+                user_id=user_id,
+                query_embedding=query_embedding,
+                limit=limit,
+                min_score=min_score,
+                filter_dict=filter_dict,
+                additional_filters=dataset_filter,
+                model_class=Record,
+            )
+
+        except (DatasetNotFoundError, InvalidRecordDataError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to perform record vector search: {str(e)}")
 
     async def get_all_records(self, user_id: str, dataset_id: UUID) -> List[Record]:
         """Retrieves all records in the specified dataset."""
