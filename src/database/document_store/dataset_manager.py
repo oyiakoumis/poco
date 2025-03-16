@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from asyncio import sleep
+from asyncio import gather, sleep
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
@@ -216,9 +216,8 @@ class DatasetManager:
             collection=self._records, index_name="vector_search_records", entity_type="record", dimension=self.VECTOR_SEARCH_CONFIG["DIMENSION"]
         )
 
-    async def _generate_dataset_embedding(self, dataset: Dataset) -> List[float]:
-        """Generate embedding from dataset metadata and schema."""
-        logger.debug("Generating dataset embedding")
+    def _prepare_dataset_text_for_embedding(self, dataset: Dataset) -> str:
+        """Prepare text representation of a dataset for embedding."""
         # Build schema description including field descriptions
         schema_desc = []
         for field in dataset.dataset_schema.fields:
@@ -227,20 +226,27 @@ class DatasetManager:
                 desc += f" ({field.description})"
             schema_desc.append(desc)
 
-        text_to_embed = f"""
+        return f"""
         Name: {dataset.name}
         Description: {dataset.description}
         Schema Fields:
         {chr(10).join(f'- {desc}' for desc in schema_desc)}
         """
+    
+    async def _generate_dataset_embedding(self, dataset: Dataset) -> List[float]:
+        """Generate embedding from dataset metadata and schema."""
+        logger.debug("Generating dataset embedding")
+        
+        # Prepare text for embedding
+        text_to_embed = self._prepare_dataset_text_for_embedding(dataset)
+        
+        # Generate and return embedding
         return await self.embeddings_model.aembed_query(text_to_embed)
 
-    async def _generate_record_embedding(self, record: Record, dataset_schema: DatasetSchema) -> List[float]:
-        """Generate embedding from record data using dataset schema for context."""
-        logger.debug("Generating record embedding")
-        # Build a clean representation of the record data
+    def _prepare_record_text_for_embedding(self, record: Record, dataset_schema: DatasetSchema) -> str:
+        """Prepare text representation of a record for embedding."""
         content_parts = []
-
+        
         for field in dataset_schema.fields:
             field_name = field.field_name
             if field_name in record.data:
@@ -250,11 +256,35 @@ class DatasetManager:
                     content_parts.append(f"{field_name} ({field.description}): {value}")
                 else:
                     content_parts.append(f"{field_name}: {value}")
-
+                    
         # Create a clean text representation focused on the content
-        text_to_embed = "\n".join(content_parts)
-
+        return "\n".join(content_parts)
+    
+    async def _generate_record_embedding(self, record: Record, dataset_schema: DatasetSchema) -> List[float]:
+        """Generate embedding from record data using dataset schema for context."""
+        logger.debug("Generating record embedding")
+        
+        # Prepare text for embedding
+        text_to_embed = self._prepare_record_text_for_embedding(record, dataset_schema)
+        
+        # Generate and return embedding
         return await self.embeddings_model.aembed_query(text_to_embed)
+        
+    async def _generate_record_embeddings_parallel(self, records: List[Record], dataset_schema: DatasetSchema) -> List[List[float]]:
+        """Generate embeddings for multiple records in parallel."""
+        logger.debug(f"Generating embeddings for {len(records)} records in parallel")
+        
+        # Prepare embedding tasks for all records
+        embedding_tasks = []
+        for record in records:
+            # Prepare text for embedding
+            text_to_embed = self._prepare_record_text_for_embedding(record, dataset_schema)
+            
+            # Add embedding task
+            embedding_tasks.append(self.embeddings_model.aembed_query(text_to_embed))
+        
+        # Execute all embedding tasks in parallel
+        return await gather(*embedding_tasks)
 
     @classmethod
     async def setup(cls, mongodb_client: AsyncIOMotorClient) -> "DatasetManager":
@@ -403,10 +433,7 @@ class DatasetManager:
         try:
             logger.info(f"Listing datasets for user {user_id}")
             datasets = []
-            cursor = self._datasets.find(
-                {"user_id": user_id},
-                {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}
-            )
+            cursor = self._datasets.find({"user_id": user_id}, {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0})
             async for doc in cursor:
                 datasets.append(Dataset.model_validate(doc))
             return datasets
@@ -417,10 +444,7 @@ class DatasetManager:
         """Retrieves a specific dataset."""
         try:
             logger.debug(f"Getting dataset {dataset_id} for user {user_id}")
-            doc = await self._datasets.find_one(
-                {"_id": str(dataset_id), "user_id": user_id},
-                {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}
-            )
+            doc = await self._datasets.find_one({"_id": str(dataset_id), "user_id": user_id}, {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0})
             if not doc:
                 raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
             return Dataset.model_validate(doc)
@@ -819,13 +843,7 @@ class DatasetManager:
                     "user_id": user_id,
                     "dataset_id": str(dataset_id),
                 },
-                {
-                    "$set": {
-                        "data": validated_data,
-                        "updated_at": datetime.now(timezone.utc),
-                        self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: embedding
-                    }
-                },
+                {"$set": {"data": validated_data, "updated_at": datetime.now(timezone.utc), self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: embedding}},
             )
 
             if result.modified_count == 0:
@@ -836,7 +854,7 @@ class DatasetManager:
                         "user_id": user_id,
                         "dataset_id": str(dataset_id),
                     },
-                    {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}
+                    {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0},
                 )
                 if not record:
                     raise RecordNotFoundError(f"Record {record_id} not found")
@@ -888,7 +906,7 @@ class DatasetManager:
                     "user_id": user_id,
                     "dataset_id": str(dataset_id),
                 },
-                {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}
+                {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0},
             )
 
             if not doc:
@@ -1045,10 +1063,7 @@ class DatasetManager:
 
             # Get all records
             records = []
-            cursor = self._records.find(
-                {"user_id": user_id, "dataset_id": str(dataset_id)},
-                {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}
-            )
+            cursor = self._records.find({"user_id": user_id, "dataset_id": str(dataset_id)}, {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0})
             async for doc in cursor:
                 records.append(Record.model_validate(doc))
 
@@ -1107,7 +1122,7 @@ class DatasetManager:
 
             # Validate and convert all data first
             validated_records_data = []
-            validated_records = []
+            records = []
             for data in records_data:
                 validated_data = Record.validate_data(data, dataset.dataset_schema)
                 validated_records_data.append(validated_data)
@@ -1116,17 +1131,20 @@ class DatasetManager:
                     dataset_id=str(dataset_id),
                     data=validated_data,
                 )
-                
-                # Generate embedding for each record
-                embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
-                
-                # Add embedding to record dict
-                record_dict = record.model_dump(by_alias=True)
-                record_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embedding
-                validated_records.append(record_dict)
+                records.append(record)
 
             # Check uniqueness constraints for the batch
             await self._validate_batch_uniqueness(user_id, dataset_id, validated_records_data, dataset.dataset_schema)
+            
+            # Generate embeddings in parallel
+            embeddings = await self._generate_record_embeddings_parallel(records, dataset.dataset_schema)
+            
+            # Prepare records with embeddings
+            validated_records = []
+            for i, record in enumerate(records):
+                record_dict = record.model_dump(by_alias=True)
+                record_dict[self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]] = embeddings[i]
+                validated_records.append(record_dict)
 
             # Insert all records
             result = await self._records.insert_many(validated_records)
@@ -1209,6 +1227,7 @@ class DatasetManager:
             # Validate and convert all data first
             validated_updates = []
             record_ids = []
+            records = []
 
             for update in records_updates:
                 record_id = update.get("record_id")
@@ -1221,16 +1240,7 @@ class DatasetManager:
                 validated_data = Record.validate_data(data, dataset.dataset_schema)
                 validated_updates.append({"record_id": record_id, "data": validated_data})
                 record_ids.append(record_id)
-
-            # Check uniqueness constraints for the batch
-            await self._validate_batch_updates_uniqueness(user_id, dataset_id, validated_updates, dataset.dataset_schema)
-
-            # Prepare bulk operations
-            operations = []
-            for update in validated_updates:
-                record_id = update["record_id"]
-                validated_data = update["data"]
-
+                
                 # Create record object for embedding generation
                 record = Record(
                     id=record_id,
@@ -1238,10 +1248,20 @@ class DatasetManager:
                     dataset_id=str(dataset_id),
                     data=validated_data,
                 )
-                
-                # Generate new embedding
-                embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
+                records.append(record)
 
+            # Check uniqueness constraints for the batch
+            await self._validate_batch_updates_uniqueness(user_id, dataset_id, validated_updates, dataset.dataset_schema)
+
+            # Generate embeddings in parallel
+            embeddings = await self._generate_record_embeddings_parallel(records, dataset.dataset_schema)
+            
+            # Prepare bulk operations
+            operations = []
+            for i, update in enumerate(validated_updates):
+                record_id = update["record_id"]
+                validated_data = update["data"]
+                
                 # Add to operations with embedding
                 operations.append(
                     pymongo.UpdateOne(
@@ -1252,9 +1272,9 @@ class DatasetManager:
                         },
                         {
                             "$set": {
-                                "data": validated_data,
-                                "updated_at": datetime.now(timezone.utc),
-                                self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: embedding
+                                "data": validated_data, 
+                                "updated_at": datetime.now(timezone.utc), 
+                                self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: embeddings[i]
                             }
                         },
                     )
@@ -1275,7 +1295,7 @@ class DatasetManager:
                             "user_id": user_id,
                             "dataset_id": str(dataset_id),
                         },
-                        {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}
+                        {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0},
                     ).to_list(None)
 
                     existing_ids = {str(record["_id"]) for record in existing_records}
@@ -1342,7 +1362,7 @@ class DatasetManager:
 
             # Build pipeline
             pipeline = build_aggregation_pipeline(user_id, str(dataset_id), query)
-            
+
             # Add projection to exclude embedding field
             pipeline.append({"$project": {self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}})
 
