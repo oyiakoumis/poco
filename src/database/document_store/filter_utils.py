@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Union
 
-from database.document_store.models.query import (
+from database.document_store.models.filter_types import (
     ComparisonOperator,
     FilterCondition,
     FilterExpression,

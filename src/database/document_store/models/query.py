@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from database.document_store.exceptions import InvalidRecordDataError
 from database.document_store.filter_utils import build_filter_dict
+from database.document_store.models.filter_types import FilterCondition, FilterExpression
 from database.document_store.models.schema import DatasetSchema
 from database.document_store.models.types import (
     AggregationType,
@@ -20,39 +21,6 @@ class SortOrder(str, Enum):
 
     ASC = "asc"
     DESC = "desc"
-
-
-class ComparisonOperator(str, Enum):
-    """Supported comparison operators for filtering."""
-
-    EQUALS = "eq"
-    NOT_EQUALS = "ne"
-    GREATER_THAN = "gt"
-    GREATER_THAN_EQUALS = "gte"
-    LESS_THAN = "lt"
-    LESS_THAN_EQUALS = "lte"
-
-
-class LogicalOperator(str, Enum):
-    """Logical operators for combining filter conditions."""
-
-    AND = "and"
-    OR = "or"
-
-
-class FilterCondition(BaseModel):
-    """Single field condition."""
-
-    field: str = Field(description="Field name to filter on")
-    operator: ComparisonOperator = Field(description="Comparison operator to use for filtering")
-    value: Any = Field(description="Value to compare against")
-
-
-class FilterExpression(BaseModel):
-    """Logical combination of conditions or other expressions."""
-
-    operator: LogicalOperator = Field(description="Logical operator to combine filter expressions")
-    expressions: List[Union[FilterCondition, "FilterExpression"]] = Field(description="List of filter conditions or nested expressions to combine")
 
 
 class AggregationField(BaseModel):

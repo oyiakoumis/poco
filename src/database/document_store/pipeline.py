@@ -3,10 +3,9 @@
 from typing import Any, Dict, List, Union
 
 from database.document_store.filter_utils import build_filter_dict
+from database.document_store.models.filter_types import FilterCondition, FilterExpression
 from database.document_store.models.query import (
     AggregationType,
-    FilterCondition,
-    FilterExpression,
     RecordQuery,
 )
 
