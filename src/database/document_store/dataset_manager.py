@@ -464,6 +464,49 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to check dataset existence: {str(e)}")
 
+    async def _regenerate_record_embeddings(
+        self, user_id: str, dataset_id: UUID, dataset_schema: DatasetSchema, session=None
+    ) -> List[pymongo.UpdateOne]:
+        """Regenerates embeddings for all records in a dataset."""
+        logger.info(f"Regenerating embeddings for all records in dataset {dataset_id}")
+        
+        # Get all records in the dataset
+        mongo_query = {"user_id": user_id, "dataset_id": str(dataset_id)}
+        
+        records = []
+        cursor = self._records.find(mongo_query, session=session)
+        async for doc in cursor:
+            records.append(Record.model_validate(doc))
+            
+        if not records:
+            logger.info("No records found to regenerate embeddings")
+            return []
+            
+        # Generate embeddings in parallel
+        embeddings = await self._generate_record_embeddings_parallel(records, dataset_schema)
+        
+        # Create update operations
+        updates = []
+        for i, record in enumerate(records):
+            updates.append(
+                pymongo.UpdateOne(
+                    {
+                        "_id": record.id,
+                        "user_id": user_id,
+                        "dataset_id": str(dataset_id),
+                    },
+                    {
+                        "$set": {
+                            self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: embeddings[i],
+                            "updated_at": datetime.now(timezone.utc),
+                        }
+                    },
+                )
+            )
+            
+        logger.info(f"Created {len(updates)} embedding update operations")
+        return updates
+        
     async def _prepare_record_updates(
         self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
     ) -> List[pymongo.UpdateOne]:
@@ -516,6 +559,18 @@ class DatasetManager:
         try:
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
+            
+            # Find the field to check if it's a STRING type
+            deleted_field = None
+            for field in dataset.dataset_schema.fields:
+                if field.field_name == field_name:
+                    deleted_field = field
+                    break
+                    
+            if not deleted_field:
+                raise InvalidDatasetSchemaError(f"Field '{field_name}' not found in schema")
+                
+            is_string_field = deleted_field.type == FieldType.STRING
 
             # Create new schema without the field
             new_schema = DatasetSchema(fields=[field for field in dataset.dataset_schema if field.field_name != field_name])
@@ -560,6 +615,18 @@ class DatasetManager:
                         {"$unset": {f"data.{field_name}": ""}},
                         session=session,
                     )
+                    
+                    # Regenerate embeddings if a STRING field was deleted
+                    if is_string_field:
+                        logger.info(f"STRING field '{field_name}' deleted, regenerating record embeddings")
+                        embedding_updates = await self._regenerate_record_embeddings(user_id, dataset_id, new_schema, session)
+                        
+                        if embedding_updates:
+                            try:
+                                result = await self._records.bulk_write(embedding_updates, session=session)
+                                logger.info(f"Updated embeddings for {result.modified_count}/{len(embedding_updates)} records")
+                            except BulkWriteError as e:
+                                raise DatabaseError(f"Failed to update record embeddings: {str(e)}")
 
         except (DatasetNotFoundError, InvalidDatasetSchemaError):
             raise
@@ -617,6 +684,18 @@ class DatasetManager:
                             {"$set": {f"data.{field.field_name}": field.default}},
                             session=session,
                         )
+                    
+                    # Regenerate embeddings for all records if the new field is a STRING type
+                    if field.type == FieldType.STRING:
+                        logger.info(f"New STRING field '{field.field_name}' added, regenerating record embeddings")
+                        embedding_updates = await self._regenerate_record_embeddings(user_id, dataset_id, new_schema, session)
+                        
+                        if embedding_updates:
+                            try:
+                                result = await self._records.bulk_write(embedding_updates, session=session)
+                                logger.info(f"Updated embeddings for {result.modified_count}/{len(embedding_updates)} records")
+                            except BulkWriteError as e:
+                                raise DatabaseError(f"Failed to update record embeddings: {str(e)}")
 
         except (DatasetNotFoundError, InvalidDatasetSchemaError):
             raise
@@ -733,6 +812,21 @@ class DatasetManager:
                                 raise DatabaseError(f"Failed to update all records: {result.modified_count}/{len(updates)} updated")
                         except BulkWriteError as e:
                             raise DatabaseError(f"Failed to update records: {str(e)}")
+                    
+                    # Regenerate embeddings if field type changed to STRING or from STRING
+                    need_embedding_update = (old_field.type != FieldType.STRING and field_update.type == FieldType.STRING) or \
+                                           (old_field.type == FieldType.STRING and field_update.type != FieldType.STRING)
+                    
+                    if need_embedding_update:
+                        logger.info(f"Field '{field_name}' type changed to/from STRING, regenerating record embeddings")
+                        embedding_updates = await self._regenerate_record_embeddings(user_id, dataset_id, new_schema, session)
+                        
+                        if embedding_updates:
+                            try:
+                                result = await self._records.bulk_write(embedding_updates, session=session)
+                                logger.info(f"Updated embeddings for {result.modified_count}/{len(embedding_updates)} records")
+                            except BulkWriteError as e:
+                                raise DatabaseError(f"Failed to update record embeddings: {str(e)}")
 
         except (DatasetNotFoundError, InvalidDatasetSchemaError, InvalidRecordDataError):
             raise
