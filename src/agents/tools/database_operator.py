@@ -412,8 +412,6 @@ class SearchSimilarDatasetsArgs(BaseModel):
 class SearchSimilarRecordsArgs(BaseModel):
     dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
     record: Record = Field(description="Record to find similar records to")
-    limit: int = Field(default=10, description="Maximum number of similar records to return", ge=1, le=100)
-    min_score: Optional[float] = Field(default=None, description="Minimum similarity score threshold (0.0 to 1.0)", ge=0.0, le=1.0)
 
 
 class GetAllRecordsOperator(BaseDBOperator):
@@ -459,7 +457,7 @@ class SearchSimilarRecordsOperator(BaseDBOperator):
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = SearchSimilarRecordsArgs(**kwargs)
-            results = await self.db.search_similar_records(user_id, args.dataset_id, args.record, limit=args.limit, min_score=args.min_score)
+            results = await self.db.search_similar_records(user_id, args.dataset_id, args.record)
             return [record.model_dump() for record in results]
         except Exception as e:
             logger.error(f"Error in SearchSimilarRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)

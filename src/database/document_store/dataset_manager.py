@@ -65,7 +65,7 @@ class DatasetManager:
         "FIELD_NAME": "embedding",
         "DIMENSION": 1536,  # 1536 for text-embedding-3-small and 3072 for text-embedding-3-large
         "NUM_CANDIDATES_MULTIPLIER": 10,
-        "MIN_SCORE": 0.7,
+        "MIN_SCORE": 0.3,
     }
 
     def __init__(self, mongodb_client: AsyncIOMotorClient) -> None:
@@ -232,57 +232,54 @@ class DatasetManager:
         Schema Fields:
         {chr(10).join(f'- {desc}' for desc in schema_desc)}
         """
-    
+
     async def _generate_dataset_embedding(self, dataset: Dataset) -> List[float]:
         """Generate embedding from dataset metadata and schema."""
         logger.debug("Generating dataset embedding")
-        
+
         # Prepare text for embedding
         text_to_embed = self._prepare_dataset_text_for_embedding(dataset)
-        
+
         # Generate and return embedding
         return await self.embeddings_model.aembed_query(text_to_embed)
 
     def _prepare_record_text_for_embedding(self, record: Record, dataset_schema: DatasetSchema) -> str:
         """Prepare text representation of a record for embedding."""
         content_parts = []
-        
+
         for field in dataset_schema.fields:
             field_name = field.field_name
-            if field_name in record.data:
+            field_type = field.type
+            if field_name in record.data and field_type in (FieldType.STRING,):
                 value = record.data[field_name]
-                # Format based on field type if needed
-                if field.description:
-                    content_parts.append(f"{field_name} ({field.description}): {value}")
-                else:
-                    content_parts.append(f"{field_name}: {value}")
-                    
+                content_parts.append(f"{field_name}: {value}")
+
         # Create a clean text representation focused on the content
         return "\n".join(content_parts)
-    
+
     async def _generate_record_embedding(self, record: Record, dataset_schema: DatasetSchema) -> List[float]:
         """Generate embedding from record data using dataset schema for context."""
         logger.debug("Generating record embedding")
-        
+
         # Prepare text for embedding
         text_to_embed = self._prepare_record_text_for_embedding(record, dataset_schema)
-        
+
         # Generate and return embedding
         return await self.embeddings_model.aembed_query(text_to_embed)
-        
+
     async def _generate_record_embeddings_parallel(self, records: List[Record], dataset_schema: DatasetSchema) -> List[List[float]]:
         """Generate embeddings for multiple records in parallel."""
         logger.debug(f"Generating embeddings for {len(records)} records in parallel")
-        
+
         # Prepare embedding tasks for all records
         embedding_tasks = []
         for record in records:
             # Prepare text for embedding
             text_to_embed = self._prepare_record_text_for_embedding(record, dataset_schema)
-            
+
             # Add embedding task
             embedding_tasks.append(self.embeddings_model.aembed_query(text_to_embed))
-        
+
         # Execute all embedding tasks in parallel
         return await gather(*embedding_tasks)
 
@@ -1135,10 +1132,10 @@ class DatasetManager:
 
             # Check uniqueness constraints for the batch
             await self._validate_batch_uniqueness(user_id, dataset_id, validated_records_data, dataset.dataset_schema)
-            
+
             # Generate embeddings in parallel
             embeddings = await self._generate_record_embeddings_parallel(records, dataset.dataset_schema)
-            
+
             # Prepare records with embeddings
             validated_records = []
             for i, record in enumerate(records):
@@ -1240,7 +1237,7 @@ class DatasetManager:
                 validated_data = Record.validate_data(data, dataset.dataset_schema)
                 validated_updates.append({"record_id": record_id, "data": validated_data})
                 record_ids.append(record_id)
-                
+
                 # Create record object for embedding generation
                 record = Record(
                     id=record_id,
@@ -1255,13 +1252,13 @@ class DatasetManager:
 
             # Generate embeddings in parallel
             embeddings = await self._generate_record_embeddings_parallel(records, dataset.dataset_schema)
-            
+
             # Prepare bulk operations
             operations = []
             for i, update in enumerate(validated_updates):
                 record_id = update["record_id"]
                 validated_data = update["data"]
-                
+
                 # Add to operations with embedding
                 operations.append(
                     pymongo.UpdateOne(
@@ -1270,13 +1267,7 @@ class DatasetManager:
                             "user_id": user_id,
                             "dataset_id": str(dataset_id),
                         },
-                        {
-                            "$set": {
-                                "data": validated_data, 
-                                "updated_at": datetime.now(timezone.utc), 
-                                self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: embeddings[i]
-                            }
-                        },
+                        {"$set": {"data": validated_data, "updated_at": datetime.now(timezone.utc), self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: embeddings[i]}},
                     )
                 )
 

@@ -61,7 +61,7 @@ SEMANTIC RECORD SEARCH (CRITICAL):
 - When users request to update or delete records (e.g., "Reschedule my doctor appointment" or "Complete my project submission task"):
   1. Create a hypothetical record using the dataset schema based on the user's description
   2. Use search_similar_records with vector similarity search to find the actual record
-  3. Only confirm with the user if you're not 100% confident in the match
+  3. Only confirm with the user if you're not fully confident in the match
 
 DATA STORAGE FEEDBACK:
 - Always provide clear feedback when storing, modifying, or deleting user data.
@@ -117,7 +117,6 @@ Immediately execute these tools whenever any information/data changes occur:
   - create_record, update_record, delete_record
   - batch_create_records, batch_update_records, batch_delete_records (*ALWAYS use for multiple records for better performance*)
 - Queries:
-  - get_all_records for listing all records in a dataset
   - query_records for searches with exact field values (e.g., status="completed", priority="high")
   - search_similar_records for finding records based on natural language descriptions or uncertain matches
 - temporal_reference_resolver for datetime conversion: Use accurate datetime conversion for natural language time expressions.
@@ -125,7 +124,6 @@ Immediately execute these tools whenever any information/data changes occur:
 HANDLING AMBIGUOUS REQUESTS:
 - If the context provides clear identification of the record to modify, proceed with the database operation.
 - If ambiguous (e.g., "update my appointment" with multiple appointments), ask for clarification before proceeding.
-- Use get_all_records to check for existing records before creating duplicates.
 
 ERROR HANDLING:
 - If a database operation fails, inform the user in simple terms without technical details.
@@ -189,7 +187,7 @@ class Assistant:
             BatchDeleteRecordsOperator(db),
             ListDatasetsOperator(db),
             GetDatasetOperator(db),
-            GetAllRecordsOperator(db),
+            # GetAllRecordsOperator(db),
             CreateRecordOperator(db),
             UpdateRecordOperator(db),
             DeleteRecordOperator(db),
