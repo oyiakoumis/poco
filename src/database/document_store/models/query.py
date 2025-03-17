@@ -1,9 +1,9 @@
-"""Query models for document store aggregations."""
+"""Query models for document store aggregations and similarity searches."""
 
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from database.document_store.exceptions import InvalidRecordDataError
 from database.document_store.models.schema import DatasetSchema
@@ -12,6 +12,7 @@ from database.document_store.models.types import (
     FieldType,
     TypeRegistry,
 )
+from database.document_store.pipeline import build_filter_dict
 
 
 class SortOrder(str, Enum):
@@ -158,9 +159,9 @@ class RecordQuery(BaseModel):
             if invalid_sort_fields:
                 raise InvalidRecordDataError(f"Invalid sort fields: {invalid_sort_fields}")
 
-    class Config:
-        arbitrary_types_allowed = True
-        json_schema_extra = {
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "json_schema_extra": {
             "examples": [
                 # Simple query example with multiple conditions
                 {
@@ -184,4 +185,67 @@ class RecordQuery(BaseModel):
                     "limit": 10,
                 },
             ]
-        }
+        },
+    }
+
+
+class SimilarityQuery(BaseModel):
+    filter: Union[FilterCondition, FilterExpression] = Field(default=None, description="Filter conditions to apply before vector search")
+
+    def validate_with_schema(self, schema: DatasetSchema) -> None:
+        """Validate the query against a schema."""
+        # Validate filter conditions
+        if self.filter:
+            self._validate_filter_node(self.filter, schema)
+
+    def _validate_filter_node(self, node: Union[FilterCondition, FilterExpression], schema: DatasetSchema) -> None:
+        """Recursively validate filter nodes against schema."""
+        if isinstance(node, FilterCondition):
+            # Validate single condition
+            if not schema.has_field(node.field):
+                raise InvalidRecordDataError(f"Filter field '{node.field}' not found in schema")
+
+            # Validate filter value against field type
+            field = schema.get_field(node.field)
+            type_impl = TypeRegistry.get_type(field.type)
+
+            # Set options for select/multi-select fields before validation
+            if field.type in (FieldType.SELECT, FieldType.MULTI_SELECT):
+                if not field.options:
+                    raise InvalidRecordDataError(f"Options not provided for {field.type} field '{field.field_name}'")
+                type_impl.set_options(field.options)
+
+            try:
+                # Convert the filter value using the field's type implementation
+                node.value = type_impl.validate(node.value)
+            except ValueError as e:
+                raise InvalidRecordDataError(f"Invalid filter value for field '{node.field}': {str(e)}")
+        else:
+            # Validate nested expressions
+            if not node.expressions:
+                raise InvalidRecordDataError("Filter expression must contain at least one condition")
+            for expr in node.expressions:
+                self._validate_filter_node(expr, schema)
+
+    def to_filter_dict(self) -> Dict:
+        """Convert the filter to a MongoDB filter dictionary."""
+        return build_filter_dict(self.filter)
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "json_schema_extra": {
+            "examples": [
+                # Simple similarity search
+                {"filter": None},
+                # Similarity search with filtering
+                {"filter": {"field": "status", "operator": "eq", "value": "active"}},
+                # Complex filtering with similarity search
+                {
+                    "filter": {
+                        "operator": "and",
+                        "expressions": [{"field": "category", "operator": "eq", "value": "electronics"}, {"field": "price", "operator": "lte", "value": 1000}],
+                    }
+                },
+            ]
+        },
+    }

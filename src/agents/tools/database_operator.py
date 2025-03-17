@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from database.document_store import DatasetManager
 from database.document_store.models.dataset import Dataset
 from database.document_store.models.field import SchemaField
-from database.document_store.models.query import RecordQuery
+from database.document_store.models.query import RecordQuery, SimilarityQuery
 from database.document_store.models.record import Record, RecordData
 from database.document_store.models.schema import DatasetSchema
 from models.base import PydanticUUID
@@ -412,6 +412,11 @@ class SearchSimilarDatasetsArgs(BaseModel):
 class SearchSimilarRecordsArgs(BaseModel):
     dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
     record: Record = Field(description="Record to find similar records to")
+    query: Optional[SimilarityQuery] = Field(
+        default=None,
+        description="Optional query parameters to filter records before similarity search",
+        example={"filter": {"field": "status", "operator": "eq", "value": "active"}},
+    )
 
 
 class GetAllRecordsOperator(BaseDBOperator):
@@ -449,7 +454,9 @@ class SearchSimilarDatasetsOperator(BaseDBOperator):
 class SearchSimilarRecordsOperator(BaseDBOperator):
     name: str = "search_similar_records"
     description: str = (
-        "Find records based on semantic similarity rather than exact field matching. Use this tool when you don't have exact field values to query with. This tool creates an embedding of a hypothetical record and finds existing records with similar meaning using vector search."
+        "Find records based on semantic similarity rather than exact field matching. Use this tool when you don't have exact field values to query with. "
+        "This tool creates an embedding of a hypothetical record and finds existing records with similar meaning using vector search. "
+        "You can optionally provide a query to filter records before similarity search."
     )
     args_schema: Type[BaseModel] = SearchSimilarRecordsArgs
 
@@ -457,7 +464,12 @@ class SearchSimilarRecordsOperator(BaseDBOperator):
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = SearchSimilarRecordsArgs(**kwargs)
-            results = await self.db.search_similar_records(user_id, args.dataset_id, args.record)
+            results = await self.db.search_similar_records(
+                user_id=user_id,
+                dataset_id=args.dataset_id,
+                record=args.record,
+                query=args.query,
+            )
             return [record.model_dump() for record in results]
         except Exception as e:
             logger.error(f"Error in SearchSimilarRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)

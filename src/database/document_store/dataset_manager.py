@@ -28,7 +28,7 @@ from database.document_store.exceptions import (
 )
 from database.document_store.models import Dataset, Record
 from database.document_store.models.field import SchemaField
-from database.document_store.models.query import RecordQuery
+from database.document_store.models.query import RecordQuery, SimilarityQuery
 from database.document_store.models.record import RecordData
 from database.document_store.models.schema import DatasetSchema
 from database.document_store.models.types import FieldType, TypeRegistry
@@ -464,27 +464,25 @@ class DatasetManager:
         except Exception as e:
             raise DatabaseError(f"Failed to check dataset existence: {str(e)}")
 
-    async def _regenerate_record_embeddings(
-        self, user_id: str, dataset_id: UUID, dataset_schema: DatasetSchema, session=None
-    ) -> List[pymongo.UpdateOne]:
+    async def _regenerate_record_embeddings(self, user_id: str, dataset_id: UUID, dataset_schema: DatasetSchema, session=None) -> List[pymongo.UpdateOne]:
         """Regenerates embeddings for all records in a dataset."""
         logger.info(f"Regenerating embeddings for all records in dataset {dataset_id}")
-        
+
         # Get all records in the dataset
         mongo_query = {"user_id": user_id, "dataset_id": str(dataset_id)}
-        
+
         records = []
         cursor = self._records.find(mongo_query, session=session)
         async for doc in cursor:
             records.append(Record.model_validate(doc))
-            
+
         if not records:
             logger.info("No records found to regenerate embeddings")
             return []
-            
+
         # Generate embeddings in parallel
         embeddings = await self._generate_record_embeddings_parallel(records, dataset_schema)
-        
+
         # Create update operations
         updates = []
         for i, record in enumerate(records):
@@ -503,10 +501,10 @@ class DatasetManager:
                     },
                 )
             )
-            
+
         logger.info(f"Created {len(updates)} embedding update operations")
         return updates
-        
+
     async def _prepare_record_updates(
         self, user_id: str, dataset_id: UUID, field_name: str, old_field: SchemaField, field_update: SchemaField, session
     ) -> List[pymongo.UpdateOne]:
@@ -559,17 +557,17 @@ class DatasetManager:
         try:
             # Validate dataset exists and belongs to user
             dataset = await self.get_dataset(user_id, dataset_id)
-            
+
             # Find the field to check if it's a STRING type
             deleted_field = None
             for field in dataset.dataset_schema.fields:
                 if field.field_name == field_name:
                     deleted_field = field
                     break
-                    
+
             if not deleted_field:
                 raise InvalidDatasetSchemaError(f"Field '{field_name}' not found in schema")
-                
+
             is_string_field = deleted_field.type == FieldType.STRING
 
             # Create new schema without the field
@@ -615,12 +613,12 @@ class DatasetManager:
                         {"$unset": {f"data.{field_name}": ""}},
                         session=session,
                     )
-                    
+
                     # Regenerate embeddings if a STRING field was deleted
                     if is_string_field:
                         logger.info(f"STRING field '{field_name}' deleted, regenerating record embeddings")
                         embedding_updates = await self._regenerate_record_embeddings(user_id, dataset_id, new_schema, session)
-                        
+
                         if embedding_updates:
                             try:
                                 result = await self._records.bulk_write(embedding_updates, session=session)
@@ -684,12 +682,12 @@ class DatasetManager:
                             {"$set": {f"data.{field.field_name}": field.default}},
                             session=session,
                         )
-                    
+
                     # Regenerate embeddings for all records if the new field is a STRING type
                     if field.type == FieldType.STRING:
                         logger.info(f"New STRING field '{field.field_name}' added, regenerating record embeddings")
                         embedding_updates = await self._regenerate_record_embeddings(user_id, dataset_id, new_schema, session)
-                        
+
                         if embedding_updates:
                             try:
                                 result = await self._records.bulk_write(embedding_updates, session=session)
@@ -812,15 +810,16 @@ class DatasetManager:
                                 raise DatabaseError(f"Failed to update all records: {result.modified_count}/{len(updates)} updated")
                         except BulkWriteError as e:
                             raise DatabaseError(f"Failed to update records: {str(e)}")
-                    
+
                     # Regenerate embeddings if field type changed to STRING or from STRING
-                    need_embedding_update = (old_field.type != FieldType.STRING and field_update.type == FieldType.STRING) or \
-                                           (old_field.type == FieldType.STRING and field_update.type != FieldType.STRING)
-                    
+                    need_embedding_update = (old_field.type != FieldType.STRING and field_update.type == FieldType.STRING) or (
+                        old_field.type == FieldType.STRING and field_update.type != FieldType.STRING
+                    )
+
                     if need_embedding_update:
                         logger.info(f"Field '{field_name}' type changed to/from STRING, regenerating record embeddings")
                         embedding_updates = await self._regenerate_record_embeddings(user_id, dataset_id, new_schema, session)
-                        
+
                         if embedding_updates:
                             try:
                                 result = await self._records.bulk_write(embedding_updates, session=session)
@@ -1019,7 +1018,7 @@ class DatasetManager:
         query_embedding: List[float],
         limit: int = 10,
         min_score: Optional[float] = None,
-        filter_dict: Optional[Dict] = None,
+        query: Optional[SimilarityQuery] = None,
         additional_filters: Optional[Dict] = None,
         model_class: Any = None,
     ) -> List[Any]:
@@ -1041,15 +1040,17 @@ class DatasetManager:
 
             # Combine pre-filters to apply before vector search
             pre_filters = {"user_id": user_id}  # Always filter by user_id
-            
+
             # Add dataset filter for records if provided
             if additional_filters:
                 pre_filters.update(additional_filters)
-                
-            # Add any general filters
-            if filter_dict:
+
+            # Add any filters from the query
+            if query:
+                # Convert the structured query filter to a MongoDB filter dictionary
+                filter_dict = query.to_filter_dict()
                 pre_filters.update(filter_dict)
-                
+
             # Add the combined filter to vector search
             if pre_filters:
                 vector_search_stage["$vectorSearch"]["filter"] = pre_filters
@@ -1062,7 +1063,7 @@ class DatasetManager:
 
             # Combine post-filters (for filters that must be applied after vector search)
             post_filters = {}
-            
+
             # Add score filter if provided
             if min_score is not None:
                 post_filters["score"] = {"$gte": min_score}
@@ -1097,12 +1098,16 @@ class DatasetManager:
         dataset: Dataset,
         limit: int = 10,
         min_score: Optional[float] = None,
-        filter_dict: Optional[Dict] = None,
+        query: Optional[SimilarityQuery] = None,
     ) -> List[Dataset]:
         """Find similar datasets using vector search."""
         try:
             # Generate embedding from dataset
             query_embedding = await self._generate_dataset_embedding(dataset)
+
+            # Validate query against schema if provided
+            if query:
+                query.validate_with_schema(dataset.dataset_schema)
 
             # Use generic search method
             return await self._search_similar_entities_generic(
@@ -1113,7 +1118,7 @@ class DatasetManager:
                 query_embedding=query_embedding,
                 limit=limit,
                 min_score=min_score,
-                filter_dict=filter_dict,
+                query=query,
                 model_class=Dataset,
             )
 
@@ -1127,7 +1132,7 @@ class DatasetManager:
         record: Record,
         limit: int = 10,
         min_score: Optional[float] = None,
-        filter_dict: Optional[Dict] = None,
+        query: Optional[SimilarityQuery] = None,
     ) -> List[Record]:
         """Find similar records using vector search."""
         try:
@@ -1136,6 +1141,10 @@ class DatasetManager:
 
             # Generate embedding from record
             query_embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
+
+            # Validate query against schema if provided
+            if query:
+                query.validate_with_schema(dataset.dataset_schema)
 
             # Additional filter to ensure we only search within the specified dataset
             dataset_filter = {"dataset_id": str(dataset_id)}
@@ -1149,7 +1158,7 @@ class DatasetManager:
                 query_embedding=query_embedding,
                 limit=limit,
                 min_score=min_score,
-                filter_dict=filter_dict,
+                query=query,
                 additional_filters=dataset_filter,
                 model_class=Record,
             )
