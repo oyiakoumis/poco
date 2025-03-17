@@ -3,6 +3,7 @@
 from typing import Any, Dict
 
 from pydantic import Field
+
 from database.document_store.exceptions import (
     InvalidFieldValueError,
     InvalidRecordDataError,
