@@ -1027,37 +1027,51 @@ class DatasetManager:
         try:
             logger.info(f"Searching similar {entity_type}s for user {user_id}")
 
-            # Build search pipeline
+            # Build vector search stage with pre-filtering
+            vector_search_stage = {
+                "$vectorSearch": {
+                    "index": index_name,
+                    "path": self.VECTOR_SEARCH_CONFIG["FIELD_NAME"],
+                    "queryVector": query_embedding,
+                    "numCandidates": limit * self.VECTOR_SEARCH_CONFIG["NUM_CANDIDATES_MULTIPLIER"],
+                    "limit": limit,
+                    "exact": False,
+                }
+            }
+
+            # Combine pre-filters to apply before vector search
+            pre_filters = {"user_id": user_id}  # Always filter by user_id
+            
+            # Add dataset filter for records if provided
+            if additional_filters:
+                pre_filters.update(additional_filters)
+                
+            # Add any general filters
+            if filter_dict:
+                pre_filters.update(filter_dict)
+                
+            # Add the combined filter to vector search
+            if pre_filters:
+                vector_search_stage["$vectorSearch"]["filter"] = pre_filters
+
+            # Start building the pipeline
             pipeline = [
-                {
-                    "$vectorSearch": {
-                        "index": index_name,
-                        "path": self.VECTOR_SEARCH_CONFIG["FIELD_NAME"],
-                        "queryVector": query_embedding,
-                        "numCandidates": limit * self.VECTOR_SEARCH_CONFIG["NUM_CANDIDATES_MULTIPLIER"],
-                        "limit": limit,
-                        "exact": False,
-                    }
-                },
+                vector_search_stage,
                 {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
             ]
 
+            # Combine post-filters (for filters that must be applied after vector search)
+            post_filters = {}
+            
             # Add score filter if provided
             if min_score is not None:
-                pipeline.append({"$match": {"score": {"$gte": min_score}}})
+                post_filters["score"] = {"$gte": min_score}
             elif self.VECTOR_SEARCH_CONFIG["MIN_SCORE"] > 0:
-                pipeline.append({"$match": {"score": {"$gte": self.VECTOR_SEARCH_CONFIG["MIN_SCORE"]}}})
+                post_filters["score"] = {"$gte": self.VECTOR_SEARCH_CONFIG["MIN_SCORE"]}
 
-            # Add any additional specific filters
-            if additional_filters:
-                pipeline.append({"$match": additional_filters})
-
-            # Add any general filters
-            if filter_dict:
-                pipeline.append({"$match": filter_dict})
-
-            # Add user_id filter in a separate stage to ensure it cannot be overridden
-            pipeline.append({"$match": {"user_id": user_id}})
+            # Add the combined post-filter if any exist
+            if post_filters:
+                pipeline.append({"$match": post_filters})
 
             # Remove score from final results
             pipeline.append({"$project": {"score": 0}})
