@@ -24,11 +24,12 @@ from agents.tools.database_operator import (
     DeleteDatasetOperator,
     DeleteFieldOperator,
     DeleteRecordOperator,
+    FindRecords,
     GetAllRecordsOperator,
     GetDatasetOperator,
+    GetDatasetSchemaOperator,
     ListDatasetsOperator,
     QueryRecordsOperator,
-    SearchSimilarRecordsOperator,
     UpdateDatasetOperator,
     UpdateFieldOperator,
     UpdateRecordOperator,
@@ -55,13 +56,18 @@ MEMORY VS. DATABASE DISTINCTION (CRITICAL):
 - *YOUR MEMORY OF CONVERSATION IS NOT A RELIABLE SOURCE OF TRUTH* - Only the database contains the actual user data.
 
 SEMANTIC RECORD SEARCH (CRITICAL):
-- *USERS NEVER KNOW THE EXACT WORDING OF DATABASE RECORDS* - Always use search_similar_records to find actual records.
-- Before deleting or updating records, first use search_similar_records or query_records with ids_only=True to verify they exist in the database.
-- Use query_records when you have exact field values to match; use search_similar_records when dealing with natural language descriptions or uncertain matches.
-- When users request to update or delete records (e.g., "Reschedule my doctor appointment" or "Complete my project submission task"):
-  1. Create a hypothetical record using the dataset schema based on the user's description
-  2. Use search_similar_records with vector similarity search to find the actual record
-  3. Only confirm with the user if you're not fully confident in the match
+- *USERS NEVER KNOW THE EXACT WORDING OF STRING FIELDS* - ALWAYS assume users don't know exact string values unless they explicitly request an exact match.
+- For finding records:
+  - Use find_records (semantic search) by DEFAULT for ANY search involving string fields
+  - Use query_records ONLY for non-string fields (dates, numbers, booleans, select fields) or when user explicitly requests exact matching
+  - ALWAYS call get_dataset FIRST to retrieve the dataset schema before using find_records or query_records
+- When users request to create, update, or delete records:
+  1. IMPORTANT: First call get_dataset to retrieve the dataset schema
+  2. For find_records, create the hypothetical record you are looking for using the dataset schema
+  3. Use find_records to find candidates for the record you are looking for. (can pre-filter on non-string fields first)
+  4. For create operations: avoid creating duplicates by checking the existing records first
+  5. For update/delete operations: use the found records to perform the requested action
+  6. Only confirm with the user if you're not fully confident in the match
 
 DATA STORAGE FEEDBACK:
 - Always provide clear feedback when storing, modifying, or deleting user data.
@@ -117,8 +123,11 @@ Immediately execute these tools whenever any information/data changes occur:
   - create_record, update_record, delete_record
   - batch_create_records, batch_update_records, batch_delete_records (*ALWAYS use for multiple records for better performance*)
 - Queries:
-  - query_records for searches with exact field values (e.g., status="completed", priority="high")
-  - search_similar_records for finding records based on natural language descriptions or uncertain matches
+  - find_records for DEFAULT searches involving string fields (users don't know exact wording)
+    * Use BEFORE creating records to avoid duplicates
+    * Use BEFORE updating/deleting to find the correct records
+    * Can take a query to pre-filter on non-string fields before semantic search
+  - query_records ONLY for non-string fields or when exact matching is explicitly requested
 - temporal_reference_resolver for datetime conversion: Use accurate datetime conversion for natural language time expressions.
 
 HANDLING AMBIGUOUS REQUESTS:
@@ -187,6 +196,7 @@ class Assistant:
             BatchDeleteRecordsOperator(db),
             ListDatasetsOperator(db),
             GetDatasetOperator(db),
+            # GetDatasetSchemaOperator(db),
             # GetAllRecordsOperator(db),
             CreateRecordOperator(db),
             UpdateRecordOperator(db),
@@ -195,7 +205,7 @@ class Assistant:
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
-            SearchSimilarRecordsOperator(db),
+            FindRecords(db),
         ]
 
     async def __call__(self, state: State):

@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field, field_validator
 
 from database.document_store.exceptions import InvalidRecordDataError
 from database.document_store.filter_utils import build_filter_dict
-from database.document_store.models.filter_types import FilterCondition, FilterExpression
+from database.document_store.models.filter_types import (
+    FilterCondition,
+    FilterExpression,
+)
 from database.document_store.models.schema import DatasetSchema
 from database.document_store.models.types import (
     AggregationType,

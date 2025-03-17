@@ -149,7 +149,7 @@ class ListDatasetsOperator(BaseDBOperator):
 # Get Dataset Operator
 class GetDatasetOperator(BaseDBOperator):
     name: str = "get_dataset"
-    description: str = "Get a dataset by its ID to view schema details"
+    description: str = "Get a dataset by its ID to view all dataset details"
     args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
@@ -160,6 +160,22 @@ class GetDatasetOperator(BaseDBOperator):
             return dataset.model_dump()
         except Exception as e:
             logger.error(f"Error in GetDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
+
+# Get Dataset Schema Operator
+class GetDatasetSchemaOperator(BaseDBOperator):
+    name: str = "get_dataset_schema"
+    description: str = "Get only the schema of a dataset by its ID"
+    args_schema: Type[BaseModel] = DatasetArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = DatasetArgs(**kwargs)
+            schema = await self.db.get_dataset_schema(user_id, args.dataset_id)
+            return schema.model_dump()
+        except Exception as e:
+            logger.error(f"Error in GetDatasetSchemaOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise
 
 
@@ -411,10 +427,12 @@ class SearchSimilarDatasetsArgs(BaseModel):
 
 class SearchSimilarRecordsArgs(BaseModel):
     dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
-    record: Record = Field(description="Record to find similar records to")
+    record: Record = Field(
+        description="Hypothetical record to search in the dataset - must be created based on the dataset schema. Always call get_dataset first to get the schema."
+    )
     query: Optional[SimilarityQuery] = Field(
         default=None,
-        description="Optional query parameters to filter records before similarity search",
+        description="Optional query parameters to pre-filter records on non-string fields before semantic search",
         example={"filter": {"field": "status", "operator": "eq", "value": "active"}},
     )
 
@@ -451,12 +469,12 @@ class SearchSimilarDatasetsOperator(BaseDBOperator):
             raise
 
 
-class SearchSimilarRecordsOperator(BaseDBOperator):
-    name: str = "search_similar_records"
+class FindRecords(BaseDBOperator):
+    name: str = "find_records"
     description: str = (
-        "Find records based on semantic similarity rather than exact field matching. Use this tool when you don't have exact field values to query with. "
-        "This tool creates an embedding of a hypothetical record and finds existing records with similar meaning using vector search. "
-        "You can optionally provide a query to filter records before similarity search."
+        "DEFAULT search method for finding records with string fields. Creates the hypothetical record that you are looking for using the dataset schema, and find candidates for this record using vector search. "
+        "ALWAYS use this for searches involving string fields unless user explicitly requests exact matching. "
+        "You can optionally provide a query to pre-filter records on non-string fields before semantic search."
     )
     args_schema: Type[BaseModel] = SearchSimilarRecordsArgs
 
@@ -472,5 +490,5 @@ class SearchSimilarRecordsOperator(BaseDBOperator):
             )
             return [record.model_dump() for record in results]
         except Exception as e:
-            logger.error(f"Error in SearchSimilarRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            logger.error(f"Error in FindRecordsByDescriptionOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise

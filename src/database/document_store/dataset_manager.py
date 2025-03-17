@@ -449,6 +449,17 @@ class DatasetManager:
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to get dataset: {str(e)}")
+            
+    async def get_dataset_schema(self, user_id: str, dataset_id: UUID) -> DatasetSchema:
+        """Retrieves only the schema of a specific dataset."""
+        try:
+            logger.debug(f"Getting dataset schema for dataset {dataset_id} for user {user_id}")
+            dataset = await self.get_dataset(user_id, dataset_id)
+            return dataset.dataset_schema
+        except DatasetNotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to get dataset schema: {str(e)}")
 
     async def dataset_exists(self, user_id: str, dataset_id: UUID) -> bool:
         """Efficiently checks if a dataset exists without retrieving the full document."""
@@ -1139,7 +1150,7 @@ class DatasetManager:
             # Get dataset to access schema
             dataset = await self.get_dataset(user_id, dataset_id)
 
-            # Generate embedding from record
+            # Generate embedding from record (only string fields are used)
             query_embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
 
             # Validate query against schema if provided
