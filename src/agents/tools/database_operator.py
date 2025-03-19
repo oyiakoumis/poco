@@ -1,10 +1,14 @@
 import asyncio
-from typing import Any, Dict, List, Optional, Type, Union
+import io
+import pandas as pd
+from typing import Annotated, Any, Dict, List, Optional, Tuple, Type, Union
 
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
+from langgraph.prebuilt import InjectedState
 from pydantic import BaseModel, Field
 
+from agents.state import State
 from database.document_store import DatasetManager
 from database.document_store.models.dataset import Dataset
 from database.document_store.models.field import SchemaField
@@ -136,6 +140,12 @@ class BaseDBOperator(BaseTool):
 
     def _run(self, config: RunnableConfig, **kwargs):
         return asyncio.run(self._arun(config, **kwargs))
+
+
+# Base Table Operator with Injected State
+class BaseInjectedStateDBOperator(BaseDBOperator):
+    def _run(self, config: RunnableConfig, state: Annotated[State, InjectedState], **kwargs):
+        return asyncio.run(self._arun(config, state, **kwargs))
 
 
 # List Dataset Operator
@@ -301,25 +311,90 @@ class GetRecordOperator(BaseDBOperator):
             raise
 
 
-class QueryRecordsOperator(BaseDBOperator):
+class QueryRecordsOperator(BaseInjectedStateDBOperator):
     name: str = "query_records"
     description: str = (
-        "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency)."
+        "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. "
+        "Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency). "
+        "If the result contains more than 10 records and is not a list of IDs, it will be truncated and an Excel file will be attached to the state. "
+        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if an Excel file was attached to the state."
     )
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
-    async def _arun(self, config: RunnableConfig, **kwargs) -> Union[List[Dict[str, Any]], List[str]]:
+    async def _arun(self, config: RunnableConfig, state: Annotated[State, InjectedState], **kwargs) -> Tuple[Union[List[Dict[str, Any]], List[str]], bool]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = QueryRecordsArgs(**kwargs)
             result = await self.db.query_records(user_id, args.dataset_id, args.query, args.ids_only)
+            
             if not result:
-                return []
+                return [], False
+                
+            # Handle record IDs - don't create Excel file for these
             if isinstance(result[0], str):  # Record IDs
-                return result
+                return result, False
+                
+            # Process different result types
             if isinstance(result[0], dict):  # Aggregation results
-                return result
-            return [record.model_dump() for record in result]  # Record objects
+                processed_result = result
+            else:  # Record objects
+                processed_result = [record.model_dump() for record in result]
+            
+            # Check if result length is greater than 10
+            if len(processed_result) > 10:
+                # Create Excel file
+                try:
+                    # Get dataset name for the filename
+                    dataset = await self.db.get_dataset(user_id, args.dataset_id)
+                    dataset_name = dataset.name if dataset else str(args.dataset_id)
+                    
+                    # Convert result to DataFrame
+                    df = pd.DataFrame(processed_result)
+                    
+                    # Create BytesIO object to store Excel file
+                    excel_buffer = io.BytesIO()
+                    
+                    # Write DataFrame to Excel file
+                    df.to_excel(excel_buffer, index=False, engine='openpyxl')
+                    
+                    # Get file size
+                    file_size = excel_buffer.tell()
+                    
+                    # Check if file size exceeds 16MB
+                    if file_size > 16 * 1024 * 1024:  # 16MB in bytes
+                        logger.error(f"Excel file size ({file_size} bytes) exceeds 16MB limit")
+                        raise ValueError("Excel file size exceeds 16MB limit. Please refine your query to return fewer records.")
+                    
+                    # Reset buffer position
+                    excel_buffer.seek(0)
+                    
+                    # Add file to state
+                    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                    # Sanitize dataset name for filename and convert to lowercase
+                    safe_dataset_name = "".join(c if c.isalnum() else "_" for c in dataset_name).lower()
+                    filename = f"query_results_{safe_dataset_name}_{timestamp}.xlsx"
+                    
+                    state.export_file_attachment = {
+                        "filename": filename,
+                        "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "content": excel_buffer.getvalue(),
+                        "size": file_size
+                    }
+                    
+                    # Truncate result to 10 items
+                    truncated_result = processed_result[:10]
+                    
+                    # Return truncated result and flag indicating Excel file was added
+                    return truncated_result, True
+                    
+                except Exception as e:
+                    logger.error(f"Error creating Excel file: {str(e)}", exc_info=True)
+                    # If Excel creation fails, return the full result
+                    return processed_result, False
+            
+            # If result length is 10 or less, return the result as is
+            return processed_result, False
+            
         except Exception as e:
             logger.error(f"Error in QueryRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise

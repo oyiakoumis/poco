@@ -19,4 +19,5 @@ twilio>=8.0.0
 python-multipart
 azure-storage-blob
 httpx
-google-generativeai
+# google-generativeai
+pandas

@@ -121,7 +121,7 @@ async def process_whatsapp_message(
         await conversation_service.process_image_urls(conversation_history + new_messages)
 
         # Process messages through the graph
-        output_messages, response, tool_summary, total_tokens = await message_processor.process_messages(
+        output_messages, response, tool_summary, total_tokens, file_attachment = await message_processor.process_messages(
             conversation_history, new_messages, user_id, conversation_id
         )
 
@@ -129,10 +129,10 @@ async def process_whatsapp_message(
         response_content = response.content + (f"\n\n`{tool_summary}`" if tool_summary else "")
 
         # Store all new messages
-        await conversation_service.store_messages(new_messages + output_messages[-1:])  # Store only the last output message
+        await conversation_service.store_messages(new_messages + output_messages)
 
-        # Send the response
-        response_formatter.send_response(to_number, Body, response_content, total_tokens)
+        # Send the response with file attachment if available
+        response_formatter.send_response(to_number, Body, response_content, total_tokens, file_attachment)
 
         return Response(status_code=status.HTTP_200_OK)
 

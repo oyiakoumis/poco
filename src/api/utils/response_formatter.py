@@ -1,5 +1,8 @@
 """Response formatting utilities for WhatsApp messages."""
 
+import base64
+from typing import Dict, Any, Optional
+
 from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
 
@@ -61,7 +64,9 @@ class ResponseFormatter:
         formatted_message = format_message(user_message, processing_message, message_type=MessageType.PROCESSING)
         self._send_message(to_number, formatted_message)
 
-    def send_response(self, to_number: str, user_message: str, response_content: str, total_tokens: int = 0) -> None:
+    def send_response(
+        self, to_number: str, user_message: str, response_content: str, total_tokens: int = 0, file_attachment: Optional[Dict[str, Any]] = None
+    ) -> None:
         """Send a response message to the user.
 
         Args:
@@ -69,6 +74,7 @@ class ResponseFormatter:
             user_message: The original user message
             response_content: The response content to send
             total_tokens: The total tokens used in the conversation
+            file_attachment: Optional file attachment to send
         """
         # Add long chat notification if tokens exceed the limit
         if total_tokens > Assistant.TOKEN_LIMIT:
@@ -76,7 +82,9 @@ class ResponseFormatter:
             response_content += f"\n\n`{notification_str}`"
 
         formatted_response = format_message(user_message, response_content)
-        self._send_message(to_number, formatted_response)
+
+        # Send the message with optional file attachment
+        self._send_message(to_number, formatted_response, file_attachment)
 
     def _split_message(self, message: str, max_length: int = 1600, max_parts: int = 10) -> list:
         """Split a message into multiple parts if it exceeds the maximum length.
@@ -135,15 +143,23 @@ class ResponseFormatter:
 
         return parts
 
-    def _send_message(self, to_number: str, message_body: str) -> dict:
-        """Send a message using the Twilio client.
+    def _send_message(self, to_number: str, message_body: str, file_attachment: Optional[Dict[str, Any]] = None) -> None:
+        """Send a message using the Twilio client, optionally with a file attachment.
 
         Args:
             to_number: The phone number to send the message to
             message_body: The message body to send
+            file_attachment: Optional file attachment to send
         """
-
         try:
+            # Prepare media_url if file attachment is provided
+            media_url = None
+            if file_attachment:
+                content_type = file_attachment.get("content_type")
+                content = file_attachment.get("content")
+                media_url = [f"data:{content_type};base64,{base64.b64encode(content).decode('utf-8')}"]
+                logger.info(f"Sending message with file attachment '{file_attachment.get('filename')}' to {to_number}")
+
             # Check message length before sending
             if len(message_body) > settings.twilio_max_message_length:
                 logger.warning(f"Message exceeds Twilio's 1600 character limit: {len(message_body)} chars")
@@ -152,14 +168,15 @@ class ResponseFormatter:
                 message_parts = self._split_message(message_body, max_length=settings.twilio_max_message_length, max_parts=10)
                 logger.info(f"Splitting message into {len(message_parts)} parts")
 
-                # Send each part
+                # Send each part (only attach file to the first part)
                 for i, part in enumerate(message_parts):
-                    self.twilio_client.messages.create(body=part, from_=settings.twilio_phone_number, to=to_number)
+                    # Only include media_url with the first part
+                    part_media_url = media_url if i == 0 else None
+                    self.twilio_client.messages.create(body=part, from_=settings.twilio_phone_number, to=to_number, media_url=part_media_url)
                     logger.info(f"Sent part {i+1}/{len(message_parts)} to {to_number}")
-
             else:
                 # Send as a single message
-                self.twilio_client.messages.create(body=message_body, from_=settings.twilio_phone_number, to=to_number)
+                self.twilio_client.messages.create(body=message_body, from_=settings.twilio_phone_number, to=to_number, media_url=media_url)
         except TwilioRestException as e:
             logger.error(f"Error sending message to {to_number}: {e.msg}")
             raise

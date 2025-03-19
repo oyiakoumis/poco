@@ -1,6 +1,6 @@
 """Message processing service for WhatsApp messages."""
 
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from uuid import UUID
 
 from langchain_community.callbacks.openai_info import OpenAICallbackHandler
@@ -28,7 +28,7 @@ class MessageProcessor:
 
     async def process_messages(
         self, conversation_history: List[Message], new_messages: List[Message], user_id: str, conversation_id: UUID
-    ) -> Tuple[List[Message], AnyMessage, Optional[str]]:
+    ) -> Tuple[List[Message], AnyMessage, Optional[str], int, Optional[Dict[str, Any]]]:
         """Process messages through the LangGraph.
 
         Args:
@@ -42,6 +42,8 @@ class MessageProcessor:
             - A list of new output messages
             - The last message (response)
             - A tool summary string (if any)
+            - Total tokens used
+            - File attachment (if any)
         """
         # Combine input messages with existing conversation history
         all_messages = conversation_history + new_messages
@@ -78,8 +80,13 @@ class MessageProcessor:
 
         # Generate tool summary
         tool_summary = self._generate_tool_summary(output_messages)
-
-        return output_messages, response, tool_summary, total_tokens
+        
+        # Check if there's a file attachment in the state
+        file_attachment = result.get("export_file_attachment")
+        if file_attachment:
+            logger.info(f"File attachment found in state: {file_attachment.get('filename')}")
+        
+        return output_messages, response, tool_summary, total_tokens, file_attachment
 
     def _generate_tool_summary(self, messages: List[Message]) -> Optional[str]:
         """Generate a summary of tool operations.
