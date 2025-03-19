@@ -100,6 +100,9 @@ class ResponseFormatter:
         if len(message) <= max_length:
             return [message]
 
+        # Calculate the total number of parts needed (capped at max_parts)
+        total_parts = min(max_parts, (len(message) + max_length - 1) // max_length)
+
         parts = []
         remaining = message
         part_count = 0
@@ -114,7 +117,7 @@ class ResponseFormatter:
                     part = remaining[: max_length - 30] + "... (message truncated)"
                 else:
                     part = remaining[:max_length]
-                parts.append(part)
+                parts.append(f"{part} ({part_count}/{total_parts})")
                 break
 
             # Find a good breaking point (preferably at a paragraph or sentence)
@@ -136,9 +139,8 @@ class ResponseFormatter:
                         cut_point = space_break + 1  # Include the space
 
             part = remaining[:cut_point]
-            # Add part number indicator
-            part += f" ({part_count}/{max_parts if len(remaining) > max_length else part_count + (len(remaining) - cut_point + max_length - 1) // max_length})"
-            parts.append(part)
+            # Add part number indicator with correct total
+            parts.append(f"{part} ({part_count}/{total_parts})")
             remaining = remaining[cut_point:]
 
         return parts

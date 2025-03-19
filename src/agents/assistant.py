@@ -128,9 +128,14 @@ Immediately execute these tools whenever any information/data changes occur:
     * Use BEFORE updating/deleting to find the correct records
     * Can take a query to pre-filter on non-string fields before semantic search
   - query_records ONLY for non-string fields or when exact matching is explicitly requested
-    * Set truncate_results=True ONLY when responding directly to user queries about records
-    * For intermediate processing steps, use truncate_results=False (default) to get complete results
-    * Aggregation results are always returned in full regardless of truncate_results setting
+    * Set serialize_records=True ONLY when responding directly to user queries about records
+      - This will include an excel file attached to the message with all the records from the query when there are more than a few records
+      - Should only be used when we want to return a list of records to the user (not during intermediate steps)
+      - query_records returns a tuple (results, has_attachment) - check has_attachment to know if a file was attached
+      - If has_attachment=True, the assistant MUST mention in the message that it attached the file with all records
+      - If has_attachment=True, the results list is partial - the full list is in the excel file
+    * For intermediate processing steps, use serialize_records=False (default) to ensure you work with all records directly
+    * Aggregation results are always returned in full regardless of serialize_records setting
 - temporal_reference_resolver for datetime conversion: Use accurate datetime conversion for natural language time expressions.
 
 HANDLING AMBIGUOUS REQUESTS:

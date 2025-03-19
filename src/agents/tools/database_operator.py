@@ -116,9 +116,9 @@ class QueryRecordsArgs(DatasetArgs):
         default=False,
         description="If True, returns only record IDs instead of full records (ignored for aggregation queries)",
     )
-    truncate_results: bool = Field(
+    serialize_records: bool = Field(
         default=False,
-        description="If True, truncates results to 10 items and attaches full results as Excel file. Set to True when responding directly to user queries with a list of records.",
+        description="If True, includes an Excel file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the Excel file. The assistant should always mention the attachment in the message.",
     )
     state: Annotated[State, InjectedState]
 
@@ -321,9 +321,9 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
     description: str = (
         "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. "
         "Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency). "
-        "Set truncate_results=True ONLY when responding directly to user queries - this will truncate results to 10 items and attach full results as Excel file. "
-        "For intermediate processing steps, use truncate_results=False (default) to get complete results. "
-        "Aggregation results are always returned in full regardless of truncate_results setting. "
+        "Set serialize_records=True ONLY when responding directly to user queries - this will include an Excel file with ALL records and return a partial list of the first records. "
+        "For intermediate processing steps, use serialize_records=False (default) to get complete results. "
+        "Aggregation results are always returned in full regardless of serialize_records setting. "
         "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if an Excel file was attached to the state."
     )
     args_schema: Type[BaseModel] = QueryRecordsArgs
@@ -349,9 +349,9 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
             else:  # Record objects
                 processed_result = [record.model_dump() for record in result]
 
-            # Only truncate and create Excel attachment if truncate_results is True
+            # Only create Excel attachment if serialize_records is True
             # and we're dealing with record objects (not aggregation results)
-            if args.truncate_results and len(processed_result) > 10:
+            if args.serialize_records and len(processed_result) > 10:
                 # Create Excel file
                 try:
                     raise Exception("error")
@@ -403,7 +403,7 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
                     # If Excel creation fails, return the full result
                     return processed_result, False
 
-            # Return the full result if truncate_results is False or result length is 10 or less
+            # Return the full result if serialize_records is False or result length is 10 or less
             return processed_result, False
 
         except Exception as e:
