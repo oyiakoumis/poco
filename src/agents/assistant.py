@@ -128,6 +128,9 @@ Immediately execute these tools whenever any information/data changes occur:
     * Use BEFORE updating/deleting to find the correct records
     * Can take a query to pre-filter on non-string fields before semantic search
   - query_records ONLY for non-string fields or when exact matching is explicitly requested
+    * Set truncate_results=True ONLY when responding directly to user queries about records
+    * For intermediate processing steps, use truncate_results=False (default) to get complete results
+    * Aggregation results are always returned in full regardless of truncate_results setting
 - temporal_reference_resolver for datetime conversion: Use accurate datetime conversion for natural language time expressions.
 
 HANDLING AMBIGUOUS REQUESTS:
@@ -209,14 +212,14 @@ class Assistant:
         ]
 
     async def __call__(self, state: State):
-        logger.debug(f"Processing state with {len(state.messages)} messages")
+        logger.debug(f"Processing state with {len(state["messages"])} messages")
         # Initialize the language model
         # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=self.TEMPERATURE)
 
         logger.debug("Trimming messages to token limit")
         trimmed_messages: List[AnyMessage] = trim_messages(
-            state.messages,
+            state["messages"],
             strategy="last",
             token_counter=llm,
             max_tokens=self.TOKEN_LIMIT,
@@ -225,19 +228,22 @@ class Assistant:
             include_system=True,
             allow_partial=False,
         )
-        runnable = create_react_agent(llm, self.tools)
+        # update the state with the trimmed messages
+        state["messages"] = trimmed_messages
+
+        runnable = create_react_agent(llm, self.tools, state_schema=State)
 
         # Get a valid response using the retry mechanism
-        result = await self.force_response(trimmed_messages, runnable)
+        result = await self.force_response(state, runnable)
 
         logger.debug("LLM response received")
         return {"messages": result["messages"]}
 
-    async def force_response(self, messages: List[AnyMessage], runnable: CompiledGraph) -> AIMessage:
+    async def force_response(self, state: State, runnable: CompiledGraph) -> AIMessage:
         """Attempt to get a valid response with retry logic."""
         for attempt in range(self.MAX_RETRIES):
             logger.debug(f"Invoking LLM (attempt {attempt+1}/{self.MAX_RETRIES})")
-            result: List[AnyMessage] = await runnable.ainvoke({"messages": messages})
+            result: List[AnyMessage] = await runnable.ainvoke(state)
             last_message: AnyMessage = result["messages"][-1]
 
             if not isinstance(last_message, ToolMessage) and last_message.content.strip():
@@ -245,7 +251,7 @@ class Assistant:
 
             # Handle invalid response
             logger.warning(f"Empty response on attempt {attempt+1}")
-            messages.extend([result, SystemMessage("Please provide a non-empty response.")])
+            state["messages"].extend([result, SystemMessage("Please provide a non-empty response.")])
 
         # If we get here, all retries failed
         error_msg = f"Failed to get valid response after {self.MAX_RETRIES} attempts"
