@@ -212,14 +212,14 @@ class Assistant:
         ]
 
     async def __call__(self, state: State):
-        logger.debug(f"Processing state with {len(state["messages"])} messages")
+        logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
         # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=self.TEMPERATURE)
 
         logger.debug("Trimming messages to token limit")
         trimmed_messages: List[AnyMessage] = trim_messages(
-            state["messages"],
+            state.messages,
             strategy="last",
             token_counter=llm,
             max_tokens=self.TOKEN_LIMIT,
@@ -229,9 +229,9 @@ class Assistant:
             allow_partial=False,
         )
         # update the state with the trimmed messages
-        state["messages"] = trimmed_messages
+        state.messages = trimmed_messages
 
-        runnable = create_react_agent(llm, self.tools, state_schema=State)
+        runnable = create_react_agent(llm, self.tools)
 
         # Get a valid response using the retry mechanism
         result = await self.force_response(state, runnable)
@@ -251,7 +251,7 @@ class Assistant:
 
             # Handle invalid response
             logger.warning(f"Empty response on attempt {attempt+1}")
-            state["messages"].extend([result, SystemMessage("Please provide a non-empty response.")])
+            state.messages.extend([result, SystemMessage("Please provide a non-empty response.")])
 
         # If we get here, all retries failed
         error_msg = f"Failed to get valid response after {self.MAX_RETRIES} attempts"

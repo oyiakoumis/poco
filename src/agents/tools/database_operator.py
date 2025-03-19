@@ -331,7 +331,7 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
     async def _arun(self, config: RunnableConfig, state: Annotated[State, InjectedState], **kwargs) -> Tuple[Union[List[Dict[str, Any]], List[str]], bool]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
-            args = QueryRecordsArgs(**kwargs)
+            args = QueryRecordsArgs(**kwargs, state=state)
             result = await self.db.query_records(user_id, args.dataset_id, args.query, args.ids_only)
 
             if not result:
@@ -354,6 +354,7 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
             if args.truncate_results and len(processed_result) > 10:
                 # Create Excel file
                 try:
+                    raise Exception("error")
                     # Get dataset name for the filename
                     dataset = await self.db.get_dataset(user_id, args.dataset_id)
                     dataset_name = dataset.name if dataset else str(args.dataset_id)
@@ -384,7 +385,7 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
                     safe_dataset_name = "".join(c if c.isalnum() else "_" for c in dataset_name).lower()
                     filename = f"query_results_{safe_dataset_name}_{timestamp}.xlsx"
 
-                    state["export_file_attachment"] = {
+                    state.export_file_attachment = {
                         "filename": filename,
                         "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         "content": excel_buffer.getvalue(),
