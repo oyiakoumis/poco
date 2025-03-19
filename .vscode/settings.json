@@ -15,6 +15,7 @@
     "ASGI",
     "astream",
     "genai",
+    "generativeai",
     "initlist",
     "levelname",
     "levelno",

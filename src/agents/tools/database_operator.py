@@ -9,10 +9,17 @@ from database.document_store import DatasetManager
 from database.document_store.models.dataset import Dataset
 from database.document_store.models.field import SchemaField
 from database.document_store.models.query import RecordQuery, SimilarityQuery
-from database.document_store.models.record import Record, RecordData
 from database.document_store.models.schema import DatasetSchema
 from models.base import PydanticUUID
 from utils.logging import logger
+
+
+class RecordData(BaseModel):
+    """Record data model representing field values of a record."""
+
+    model_config = {
+        "extra": "allow",  # Allow extra fields not defined in the model
+    }
 
 
 class DatasetArgs(BaseModel):
@@ -162,6 +169,7 @@ class GetDatasetOperator(BaseDBOperator):
             logger.error(f"Error in GetDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise
 
+
 # Get Dataset Schema Operator
 class GetDatasetSchemaOperator(BaseDBOperator):
     name: str = "get_dataset_schema"
@@ -229,16 +237,16 @@ class DeleteDatasetOperator(BaseDBOperator):
 
 class CreateRecordOperator(BaseDBOperator):
     name: str = "create_record"
-    description: str = (
-        f"Create a SINGLE new record. WARNING: Do NOT use this for creating multiple records - use batch_create_records instead. {CreateRecordArgs.model_json_schema()}"
-    )
+    description: str = "Create a SINGLE new record. WARNING: Do NOT use this for creating multiple records - use batch_create_records instead."
     args_schema: Type[BaseModel] = CreateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = CreateRecordArgs(**kwargs)
-            result = await self.db.create_record(user_id, args.dataset_id, args.data)
+            # Convert RecordData to dict
+            record_data = args.data.model_dump()
+            result = await self.db.create_record(user_id, args.dataset_id, record_data)
             return {"record_id": result}
         except Exception as e:
             logger.error(f"Error in CreateRecordOperator with args {kwargs}: {str(e)}", exc_info=True)
@@ -247,16 +255,16 @@ class CreateRecordOperator(BaseDBOperator):
 
 class UpdateRecordOperator(BaseDBOperator):
     name: str = "update_record"
-    description: str = (
-        f"Update a SINGLE record. WARNING: Do NOT use this for updating multiple records - use batch_update_records instead. {UpdateRecordArgs.model_json_schema()}"
-    )
+    description: str = f"Update a SINGLE record. WARNING: Do NOT use this for updating multiple records - use batch_update_records instead."
     args_schema: Type[BaseModel] = UpdateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = UpdateRecordArgs(**kwargs)
-            await self.db.update_record(user_id, args.dataset_id, args.record_id, args.data)
+            # Convert RecordData to dict
+            record_data = args.data.model_dump()
+            await self.db.update_record(user_id, args.dataset_id, args.record_id, record_data)
         except Exception as e:
             logger.error(f"Error in UpdateRecordOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise
@@ -365,7 +373,7 @@ class AddFieldOperator(BaseDBOperator):
 class BatchCreateRecordsOperator(BaseDBOperator):
     name: str = "batch_create_records"
     description: str = (
-        f"Create multiple records in a dataset at once. ALWAYS use this instead of create_record when you need to create multiple records in the same dataset. {BatchCreateRecordsArgs.model_json_schema()}"
+        "Create multiple records in a dataset at once. ALWAYS use this instead of create_record when you need to create multiple records in the same dataset."
     )
     args_schema: Type[BaseModel] = BatchCreateRecordsArgs
 
@@ -373,7 +381,9 @@ class BatchCreateRecordsOperator(BaseDBOperator):
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = BatchCreateRecordsArgs(**kwargs)
-            record_ids = await self.db.batch_create_records(user_id, args.dataset_id, args.records)
+            # Convert list of RecordData to list of dicts
+            records_data = [record.model_dump() for record in args.records]
+            record_ids = await self.db.batch_create_records(user_id, args.dataset_id, records_data)
             return {"record_ids": [str(record_id) for record_id in record_ids]}
         except Exception as e:
             logger.error(f"Error in BatchCreateRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
@@ -393,7 +403,7 @@ class BatchUpdateRecordsOperator(BaseDBOperator):
             args = BatchUpdateRecordsArgs(**kwargs)
 
             # Convert RecordUpdate objects to the dictionary format expected by batch_update_records
-            record_updates = [{"record_id": record_update.record_id, "data": record_update.data} for record_update in args.records]
+            record_updates = [{"record_id": record_update.record_id, "data": record_update.data.model_dump()} for record_update in args.records]
 
             updated_ids = await self.db.batch_update_records(user_id, args.dataset_id, record_updates)
             return {"updated_record_ids": [str(record_id) for record_id in updated_ids]}
@@ -427,9 +437,7 @@ class SearchSimilarDatasetsArgs(BaseModel):
 
 class SearchSimilarRecordsArgs(BaseModel):
     dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
-    record: Record = Field(
-        description="Hypothetical record to search in the dataset - must be created based on the dataset schema. Always call get_dataset first to get the schema."
-    )
+    record_data: RecordData = Field(description="""Hypothetical record data to search in the dataset.""")
     query: Optional[SimilarityQuery] = Field(
         default=None,
         description="Optional query parameters to pre-filter records on non-string fields before semantic search",
@@ -474,7 +482,7 @@ class FindRecords(BaseDBOperator):
     description: str = (
         "DEFAULT search method for finding records with string fields. Creates the hypothetical record that you are looking for using the dataset schema, and find candidates for this record using vector search. "
         "ALWAYS use this for searches involving string fields unless user explicitly requests exact matching. "
-        "You can optionally provide a query to pre-filter records on non-string fields before semantic search."
+        "You can optionally provide a query to pre-filter records on non-string fields before semantic search. \n\n"
     )
     args_schema: Type[BaseModel] = SearchSimilarRecordsArgs
 
@@ -482,10 +490,12 @@ class FindRecords(BaseDBOperator):
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = SearchSimilarRecordsArgs(**kwargs)
+            # Convert RecordData to dict
+            record_data = args.record_data.model_dump()
             results = await self.db.search_similar_records(
                 user_id=user_id,
                 dataset_id=args.dataset_id,
-                record=args.record,
+                record_data=record_data,
                 query=args.query,
             )
             return [record.model_dump() for record in results]

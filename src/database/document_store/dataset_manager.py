@@ -8,6 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
+from pydantic import BaseModel
 import pymongo
 from langchain_openai import OpenAIEmbeddings
 from motor.motor_asyncio import (
@@ -60,12 +61,12 @@ class DatasetManager:
 
     # Vector search configuration
     VECTOR_SEARCH_CONFIG = {
-        "MODEL": "text-embedding-3-small",
+        "MODEL": "text-embedding-3-large",
         "INDEX_NAME": "vector_search_datasets",
         "FIELD_NAME": "embedding",
-        "DIMENSION": 1536,  # 1536 for text-embedding-3-small and 3072 for text-embedding-3-large
-        "NUM_CANDIDATES_MULTIPLIER": 10,
-        "MIN_SCORE": 0.3,
+        "DIMENSION": 3072,  # 1536 for text-embedding-3-small and 3072 for text-embedding-3-large
+        "NUM_CANDIDATES_MULTIPLIER": 5,
+        "MIN_SCORE": 0.25,
     }
 
     def __init__(self, mongodb_client: AsyncIOMotorClient) -> None:
@@ -107,13 +108,16 @@ class DatasetManager:
             logger.info(f"Creating new {entity_type} vector search index")
             index_definition = {
                 "mappings": {
-                    "dynamic": True,
+                    "dynamic": False,  # Turn off dynamic mapping to control indexed fields
                     "fields": {
                         self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: {
                             "type": "knnVector",
                             "dimensions": dimension,
                             "similarity": "cosine",
-                        }
+                        },
+                        # Add user_id and dataset_id for pre-filtering
+                        "user_id": {"type": "token"},
+                        "dataset_id": {"type": "token"},
                     },
                 }
             }
@@ -243,26 +247,26 @@ class DatasetManager:
         # Generate and return embedding
         return await self.embeddings_model.aembed_query(text_to_embed)
 
-    def _prepare_record_text_for_embedding(self, record: Record, dataset_schema: DatasetSchema) -> str:
+    def _prepare_record_text_for_embedding(self, record_data: RecordData, dataset_schema: DatasetSchema) -> str:
         """Prepare text representation of a record for embedding."""
         content_parts = []
 
         for field in dataset_schema.fields:
             field_name = field.field_name
             field_type = field.type
-            if field_name in record.data and field_type in (FieldType.STRING,):
-                value = record.data[field_name]
+            if field_name in record_data and field_type in (FieldType.STRING,):
+                value = record_data[field_name]
                 content_parts.append(f"{field_name}: {value}")
 
         # Create a clean text representation focused on the content
         return "\n".join(content_parts)
 
-    async def _generate_record_embedding(self, record: Record, dataset_schema: DatasetSchema) -> List[float]:
+    async def _generate_record_embedding(self, record_data: RecordData, dataset_schema: DatasetSchema) -> List[float]:
         """Generate embedding from record data using dataset schema for context."""
         logger.debug("Generating record embedding")
 
         # Prepare text for embedding
-        text_to_embed = self._prepare_record_text_for_embedding(record, dataset_schema)
+        text_to_embed = self._prepare_record_text_for_embedding(record_data, dataset_schema)
 
         # Generate and return embedding
         return await self.embeddings_model.aembed_query(text_to_embed)
@@ -275,7 +279,7 @@ class DatasetManager:
         embedding_tasks = []
         for record in records:
             # Prepare text for embedding
-            text_to_embed = self._prepare_record_text_for_embedding(record, dataset_schema)
+            text_to_embed = self._prepare_record_text_for_embedding(record.data, dataset_schema)
 
             # Add embedding task
             embedding_tasks.append(self.embeddings_model.aembed_query(text_to_embed))
@@ -449,7 +453,7 @@ class DatasetManager:
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to get dataset: {str(e)}")
-            
+
     async def get_dataset_schema(self, user_id: str, dataset_id: UUID) -> DatasetSchema:
         """Retrieves only the schema of a specific dataset."""
         try:
@@ -897,7 +901,7 @@ class DatasetManager:
             )
 
             # Generate embedding
-            embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
+            embedding = await self._generate_record_embedding(record.data, dataset.dataset_schema)
 
             # Add embedding to record dict
             record_dict = record.model_dump(by_alias=True)
@@ -935,7 +939,7 @@ class DatasetManager:
             )
 
             # Generate new embedding
-            embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
+            embedding = await self._generate_record_embedding(record.data, dataset.dataset_schema)
 
             # Update record with embedding
             result = await self._records.update_one(
@@ -1027,44 +1031,40 @@ class DatasetManager:
         entity_type: str,
         user_id: str,
         query_embedding: List[float],
-        limit: int = 10,
+        limit: int = 20,
         min_score: Optional[float] = None,
         query: Optional[SimilarityQuery] = None,
         additional_filters: Optional[Dict] = None,
-        model_class: Any = None,
+        model_class: BaseModel = None,
     ) -> List[Any]:
         """Generic method to find similar entities using vector search."""
         try:
             logger.info(f"Searching similar {entity_type}s for user {user_id}")
 
-            # Build vector search stage with pre-filtering
+            vector_search_limit = limit * 3  # Get more results than needed for post-filtering
+            num_candidates = min(vector_search_limit * self.VECTOR_SEARCH_CONFIG["NUM_CANDIDATES_MULTIPLIER"], 10000)
+
+            # Build vector search stage with ONLY user_id and dataset_id pre-filtering
             vector_search_stage = {
                 "$vectorSearch": {
                     "index": index_name,
                     "path": self.VECTOR_SEARCH_CONFIG["FIELD_NAME"],
                     "queryVector": query_embedding,
-                    "numCandidates": limit * self.VECTOR_SEARCH_CONFIG["NUM_CANDIDATES_MULTIPLIER"],
-                    "limit": limit,
-                    "exact": False,
+                    # "numCandidates": num_candidates,
+                    "limit": vector_search_limit,  # Get more results for post-filtering
+                    "exact": True,
                 }
             }
 
-            # Combine pre-filters to apply before vector search
+            # Only use user_id and dataset_id in pre-filters (these are indexed)
             pre_filters = {"user_id": user_id}  # Always filter by user_id
 
             # Add dataset filter for records if provided
-            if additional_filters:
-                pre_filters.update(additional_filters)
+            if additional_filters and "dataset_id" in additional_filters:
+                pre_filters["dataset_id"] = additional_filters["dataset_id"]
 
-            # Add any filters from the query
-            if query:
-                # Convert the structured query filter to a MongoDB filter dictionary
-                filter_dict = query.to_filter_dict()
-                pre_filters.update(filter_dict)
-
-            # Add the combined filter to vector search
-            if pre_filters:
-                vector_search_stage["$vectorSearch"]["filter"] = pre_filters
+            # Add the pre-filters to vector search
+            vector_search_stage["$vectorSearch"]["filter"] = pre_filters
 
             # Start building the pipeline
             pipeline = [
@@ -1072,7 +1072,7 @@ class DatasetManager:
                 {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
             ]
 
-            # Combine post-filters (for filters that must be applied after vector search)
+            # Apply any additional filters as post-filters
             post_filters = {}
 
             # Add score filter if provided
@@ -1081,12 +1081,37 @@ class DatasetManager:
             elif self.VECTOR_SEARCH_CONFIG["MIN_SCORE"] > 0:
                 post_filters["score"] = {"$gte": self.VECTOR_SEARCH_CONFIG["MIN_SCORE"]}
 
+            # Add query filters as post-filters
+            if query:
+                query_filter_dict = query.to_filter_dict()
+                if query_filter_dict:
+                    # Combine score filter with query filters if both exist
+                    if post_filters:
+                        post_filters = {"$and": [post_filters, query_filter_dict]}
+                    else:
+                        post_filters = query_filter_dict
+
+            # Add any remaining additional filters (except dataset_id which was used in pre-filter)
+            if additional_filters:
+                remaining_filters = {k: v for k, v in additional_filters.items() if k != "dataset_id"}
+                if remaining_filters:
+                    if post_filters:
+                        post_filters = {"$and": [post_filters, remaining_filters]}
+                    else:
+                        post_filters = remaining_filters
+
             # Add the combined post-filter if any exist
             if post_filters:
                 pipeline.append({"$match": post_filters})
 
+            # Sort by score in descending order (highest similarity first)
+            pipeline.append({"$sort": {"score": -1}})
+
+            # Limit results to requested number after all filtering
+            pipeline.append({"$limit": limit})
+
             # Remove score from final results
-            pipeline.append({"$project": {"score": 0}})
+            pipeline.append({"$project": {"score": 0, self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}})
 
             # Execute search
             results = []
@@ -1140,8 +1165,8 @@ class DatasetManager:
         self,
         user_id: str,
         dataset_id: UUID,
-        record: Record,
-        limit: int = 10,
+        record_data: RecordData,
+        limit: int = 20,  # Increased default limit to 20
         min_score: Optional[float] = None,
         query: Optional[SimilarityQuery] = None,
     ) -> List[Record]:
@@ -1151,7 +1176,7 @@ class DatasetManager:
             dataset = await self.get_dataset(user_id, dataset_id)
 
             # Generate embedding from record (only string fields are used)
-            query_embedding = await self._generate_record_embedding(record, dataset.dataset_schema)
+            query_embedding = await self._generate_record_embedding(record_data, dataset.dataset_schema)
 
             # Validate query against schema if provided
             if query:

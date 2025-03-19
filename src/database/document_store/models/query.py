@@ -166,8 +166,7 @@ class SimilarityQuery(BaseModel):
     def validate_with_schema(self, schema: DatasetSchema) -> None:
         """Validate the query against a schema."""
         # Validate filter conditions
-        if self.filter:
-            self._validate_filter_node(self.filter, schema)
+        self._validate_filter_node(self.filter, schema)
 
     def _validate_filter_node(self, node: Union[FilterCondition, FilterExpression], schema: DatasetSchema) -> None:
         """Recursively validate filter nodes against schema."""
@@ -206,8 +205,6 @@ class SimilarityQuery(BaseModel):
         "arbitrary_types_allowed": True,
         "json_schema_extra": {
             "examples": [
-                # Simple similarity search
-                {"filter": None},
                 # Similarity search with filtering
                 {"filter": {"field": "status", "operator": "eq", "value": "active"}},
                 # Complex filtering with similarity search
