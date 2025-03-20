@@ -8,7 +8,6 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel
 import pymongo
 from langchain_openai import OpenAIEmbeddings
 from motor.motor_asyncio import (
@@ -16,6 +15,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorCollection,
     AsyncIOMotorDatabase,
 )
+from pydantic import BaseModel
 from pymongo.errors import BulkWriteError
 from pymongo.operations import SearchIndexModel
 

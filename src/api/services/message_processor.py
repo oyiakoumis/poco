@@ -1,6 +1,6 @@
 """Message processing service for WhatsApp messages."""
 
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from langchain_community.callbacks.openai_info import OpenAICallbackHandler
@@ -57,6 +57,7 @@ class MessageProcessor:
                 "user_id": user_id,
                 "time_zone": "UTC",
                 "first_day_of_the_week": 0,
+                "thread_id": conversation_id,
             },
             recursion_limit=25,
             callbacks=[callback_handler],
@@ -80,12 +81,12 @@ class MessageProcessor:
 
         # Generate tool summary
         tool_summary = self._generate_tool_summary(output_messages)
-        
+
         # Check if there's a file attachment in the state
         file_attachment = result.get("export_file_attachment")
         if file_attachment:
             logger.info(f"File attachment found in state: {file_attachment.get('filename')}")
-        
+
         return output_messages, response, tool_summary, total_tokens, file_attachment
 
     def _generate_tool_summary(self, messages: List[Message]) -> Optional[str]:

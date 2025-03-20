@@ -236,19 +236,20 @@ class Assistant:
         # update the state with the trimmed messages
         state.messages = trimmed_messages
 
-        runnable = create_react_agent(llm, self.tools)
+        runnable = create_react_agent(llm, self.tools, state_schema=State)
 
         # Get a valid response using the retry mechanism
-        result = await self.force_response(state, runnable)
+        result = await self.force_response(runnable, state)
 
         logger.debug("LLM response received")
-        return {"messages": result["messages"]}
+        return {"messages": result["messages"], "export_file_attachment": result.get("export_file_attachment")}
 
-    async def force_response(self, state: State, runnable: CompiledGraph) -> AIMessage:
+    async def force_response(self, runnable: CompiledGraph, state: State) -> AIMessage:
         """Attempt to get a valid response with retry logic."""
         for attempt in range(self.MAX_RETRIES):
             logger.debug(f"Invoking LLM (attempt {attempt+1}/{self.MAX_RETRIES})")
-            result: List[AnyMessage] = await runnable.ainvoke(state)
+            result = await runnable.ainvoke(state)
+
             last_message: AnyMessage = result["messages"][-1]
 
             if not isinstance(last_message, ToolMessage) and last_message.content.strip():

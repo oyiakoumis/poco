@@ -20,6 +20,8 @@
     "levelname",
     "levelno",
     "multimodal",
+    "officedocument",
+    "openxmlformats",
     "redlock",
     "relativedelta",
     "servicebus",

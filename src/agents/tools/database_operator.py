@@ -1,11 +1,14 @@
 import asyncio
+import base64
 import io
-import pandas as pd
 from typing import Annotated, Any, Dict, List, Optional, Tuple, Type, Union
+from uuid import uuid4
 
+import pandas as pd
+from langchain_core.messages import ToolMessage
 from langchain_core.runnables.config import RunnableConfig
-from langchain_core.tools import BaseTool
-from langgraph.prebuilt import InjectedState
+from langchain_core.tools import BaseTool, InjectedToolCallId
+from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from agents.state import State
@@ -120,7 +123,7 @@ class QueryRecordsArgs(DatasetArgs):
         default=False,
         description="If True, includes an Excel file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the Excel file. The assistant should always mention the attachment in the message.",
     )
-    state: Annotated[State, InjectedState]
+    tool_call_id: Annotated[str, InjectedToolCallId]
 
 
 class UpdateFieldArgs(DatasetArgs):
@@ -148,9 +151,10 @@ class BaseDBOperator(BaseTool):
 
 
 # Base Table Operator with Injected State
-class BaseInjectedStateDBOperator(BaseDBOperator):
-    def _run(self, config: RunnableConfig, state: Annotated[State, InjectedState], **kwargs):
-        return asyncio.run(self._arun(config, state, **kwargs))
+class BaseInjectedToolCallIdDBOperator(BaseDBOperator):
+
+    def _run(self, config: RunnableConfig, tool_call_id: Annotated[str, InjectedToolCallId], **kwargs):
+        return asyncio.run(self._arun(config, tool_call_id, **kwargs))
 
 
 # List Dataset Operator
@@ -316,7 +320,7 @@ class GetRecordOperator(BaseDBOperator):
             raise
 
 
-class QueryRecordsOperator(BaseInjectedStateDBOperator):
+class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
     name: str = "query_records"
     description: str = (
         "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. "
@@ -328,10 +332,12 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
     )
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
-    async def _arun(self, config: RunnableConfig, state: Annotated[State, InjectedState], **kwargs) -> Tuple[Union[List[Dict[str, Any]], List[str]], bool]:
+    async def _arun(
+        self, config: RunnableConfig, tool_call_id: Annotated[str, InjectedToolCallId], **kwargs
+    ) -> Tuple[Union[List[Dict[str, Any]], List[str]], bool]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
-            args = QueryRecordsArgs(**kwargs, state=state)
+            args = QueryRecordsArgs(**kwargs, tool_call_id=tool_call_id)
             result = await self.db.query_records(user_id, args.dataset_id, args.query, args.ids_only)
 
             if not result:
@@ -354,7 +360,6 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
             if args.serialize_records and len(processed_result) > 10:
                 # Create Excel file
                 try:
-                    raise Exception("error")
                     # Get dataset name for the filename
                     dataset = await self.db.get_dataset(user_id, args.dataset_id)
                     dataset_name = dataset.name if dataset else str(args.dataset_id)
@@ -380,23 +385,23 @@ class QueryRecordsOperator(BaseInjectedStateDBOperator):
                     excel_buffer.seek(0)
 
                     # Add file to state
-                    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-                    # Sanitize dataset name for filename and convert to lowercase
-                    safe_dataset_name = "".join(c if c.isalnum() else "_" for c in dataset_name).lower()
-                    filename = f"query_results_{safe_dataset_name}_{timestamp}.xlsx"
-
-                    state.export_file_attachment = {
-                        "filename": filename,
-                        "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "content": excel_buffer.getvalue(),
-                        "size": file_size,
-                    }
+                    filename = f"{uuid4()}.xlsx"
 
                     # Truncate result to 10 items
                     truncated_result = processed_result[:10]
 
                     # Return truncated result and flag indicating Excel file was added
-                    return truncated_result, True
+                    return Command(
+                        update={
+                            "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
+                            "export_file_attachment": {
+                                "filename": filename,
+                                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheet.sheet",
+                                "content": base64.b64encode(excel_buffer.getvalue()).decode("utf-8"),
+                                "size": file_size,
+                            },
+                        }
+                    )
 
                 except Exception as e:
                     logger.error(f"Error creating Excel file: {str(e)}", exc_info=True)

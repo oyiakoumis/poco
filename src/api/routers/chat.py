@@ -13,7 +13,7 @@ from api.routers.dependencies import (
 from api.services.conversation_service import ConversationService
 from api.services.media_service import MediaService
 from api.services.message_processor import MessageProcessor
-from api.utils.response_formatter import ResponseFormatter
+from api.services.response_service import ResponseService
 from database.manager import DatabaseManager
 from settings import settings
 from utils.azure_blob_lock import AzureBlobLockManager
@@ -48,12 +48,12 @@ async def process_whatsapp_message(
     to_number = From
 
     # Initialize services
-    response_formatter = ResponseFormatter()
+    response_formatter = ResponseService()
 
     # Check if the message body is empty
     if not Body or Body.strip() == "":
         logger.info(f"Empty message received from {From}, SID: {SmsMessageSid}")
-        response_formatter.send_error(From, "", "Message's body cannot be empty.")
+        await response_formatter.send_error(From, "", "Message's body cannot be empty.")
         return Response(status_code=status.HTTP_400_BAD_REQUEST)
 
     # Validate the request is coming from Twilio (currently disabled with TODO)
@@ -87,7 +87,7 @@ async def process_whatsapp_message(
         # If we couldn't acquire the lock, send a busy message and return
         if not lock:
             logger.info(f"Conversation {conversation_id} is already being processed, skipping")
-            response_formatter.send_processing(to_number, Body, "I'm still processing your last message. Please send your next message right after.")
+            await response_formatter.send_processing(to_number, Body, "I'm still processing your last message. Please send your next message right after.")
             return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         # Process media
@@ -97,7 +97,7 @@ async def process_whatsapp_message(
         unsupported_media = await media_service.has_unsupported_media(request, num_media)
 
         # Send immediate acknowledgment
-        response_formatter.send_acknowledgment(to_number, Body, new_conversation=new_conversation_created, unsupported_media=unsupported_media)
+        await response_formatter.send_acknowledgment(to_number, Body, new_conversation=new_conversation_created, unsupported_media=unsupported_media)
 
         # Process media
         media_items = await media_service.process_media(request, num_media)
@@ -132,7 +132,7 @@ async def process_whatsapp_message(
         await conversation_service.store_messages(new_messages + output_messages)
 
         # Send the response with file attachment if available
-        response_formatter.send_response(to_number, Body, response_content, total_tokens, file_attachment)
+        await response_formatter.send_response(to_number, Body, response_content, total_tokens, file_attachment)
 
         return Response(status_code=status.HTTP_200_OK)
 
@@ -140,8 +140,8 @@ async def process_whatsapp_message(
         logger.error(f"Error processing WhatsApp message: {str(e)}", exc_info=True)
 
         # Send error message
-        response_formatter = ResponseFormatter()
-        response_formatter.send_error(to_number, Body, "We're experiencing technical difficulties processing your message. Our team has been notified.")
+        response_formatter = ResponseService()
+        await response_formatter.send_error(to_number, Body, "We're experiencing technical difficulties processing your message. Our team has been notified.")
 
         return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

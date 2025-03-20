@@ -13,9 +13,9 @@ from langchain_core.messages import (
 )
 from pydantic import Field, model_validator
 
+from api.services.media_service import BlobStorageService
 from models.base import BaseDocument, PydanticUUID
 from utils.logging import logger
-from utils.media_storage import generate_multiple_blob_presigned_urls
 
 
 class MessageRole(str, Enum):
@@ -116,7 +116,7 @@ class Message(BaseDocument):
         blob_names = [media_item["blob_name"] for media_item in media_items]
 
         # Generate all presigned URLs concurrently
-        url_results = await generate_multiple_blob_presigned_urls(blob_names)
+        url_results = await BlobStorageService.generate_multiple_blob_presigned_urls(blob_names)
 
         # Process results and add to content
         for media_item in media_items:
