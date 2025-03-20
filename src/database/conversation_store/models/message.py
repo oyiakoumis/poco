@@ -1,7 +1,7 @@
 """Message model for chat history."""
 
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from uuid import uuid4
 
 from langchain_core.messages import (
@@ -13,6 +13,7 @@ from langchain_core.messages import (
 )
 from pydantic import Field, model_validator
 
+from api.models import MediaItem
 from api.services.media_service import BlobStorageService
 from models.base import BaseDocument, PydanticUUID
 from utils.logging import logger
@@ -112,15 +113,14 @@ class Message(BaseDocument):
         url_generation_successes = 0
 
         # Extract all blob names from media items
-        media_items = self.metadata["media_items"]
-        blob_names = [media_item["blob_name"] for media_item in media_items]
+        media_items: List[MediaItem] = self.metadata["media_items"]
+        blob_names = [media_item.blob_name for media_item in media_items]
 
         # Generate all presigned URLs concurrently
-        url_results = await BlobStorageService.generate_multiple_blob_presigned_urls(blob_names)
+        url_results = await BlobStorageService().generate_multiple_blob_presigned_urls(blob_names)
 
         # Process results and add to content
-        for media_item in media_items:
-            blob_name = media_item["blob_name"]
+        for blob_name in blob_names:
             presigned_url = url_results.get(blob_name)
 
             if presigned_url:
