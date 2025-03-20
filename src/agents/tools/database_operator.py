@@ -360,12 +360,8 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             if args.serialize_records and len(processed_result) > 10:
                 # Create Excel file
                 try:
-                    # Get dataset name for the filename
-                    dataset = await self.db.get_dataset(user_id, args.dataset_id)
-                    dataset_name = dataset.name if dataset else str(args.dataset_id)
-
                     # Convert result to DataFrame
-                    df = pd.DataFrame(processed_result)
+                    df = pd.DataFrame([record["data"] for record in processed_result])
 
                     # Create BytesIO object to store Excel file
                     excel_buffer = io.BytesIO()

@@ -140,7 +140,6 @@ async def process_whatsapp_message(
         logger.error(f"Error processing WhatsApp message: {str(e)}", exc_info=True)
 
         # Send error message
-        response_formatter = ResponseService()
         await response_formatter.send_error(to_number, Body, "We're experiencing technical difficulties processing your message. Our team has been notified.")
 
         return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)

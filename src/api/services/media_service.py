@@ -2,13 +2,14 @@
 
 import asyncio
 import base64
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple, Union
+from typing import AsyncGenerator, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 import httpx
 from azure.storage.blob import BlobSasPermissions, ContentSettings, generate_blob_sas
-from azure.storage.blob.aio import BlobServiceClient
+from azure.storage.blob.aio import BlobServiceClient, ContainerClient
 from fastapi import Request
 
 from api.models import MediaItem
@@ -19,24 +20,39 @@ from utils.logging import logger
 class BlobStorageService:
     """Service for interacting with Azure Blob Storage."""
 
-    @staticmethod
-    async def _get_container_client():
-        """Get a container client for the configured blob container.
+    @asynccontextmanager
+    async def blob_service_client(self) -> AsyncGenerator[BlobServiceClient, None]:
+        """Get a blob service client using a context manager for proper cleanup.
 
-        Returns:
+        Yields:
+            A blob service client
+        """
+        client = BlobServiceClient.from_connection_string(settings.azure_storage_connection_string)
+        try:
+            yield client
+        finally:
+            await client.close()
+
+    @asynccontextmanager
+    async def container_client(self) -> AsyncGenerator[ContainerClient, None]:
+        """Get a container client using a context manager for proper cleanup.
+
+        Yields:
             A container client for the configured blob container
         """
-        blob_service_client = BlobServiceClient.from_connection_string(settings.azure_storage_connection_string)
-        container_client = blob_service_client.get_container_client(settings.azure_blob_container_name)
+        async with self.blob_service_client() as blob_service_client:
+            container_client = blob_service_client.get_container_client(settings.azure_blob_container_name)
+            
+            # Create container if it doesn't exist
+            if not await container_client.exists():
+                await container_client.create_container()
+                
+            try:
+                yield container_client
+            finally:
+                await container_client.close()
 
-        # Create container if it doesn't exist
-        if not await container_client.exists():
-            await container_client.create_container()
-
-        return container_client
-
-    @staticmethod
-    async def upload_blob(content: bytes, blob_name: str, content_type: str) -> str:
+    async def upload_blob(self, content: bytes, blob_name: str, content_type: str) -> str:
         """Upload content to Azure Blob Storage.
 
         Args:
@@ -47,20 +63,13 @@ class BlobStorageService:
         Returns:
             The name of the blob in Azure Blob Storage
         """
-        container_client = await BlobStorageService._get_container_client()
+        async with self.container_client() as container_client:
+            blob_client = container_client.get_blob_client(blob_name)
+            content_settings = ContentSettings(content_type=content_type)
+            await blob_client.upload_blob(content, content_settings=content_settings)
+            return blob_name
 
-        # Upload to Azure Blob Storage
-        blob_client = container_client.get_blob_client(blob_name)
-        content_settings = ContentSettings(content_type=content_type)
-        await blob_client.upload_blob(content, content_settings=content_settings)
-
-        # Close the container client
-        await container_client.close()
-
-        return blob_name
-
-    @staticmethod
-    async def generate_presigned_url(blob_name: str, expiry_hours: int = 24) -> str:
+    async def generate_presigned_url(self, blob_name: str, expiry_hours: int = 24) -> str:
         """Generate a presigned URL for a blob in Azure Blob Storage.
 
         Args:
@@ -70,32 +79,27 @@ class BlobStorageService:
         Returns:
             A presigned URL for the blob
         """
-        blob_service_client = BlobServiceClient.from_connection_string(settings.azure_storage_connection_string)
+        async with self.blob_service_client() as blob_service_client:
+            # Extract account name from the blob service client
+            account_name = blob_service_client.account_name
+            container_name = settings.azure_blob_container_name
+            account_key = settings.azure_storage_account_key
 
-        # Extract account name from the blob service client
-        account_name = blob_service_client.account_name
-        container_name = settings.azure_blob_container_name
-        account_key = settings.azure_storage_account_key
+            # Generate SAS token
+            sas_token = generate_blob_sas(
+                account_name=account_name,
+                container_name=container_name,
+                blob_name=blob_name,
+                account_key=account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=datetime.now(timezone.utc) + timedelta(hours=expiry_hours),
+            )
 
-        # Close the blob service client
-        await blob_service_client.close()
+            # Create the presigned URL
+            presigned_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
+            return presigned_url
 
-        # Generate SAS token
-        sas_token = generate_blob_sas(
-            account_name=account_name,
-            container_name=container_name,
-            blob_name=blob_name,
-            account_key=account_key,
-            permission=BlobSasPermissions(read=True),
-            expiry=datetime.now(timezone.utc) + timedelta(hours=expiry_hours),
-        )
-
-        # Create the presigned URL
-        presigned_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
-        return presigned_url
-
-    @staticmethod
-    async def generate_multiple_blob_presigned_urls(blob_names: List[str], expiry_hours: int = 24) -> Dict[str, Optional[str]]:
+    async def generate_multiple_blob_presigned_urls(self, blob_names: List[str], expiry_hours: int = 24) -> Dict[str, Optional[str]]:
         """Generate presigned URLs for multiple blobs concurrently.
 
         Args:
@@ -108,24 +112,45 @@ class BlobStorageService:
         if not blob_names:
             return {}
 
-        # Create a helper function to handle errors for individual URL generation
-        async def get_url_with_error_handling(blob_name: str) -> Tuple[str, Optional[str]]:
-            try:
-                url = await BlobStorageService.generate_presigned_url(blob_name, expiry_hours)
-                return blob_name, url
-            except Exception as e:
-                logger.error(f"Error generating presigned URL for blob {blob_name}: {str(e)}")
-                return blob_name, None
+        async with self.blob_service_client() as blob_service_client:
+            # Extract common information
+            account_name = blob_service_client.account_name
+            container_name = settings.azure_blob_container_name
+            account_key = settings.azure_storage_account_key
+            
+            # Create a helper function that doesn't create a new client each time
+            async def get_url_with_error_handling(blob_name: str) -> Tuple[str, Optional[str]]:
+                try:
+                    # Generate SAS token
+                    sas_token = generate_blob_sas(
+                        account_name=account_name,
+                        container_name=container_name,
+                        blob_name=blob_name,
+                        account_key=account_key,
+                        permission=BlobSasPermissions(read=True),
+                        expiry=datetime.now(timezone.utc) + timedelta(hours=expiry_hours),
+                    )
+                    
+                    # Create the presigned URL
+                    presigned_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
+                    return blob_name, presigned_url
+                except Exception as e:
+                    logger.error(f"Error generating presigned URL for blob {blob_name}: {str(e)}")
+                    return blob_name, None
 
-        # Use asyncio.gather to run all URL generation tasks concurrently
-        results = await asyncio.gather(*[get_url_with_error_handling(blob_name) for blob_name in blob_names])
+            # Use asyncio.gather to run all URL generation tasks concurrently
+            results = await asyncio.gather(*[get_url_with_error_handling(blob_name) for blob_name in blob_names])
 
-        # Convert results to a dictionary
-        return {blob_name: url for blob_name, url in results}
+            # Convert results to a dictionary
+            return {blob_name: url for blob_name, url in results}
 
 
 class MediaService:
     """Service for handling media in WhatsApp messages."""
+    
+    def __init__(self):
+        """Initialize the MediaService with a BlobStorageService instance."""
+        self.blob_storage = BlobStorageService()
 
     async def process_media(self, request: Request, num_media: int) -> List[MediaItem]:
         """Process media items from a WhatsApp message.
@@ -211,7 +236,7 @@ class MediaService:
                 raise Exception(f"Failed to download media from Twilio")
 
         # Upload to Azure Blob Storage
-        await BlobStorageService.upload_blob(content=media_response.content, blob_name=blob_name, content_type=content_type)
+        await self.blob_storage.upload_blob(content=media_response.content, blob_name=blob_name, content_type=content_type)
 
         return blob_name
 
@@ -235,10 +260,10 @@ class MediaService:
             blob_name = f"{uuid4()}.{file_extension}"
 
             # Upload to Azure Blob Storage
-            await BlobStorageService.upload_blob(content=content, blob_name=blob_name, content_type=content_type)
+            await self.blob_storage.upload_blob(content=content, blob_name=blob_name, content_type=content_type)
 
             # Generate a presigned URL for the blob
-            presigned_url = await BlobStorageService.generate_presigned_url(blob_name)
+            presigned_url = await self.blob_storage.generate_presigned_url(blob_name)
 
             logger.info(f"File '{filename}' prepared for outgoing attachment: {blob_name}")
             return presigned_url
