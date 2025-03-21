@@ -392,7 +392,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
                             "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
                             "export_file_attachment": {
                                 "filename": filename,
-                                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheet.sheet",
+                                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 "content": base64.b64encode(excel_buffer.getvalue()).decode("utf-8"),
                                 "size": file_size,
                             },
