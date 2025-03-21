@@ -100,7 +100,7 @@ async def process_whatsapp_message(
             await response_formatter.send_error(
                 to_number,
                 Body,
-                f"I couldn't process the media you sent.\n\nHere's what I can work with:\n- Images only: PNG, JPEG, or non-animated GIF\n- Up to 10 images\n- Each image should be under 5MB\n\nPlease try again with supported media!",
+                "I couldn't process your media. I accept only one image (PNG, JPEG, or non-animated GIF) under 5MB. Please try again with supported media!",
             )
             return Response(status_code=status.HTTP_400_BAD_REQUEST)
 

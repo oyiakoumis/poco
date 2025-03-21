@@ -211,8 +211,8 @@ class MediaService:
             return True, None
 
         # Check if there are too many images
-        if num_media > 10:
-            return False, f"Too many images. Maximum allowed is 10, but received {num_media}."
+        if num_media > 1:
+            return False, f"Too many images. Maximum allowed is 1, but received {num_media}."
 
         try:
             form_data = await request.form()
