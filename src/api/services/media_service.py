@@ -42,11 +42,11 @@ class BlobStorageService:
         """
         async with self.blob_service_client() as blob_service_client:
             container_client = blob_service_client.get_container_client(settings.azure_blob_container_name)
-            
+
             # Create container if it doesn't exist
             if not await container_client.exists():
                 await container_client.create_container()
-                
+
             try:
                 yield container_client
             finally:
@@ -117,7 +117,7 @@ class BlobStorageService:
             account_name = blob_service_client.account_name
             container_name = settings.azure_blob_container_name
             account_key = settings.azure_storage_account_key
-            
+
             # Create a helper function that doesn't create a new client each time
             async def get_url_with_error_handling(blob_name: str) -> Tuple[str, Optional[str]]:
                 try:
@@ -130,7 +130,7 @@ class BlobStorageService:
                         permission=BlobSasPermissions(read=True),
                         expiry=datetime.now(timezone.utc) + timedelta(hours=expiry_hours),
                     )
-                    
+
                     # Create the presigned URL
                     presigned_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
                     return blob_name, presigned_url
@@ -147,7 +147,7 @@ class BlobStorageService:
 
 class MediaService:
     """Service for handling media in WhatsApp messages."""
-    
+
     def __init__(self):
         """Initialize the MediaService with a BlobStorageService instance."""
         self.blob_storage = BlobStorageService()
@@ -245,7 +245,7 @@ class MediaService:
 
         Args:
             content: Base64-encoded file content
-            filename: The name of the file
+            filename: The name of the file.
             content_type: The content type of the file
 
         Returns:
@@ -255,17 +255,13 @@ class MediaService:
             # Decode base64 content
             content = base64.b64decode(content)
 
-            # Generate a unique blob name
-            file_extension = filename.split(".")[-1] if "." in filename else ""
-            blob_name = f"{uuid4()}.{file_extension}"
-
             # Upload to Azure Blob Storage
-            await self.blob_storage.upload_blob(content=content, blob_name=blob_name, content_type=content_type)
+            await self.blob_storage.upload_blob(content=content, blob_name=filename, content_type=content_type)
 
             # Generate a presigned URL for the blob
-            presigned_url = await self.blob_storage.generate_presigned_url(blob_name)
+            presigned_url = await self.blob_storage.generate_presigned_url(filename)
 
-            logger.info(f"File '{filename}' prepared for outgoing attachment: {blob_name}")
+            logger.info(f"File '{filename}' prepared for outgoing attachment: {filename}")
             return presigned_url
 
         except Exception as e:

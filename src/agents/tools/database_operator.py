@@ -121,7 +121,7 @@ class QueryRecordsArgs(DatasetArgs):
     )
     serialize_records: bool = Field(
         default=False,
-        description="If True, includes an Excel file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the Excel file. The assistant should always mention the attachment in the message.",
+        description="If True, includes a CSV file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the CSV file. The assistant should always mention the attachment in the message.",
     )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
@@ -321,14 +321,19 @@ class GetRecordOperator(BaseDBOperator):
 
 
 class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
+    MAX_TRUNCATED_RECORDS: int = 25  # Maximum number of records to show in truncated result
+
     name: str = "query_records"
     description: str = (
         "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. "
         "Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency). "
-        "Set serialize_records=True ONLY when responding directly to user queries - this will include an Excel file with ALL records and return a partial list of the first records. "
+        "Set serialize_records=True ONLY when responding directly to user queries - this will include a CSV file with ALL records and return a PARTIAL list. "
+        "When serialize_records=True, you MUST explicitly state in your response that: "
+        "1. The results shown are only a PARTIAL list of records, and "
+        "2. The COMPLETE list of ALL records is available in the attached CSV file. "
         "For intermediate processing steps, use serialize_records=False (default) to get complete results. "
         "Aggregation results are always returned in full regardless of serialize_records setting. "
-        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if an Excel file was attached to the state."
+        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if a CSV file was attached to the state."
     )
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
@@ -343,7 +348,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             if not result:
                 return [], False
 
-            # Handle record IDs - don't create Excel file for these
+            # Handle record IDs - don't create CSV file for these
             if isinstance(result[0], str):  # Record IDs
                 return result, False
 
@@ -355,56 +360,67 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             else:  # Record objects
                 processed_result = [record.model_dump() for record in result]
 
-            # Only create Excel attachment if serialize_records is True
+            # Only create CSV attachment if serialize_records is True
             # and we're dealing with record objects (not aggregation results)
-            if args.serialize_records and len(processed_result) > 10:
-                # Create Excel file
+            if args.serialize_records and len(processed_result) > self.MAX_TRUNCATED_RECORDS:
+                # Create CSV file
                 try:
                     # Convert result to DataFrame
                     df = pd.DataFrame([record["data"] for record in processed_result])
 
-                    # Create BytesIO object to store Excel file
-                    excel_buffer = io.BytesIO()
+                    # Create BytesIO object to store CSV file
+                    csv_buffer = io.BytesIO()
 
-                    # Write DataFrame to Excel file
-                    df.to_excel(excel_buffer, index=False, engine="openpyxl")
+                    # Write DataFrame to CSV file
+                    df.to_csv(csv_buffer, index=False)
 
                     # Get file size
-                    file_size = excel_buffer.tell()
+                    file_size = csv_buffer.tell()
 
                     # Check if file size exceeds 16MB
                     if file_size > 16 * 1024 * 1024:  # 16MB in bytes
-                        logger.error(f"Excel file size ({file_size} bytes) exceeds 16MB limit")
-                        raise ValueError("Excel file size exceeds 16MB limit. Please refine your query to return fewer records.")
+                        logger.error(f"CSV file size ({file_size} bytes) exceeds 16MB limit")
+                        raise ValueError("CSV file size exceeds 16MB limit. Please refine your query to return fewer records.")
 
                     # Reset buffer position
-                    excel_buffer.seek(0)
+                    csv_buffer.seek(0)
 
-                    # Add file to state
-                    filename = f"{uuid4()}.xlsx"
+                    # Get dataset name
+                    dataset = await self.db.get_dataset(user_id, args.dataset_id)
+                    dataset_name = dataset.name
 
-                    # Truncate result to 10 items
-                    truncated_result = processed_result[:10]
+                    # Replace spaces and special characters with underscores
+                    processed_dataset_name = "".join(c if c.isalnum() or c in "_-" else "_" for c in dataset_name)
 
-                    # Return truncated result and flag indicating Excel file was added
+                    # Truncate to 20 characters or less
+                    processed_dataset_name = processed_dataset_name[:20]
+
+                    # Add file to state with dataset name
+                    short_uuid = str(uuid4())[:8]  # Use shorter UUID
+                    filename = f"{processed_dataset_name}_{short_uuid}.csv"
+
+                    # Truncate result to MAX_TRUNCATED_RECORDS items
+                    truncated_result = processed_result[:self.MAX_TRUNCATED_RECORDS]
+
+                    # Return truncated result and flag indicating CSV file was added
                     return Command(
                         update={
                             "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
                             "export_file_attachment": {
                                 "filename": filename,
-                                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                "content": base64.b64encode(excel_buffer.getvalue()).decode("utf-8"),
+                                "content_type": "text/csv",
+                                "content": base64.b64encode(csv_buffer.getvalue()).decode("utf-8"),
                                 "size": file_size,
                             },
                         }
                     )
 
                 except Exception as e:
-                    logger.error(f"Error creating Excel file: {str(e)}", exc_info=True)
-                    # If Excel creation fails, return the full result
+                    logger.error(f"Error creating CSV file: {str(e)}", exc_info=True)
+                    # If CSV creation fails, return the full result
                     return processed_result, False
 
-            # Return the full result if serialize_records is False or result length is 10 or less
+            # Return the full result if serialize_records is False or result length is MAX_TRUNCATED_RECORDS or less
             return processed_result, False
 
         except Exception as e:

@@ -25,6 +25,7 @@
     "redlock",
     "relativedelta",
     "servicebus",
+    "spreadsheetml",
     "sseclient",
     "twiml"
   ]
