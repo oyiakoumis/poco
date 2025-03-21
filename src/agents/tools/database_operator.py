@@ -348,7 +348,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             if not result:
                 return [], False
 
-            # Handle record IDs - don't create Excel file for these
+            # Handle record IDs - don't create a file for these
             if isinstance(result[0], str):  # Record IDs
                 return result, False
 
@@ -360,7 +360,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             else:  # Record objects
                 processed_result = [record.model_dump() for record in result]
 
-            # Only create Excel attachment if serialize_records is True
+            # Only create an attachment if serialize_records is True
             # and we're dealing with record objects (not aggregation results)
             if args.serialize_records and len(processed_result) > self.MAX_TRUNCATED_RECORDS:
                 # Create CSV file
@@ -534,13 +534,13 @@ class BatchDeleteRecordsOperator(BaseDBOperator):
             raise
 
 
-class SearchSimilarDatasetsArgs(BaseModel):
-    dataset: Dataset = Field(description="Dataset to find similar datasets to")
+class FindDatasetArgs(BaseModel):
+    dataset: Dataset = Field(description="Hypothetical dataset to search for in the database")
 
 
-class SearchSimilarRecordsArgs(BaseModel):
+class FindRecordsArgs(BaseModel):
     dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
-    record_data: RecordData = Field(description="""Hypothetical record data to search in the dataset.""")
+    record_data: RecordData = Field(description="Hypothetical record data to search in the dataset.")
     query: Optional[SimilarityQuery] = Field(
         default=None,
         description="Optional query parameters to pre-filter records on non-string fields before semantic search",
@@ -564,19 +564,19 @@ class GetAllRecordsOperator(BaseDBOperator):
             raise
 
 
-class SearchSimilarDatasetsOperator(BaseDBOperator):
-    name: str = "search_similar_datasets"
-    description: str = "Find similar datasets using vector search"
-    args_schema: Type[BaseModel] = SearchSimilarDatasetsArgs
+class FindDatasetOperator(BaseDBOperator):
+    name: str = "find_dataset"
+    description: str = "Find a dataset in the database. Creates the hypothetical dataset that you are looking for, and find candidates for this dataset using vector search."
+    args_schema: Type[BaseModel] = FindDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
-            args = SearchSimilarDatasetsArgs(**kwargs)
+            args = FindDatasetArgs(**kwargs)
             results = await self.db.search_similar_datasets(user_id, args.dataset)
             return [dataset.model_dump() for dataset in results]
         except Exception as e:
-            logger.error(f"Error in SearchSimilarDatasetsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            logger.error(f"Error in FindDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
             raise
 
 
@@ -587,12 +587,12 @@ class FindRecords(BaseDBOperator):
         "ALWAYS use this for searches involving string fields unless user explicitly requests exact matching. "
         "You can optionally provide a query to pre-filter records on non-string fields before semantic search. \n\n"
     )
-    args_schema: Type[BaseModel] = SearchSimilarRecordsArgs
+    args_schema: Type[BaseModel] = FindRecordsArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
-            args = SearchSimilarRecordsArgs(**kwargs)
+            args = FindRecordsArgs(**kwargs)
             # Convert RecordData to dict
             record_data = args.record_data.model_dump()
             results = await self.db.search_similar_records(
@@ -603,5 +603,5 @@ class FindRecords(BaseDBOperator):
             )
             return [record.model_dump() for record in results]
         except Exception as e:
-            logger.error(f"Error in FindRecordsByDescriptionOperator with args {kwargs}: {str(e)}", exc_info=True)
+            logger.error(f"Error in FindRecords with args {kwargs}: {str(e)}", exc_info=True)
             raise

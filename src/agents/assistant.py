@@ -24,6 +24,7 @@ from agents.tools.database_operator import (
     DeleteDatasetOperator,
     DeleteFieldOperator,
     DeleteRecordOperator,
+    FindDatasetOperator,
     FindRecords,
     GetAllRecordsOperator,
     GetDatasetOperator,
@@ -71,6 +72,9 @@ SEMANTIC RECORD SEARCH (CRITICAL):
 
 DATA STORAGE FEEDBACK:
 - Always provide clear feedback when storing, modifying, or deleting user data.
+- *ALWAYS INFORM USERS ABOUT THE FINAL STATE OF THE DATABASE AFTER OPERATIONS* in a conversational manner:
+  - For newly created datasets, provide the schema.
+  - For record operations, summarize what was stored/modified/deleted.
 - Summarize the stored information so the user can verify its accuracy.
 - Offer the user an option to modify or correct the stored details immediately.
 - If a record is ambiguous or there are multiple possible matches, ask the user for clarification before making changes.
@@ -91,7 +95,7 @@ COMMUNICATION GUIDELINES:
 
 WHATSAPP FORMATTING (CRITICAL):
 ONLY use WhatsApp-supported formatting. Markdown formatting is NOT supported and should NOT be used:
-- *Bold*: single asterisks (*bold*) - NOT double asterisks like markdown
+- *Bold*: single asterisks (*bold*) - NOT double asterisks like Markdown. Incorrect formatting: **bold**
 - _Italic_: single underscores (_italic_)
 - ~Strikethrough~: single tildes (~strikethrough~)
 - `Monospace`: single backticks for inline code, triple backticks for code blocks
@@ -115,8 +119,7 @@ USER-FACING RESPONSIBILITIES:
 TOOLS TO USE FOR ANY DATABASE OPERATIONS:
 Immediately execute these tools whenever any information/data changes occur:
 - Dataset operations:
-  - create_dataset, update_dataset, delete_dataset
-  - list_datasets, get_dataset
+  - list_datasets, get_dataset, create_dataset, update_dataset, delete_dataset
 - Field operations:
   - add_field, update_field, delete_field
 - Record operations:
@@ -129,12 +132,12 @@ Immediately execute these tools whenever any information/data changes occur:
     * Can take a query to pre-filter on non-string fields before semantic search
       - query_records ONLY for non-string fields or when exact matching is explicitly requested
     * Set serialize_records=True ONLY when responding directly to user queries about records
-      - This will include an excel file attached to the message with all the records from the query when there are more than a few records
+      - This will include an CSV file attached to the message with all the records from the query when there are more than a few records
       - Should only be used when we want to return a list of records to the user (not during intermediate steps)
       - query_records returns a tuple (results, serialize_records) - check serialize_records to know if a file was attached
       - If =True, the assistant MUST EXPLICITLY state in the message:
         1. That it attached a file with ALL records.
-        2. Clearly indicate that the results shown in the message are only a PARTIAL list, and that the COMPLETE list is in the attached Excel file.
+        2. Clearly indicate that the results shown in the message are only a PARTIAL list, and that the COMPLETE list is in the attached CSV file.
     * For intermediate processing steps, use serialize_records=False (default) to ensure you work with all records directly
     * Aggregation results are always returned in full regardless of serialize_records setting
 - temporal_reference_resolver for datetime conversion: Use accurate datetime conversion for natural language time expressions.
@@ -207,6 +210,7 @@ class Assistant:
             GetDatasetOperator(db),
             # GetDatasetSchemaOperator(db),
             # GetAllRecordsOperator(db),
+            # FindDatasetOperator(db),
             CreateRecordOperator(db),
             UpdateRecordOperator(db),
             DeleteRecordOperator(db),

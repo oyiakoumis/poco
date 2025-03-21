@@ -62,7 +62,7 @@ class DatasetManager:
     # Vector search configuration
     VECTOR_SEARCH_CONFIG = {
         "MODEL": "text-embedding-3-large",
-        "INDEX_NAME": "vector_search_datasets",
+        "INDEX_NAME": "vector_search_items",
         "FIELD_NAME": "embedding",
         "DIMENSION": 3072,  # 1536 for text-embedding-3-small and 3072 for text-embedding-3-large
         "NUM_CANDIDATES_MULTIPLIER": 5,
@@ -217,7 +217,7 @@ class DatasetManager:
     async def _create_record_vector_search_index(self) -> None:
         """Create vector search index for records if it doesn't exist and ensure it's ready."""
         await self._create_vector_search_index_generic(
-            collection=self._records, index_name="vector_search_records", entity_type="record", dimension=self.VECTOR_SEARCH_CONFIG["DIMENSION"]
+            collection=self._records, index_name=self.VECTOR_SEARCH_CONFIG["INDEX_NAME"], entity_type="record", dimension=self.VECTOR_SEARCH_CONFIG["DIMENSION"]
         )
 
     def _prepare_dataset_text_for_embedding(self, dataset: Dataset) -> str:
@@ -1030,7 +1030,7 @@ class DatasetManager:
         index_name: str,
         entity_type: str,
         user_id: str,
-        query_embedding: List[float],
+        embedding: List[float],
         limit: int = 20,
         min_score: Optional[float] = None,
         query: Optional[SimilarityQuery] = None,
@@ -1042,15 +1042,13 @@ class DatasetManager:
             logger.info(f"Searching similar {entity_type}s for user {user_id}")
 
             vector_search_limit = limit * 3  # Get more results than needed for post-filtering
-            num_candidates = min(vector_search_limit * self.VECTOR_SEARCH_CONFIG["NUM_CANDIDATES_MULTIPLIER"], 10000)
 
             # Build vector search stage with ONLY user_id and dataset_id pre-filtering
             vector_search_stage = {
                 "$vectorSearch": {
                     "index": index_name,
                     "path": self.VECTOR_SEARCH_CONFIG["FIELD_NAME"],
-                    "queryVector": query_embedding,
-                    # "numCandidates": num_candidates,
+                    "queryVector": embedding,
                     "limit": vector_search_limit,  # Get more results for post-filtering
                     "exact": True,
                 }
@@ -1111,7 +1109,14 @@ class DatasetManager:
             pipeline.append({"$limit": limit})
 
             # Remove score from final results
-            pipeline.append({"$project": {"score": 0, self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0}})
+            pipeline.append(
+                {
+                    "$project": {
+                        "score": 0,
+                        self.VECTOR_SEARCH_CONFIG["FIELD_NAME"]: 0,
+                    }
+                }
+            )
 
             # Execute search
             results = []
@@ -1132,18 +1137,13 @@ class DatasetManager:
         self,
         user_id: str,
         dataset: Dataset,
-        limit: int = 10,
+        limit: int = 20,
         min_score: Optional[float] = None,
-        query: Optional[SimilarityQuery] = None,
     ) -> List[Dataset]:
         """Find similar datasets using vector search."""
         try:
             # Generate embedding from dataset
-            query_embedding = await self._generate_dataset_embedding(dataset)
-
-            # Validate query against schema if provided
-            if query:
-                query.validate_with_schema(dataset.dataset_schema)
+            embedding = await self._generate_dataset_embedding(dataset)
 
             # Use generic search method
             return await self._search_similar_entities_generic(
@@ -1151,15 +1151,13 @@ class DatasetManager:
                 index_name=self.VECTOR_SEARCH_CONFIG["INDEX_NAME"],
                 entity_type="dataset",
                 user_id=user_id,
-                query_embedding=query_embedding,
+                embedding=embedding,
                 limit=limit,
                 min_score=min_score,
-                query=query,
                 model_class=Dataset,
             )
-
         except Exception as e:
-            raise DatabaseError(f"Failed to perform dataset vector search: {str(e)}")
+            raise DatabaseError(f"Failed to perform record vector search: {str(e)}")
 
     async def search_similar_records(
         self,
@@ -1188,10 +1186,10 @@ class DatasetManager:
             # Use generic search method
             return await self._search_similar_entities_generic(
                 collection=self._records,
-                index_name="vector_search_records",
+                index_name=self.VECTOR_SEARCH_CONFIG["INDEX_NAME"],
                 entity_type="record",
                 user_id=user_id,
-                query_embedding=query_embedding,
+                embedding=query_embedding,
                 limit=limit,
                 min_score=min_score,
                 query=query,

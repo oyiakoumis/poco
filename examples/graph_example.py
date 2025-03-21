@@ -16,7 +16,7 @@ async def main():
             configurable={"thread_id": "1", "user_id": "whatsapp:+971565312695", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25
         )
 
-        messages = [HumanMessage(content="can you show me all my tasks with High priority please?")]
+        messages = [HumanMessage(content="an you show me all my tasks with High priority please?")]
 
         for message in messages:
             print_event((), {"Human": {"messages": [message]}})
