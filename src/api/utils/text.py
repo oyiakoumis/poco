@@ -40,10 +40,12 @@ def format_message(user_message: str, response: str, message_type: MessageType =
 
     formatted_message = f"> {trimmed_user_message}\n"
 
-    if message_type == MessageType.PROCESSING:
-        formatted_message += f"`🔄 {response}`"
-    elif message_type == MessageType.ERROR:
-        formatted_message += f"`❌ {response}`"
+    if message_type in (MessageType.PROCESSING, MessageType.ERROR):
+        emoji = "❌" if message_type == MessageType.ERROR else "🔄"
+        if "\n" in response:
+            formatted_message += f"```\n{emoji} {response}\n```"
+        else:
+            formatted_message += f"`{emoji} {response}`"
     else:
         formatted_message += f"{response}"
 
@@ -56,7 +58,6 @@ def build_notification_string(flags: dict) -> str:
     Args:
         flags: Dictionary of notification flags
             - new_conversation: True if a new conversation was created
-            - unsupported_media: True if unsupported media was received
             - long_chat: True if the chat exceeds the token limit
 
     Returns:
@@ -65,8 +66,6 @@ def build_notification_string(flags: dict) -> str:
     parts = []
     if flags.get("new_conversation"):
         parts.append("🆕 New chat")
-    if flags.get("unsupported_media"):
-        parts.append("📝 Images only")
     if flags.get("long_chat"):
         parts.append("🧵 Long chat")
 

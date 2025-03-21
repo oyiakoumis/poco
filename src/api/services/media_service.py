@@ -192,25 +192,62 @@ class MediaService:
 
         return media_items
 
-    async def has_unsupported_media(self, request: Request, num_media: int) -> bool:
-        """Check if the message contains unsupported media types.
+    async def validate_media(self, request: Request, num_media: int) -> Tuple[bool, Optional[str]]:
+        """Validate media items in a WhatsApp message.
+
+        Checks:
+        - Only supported image types (PNG, JPEG/JPG, non-animated GIF)
+        - Maximum 10 images
+        - Maximum 5MB per image
 
         Args:
             request: The FastAPI request object
             num_media: The number of media items in the message
 
         Returns:
-            True if the message contains unsupported media, False otherwise
+            Tuple of (is_valid, error_message)
         """
         if not num_media:
-            return False
+            return True, None
+
+        # Check if there are too many images
+        if num_media > 10:
+            return False, f"Too many images. Maximum allowed is 10, but received {num_media}."
 
         try:
             form_data = await request.form()
-            return any(not form_data.get(f"MediaContentType{i}").startswith("image/") for i in range(num_media))
+
+            for i in range(num_media):
+                media_type = form_data.get(f"MediaContentType{i}")
+
+                # Check if it's an image
+                if not media_type or not media_type.startswith("image/"):
+                    return False, f"Unsupported media type: {media_type}. Only images are supported."
+
+                # Check if it's a supported image type
+                supported_types = ["image/png", "image/jpeg", "image/jpg", "image/gif"]
+                if media_type not in supported_types:
+                    return False, f"Unsupported image format: {media_type}. Supported formats are PNG, JPEG, and GIF."
+
+                # Download the media to check its size
+                media_url = form_data.get(f"MediaUrl{i}")
+                if media_url:
+                    async with httpx.AsyncClient() as client:
+                        auth = (settings.twilio_account_sid, settings.twilio_auth_token)
+                        # Just get the headers to check content length
+                        media_response = await client.head(media_url, auth=auth, follow_redirects=True)
+
+                        # Check file size (5MB = 5 * 1024 * 1024 bytes)
+                        content_length = int(media_response.headers.get("content-length", 0))
+                        max_size = 5 * 1024 * 1024  # 5MB in bytes
+
+                        if content_length > max_size:
+                            return False, f"Image size exceeds maximum allowed (5MB). Image {i+1} is {content_length / (1024 * 1024):.2f}MB."
+
+            return True, None
         except Exception as e:
-            logger.error(f"Error checking for unsupported media: {str(e)}")
-            return False
+            logger.error(f"Error validating media: {str(e)}")
+            return False, f"Error validating media: {str(e)}"
 
     async def _upload_from_url(self, media_url: str, content_type: str) -> str:
         """Upload media from a URL to Azure Blob Storage.

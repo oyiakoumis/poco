@@ -348,7 +348,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             if not result:
                 return [], False
 
-            # Handle record IDs - don't create CSV file for these
+            # Handle record IDs - don't create Excel file for these
             if isinstance(result[0], str):  # Record IDs
                 return result, False
 
@@ -360,7 +360,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             else:  # Record objects
                 processed_result = [record.model_dump() for record in result]
 
-            # Only create CSV attachment if serialize_records is True
+            # Only create Excel attachment if serialize_records is True
             # and we're dealing with record objects (not aggregation results)
             if args.serialize_records and len(processed_result) > self.MAX_TRUNCATED_RECORDS:
                 # Create CSV file
@@ -400,7 +400,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
                     filename = f"{processed_dataset_name}_{short_uuid}.csv"
 
                     # Truncate result to MAX_TRUNCATED_RECORDS items
-                    truncated_result = processed_result[:self.MAX_TRUNCATED_RECORDS]
+                    truncated_result = processed_result[: self.MAX_TRUNCATED_RECORDS]
 
                     # Return truncated result and flag indicating CSV file was added
                     return Command(

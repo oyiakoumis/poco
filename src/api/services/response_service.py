@@ -23,19 +23,18 @@ class ResponseService:
         self.twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token, http_client=http_client)
         self.media_service = MediaService()
 
-    async def send_acknowledgment(self, to_number: str, user_message: str, new_conversation: bool = False, unsupported_media: bool = False) -> None:
+    async def send_acknowledgment(self, to_number: str, user_message: str, new_conversation: bool = False) -> None:
         """Send an acknowledgment message to the user.
 
         Args:
             to_number: The phone number to send the message to
             user_message: The original user message
             new_conversation: Whether a new conversation was created
-            unsupported_media: Whether unsupported media was received
         """
         response_message = "`🚀 Got it! Just give me a second...`"
 
         # Build concise notification string if needed
-        notification_str = build_notification_string({"new_conversation": new_conversation, "unsupported_media": unsupported_media})
+        notification_str = build_notification_string({"new_conversation": new_conversation})
 
         if notification_str:
             response_message += f"\n\n`{notification_str}`"

@@ -94,10 +94,18 @@ async def process_whatsapp_message(
         num_media = int(NumMedia) if NumMedia is not None else 0
 
         # Check for unsupported media
-        unsupported_media = await media_service.has_unsupported_media(request, num_media)
+        is_valid_media, media_error = await media_service.validate_media(request, num_media)
+        if not is_valid_media:
+            logger.info(f"Invalid media received from {From}: {media_error}")
+            await response_formatter.send_error(
+                to_number,
+                Body,
+                f"I couldn't process the media you sent.\n\nHere's what I can work with:\n- Images only: PNG, JPEG, or non-animated GIF\n- Up to 10 images\n- Each image should be under 5MB\n\nPlease try again with supported media!",
+            )
+            return Response(status_code=status.HTTP_400_BAD_REQUEST)
 
         # Send immediate acknowledgment
-        await response_formatter.send_acknowledgment(to_number, Body, new_conversation=new_conversation_created, unsupported_media=unsupported_media)
+        await response_formatter.send_acknowledgment(to_number, Body, new_conversation=new_conversation_created)
 
         # Process media
         media_items = await media_service.process_media(request, num_media)
@@ -108,7 +116,6 @@ async def process_whatsapp_message(
             "sms_message_sid": SmsMessageSid,
             "media_count": len(media_items),
             "media_items": media_items,
-            "unsupported_media": unsupported_media,
         }
 
         # Prepare new messages
