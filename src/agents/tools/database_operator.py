@@ -1,7 +1,6 @@
 import asyncio
 from typing import Annotated, Any, Dict, List, Optional, Tuple, Type, Union
 
-from utils.xslx_serializer import serialize_to_xlsx
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolCallId
@@ -15,6 +14,7 @@ from database.document_store.models.query import RecordQuery, SimilarityQuery
 from database.document_store.models.schema import DatasetSchema
 from models.base import PydanticUUID
 from utils.logging import logger
+from utils.xslx_serializer import serialize_to_xlsx
 
 
 class RecordData(BaseModel):

@@ -107,6 +107,10 @@ class ResponseService:
         # Calculate the total number of parts needed (capped at max_parts)
         total_parts = min(max_parts, (len(message) + max_length - 1) // max_length)
 
+        # Reserve space for part indicator (e.g., "[1/3] ")
+        part_indicator_length = len(f" [{total_parts}/{total_parts}]")
+        effective_max_length = max_length - part_indicator_length
+
         parts = []
         remaining = message
         part_count = 0
@@ -115,26 +119,28 @@ class ResponseService:
             part_count += 1
 
             # If this is the last allowed part or the remaining text fits in one part
-            if part_count == max_parts or len(remaining) <= max_length:
+            if part_count == max_parts or len(remaining) <= effective_max_length:
                 # For the last part, if we're truncating, add an indicator
-                if part_count == max_parts and len(remaining) > max_length:
-                    part = remaining[: max_length - 30] + "... (message truncated)"
+                if part_count == max_parts and len(remaining) > effective_max_length:
+                    part = remaining[: effective_max_length - 30] + "... (message truncated)"
                 else:
-                    part = remaining[:max_length]
+                    part = remaining[:effective_max_length]
+
+                # Add part indicator
                 parts.append(f"{part} ({part_count}/{total_parts})")
                 break
 
             # Find a good breaking point (preferably at a paragraph or sentence)
-            cut_point = min(max_length, len(remaining))
+            cut_point = min(effective_max_length, len(remaining))
 
             # Try to break at a paragraph
             paragraph_break = remaining[:cut_point].rfind("\n\n")
-            if paragraph_break > max_length * 0.5:  # Only use if it's not too short
+            if paragraph_break > effective_max_length * 0.5:  # Only use if it's not too short
                 cut_point = paragraph_break + 2  # Include the newlines
             else:
                 # Try to break at a sentence
                 sentence_break = remaining[:cut_point].rfind(". ")
-                if sentence_break > max_length * 0.5:  # Only use if it's not too short
+                if sentence_break > effective_max_length * 0.5:  # Only use if it's not too short
                     cut_point = sentence_break + 2  # Include the period and space
                 else:
                     # Fall back to breaking at a space
@@ -143,7 +149,7 @@ class ResponseService:
                         cut_point = space_break + 1  # Include the space
 
             part = remaining[:cut_point]
-            # Add part number indicator with correct total
+            # Add part number indicator
             parts.append(f"{part} ({part_count}/{total_parts})")
             remaining = remaining[cut_point:]
 
@@ -191,23 +197,26 @@ class ResponseService:
             file_attachments: Optional list of file attachments to send
         """
         try:
-            # Prepare media_urls if file attachments are provided
+            # Prepare media_url if file attachments are provided (only use the first attachment)
             media_urls = []
-            if file_attachments:
-                for attachment in file_attachments:
-                    content_type = attachment.get("content_type")
-                    content = attachment.get("content")
-                    filename = attachment.get("filename", "attachment")
-                    media_url = await self.media_service.prepare_outgoing_attachment(content=content, filename=filename, content_type=content_type)
-                    media_urls.append(media_url)
-                logger.info(f"Sending message with {len(media_urls)} file attachment(s) to {to_number}")
+            if file_attachments and len(file_attachments) > 0:
+                # Only process the first attachment
+                attachment = file_attachments[0]
+                content_type = attachment.get("content_type")
+                content = attachment.get("content")
+                filename = attachment.get("filename", "attachment")
+                media_url = await self.media_service.prepare_outgoing_attachment(content=content, filename=filename, content_type=content_type)
+                media_urls.append(media_url)
+                logger.info(f"Sending message with first file attachment to {to_number}")
+                if len(file_attachments) > 1:
+                    logger.warning(f"Ignoring {len(file_attachments) - 1} additional attachment(s) as only the first one is used")
 
             # Check message length before sending
             if len(message_body) > settings.twilio_max_message_length:
                 logger.warning(f"Message exceeds Twilio's 1600 character limit: {len(message_body)} chars")
 
-                # Split the message into multiple parts (max 10)
-                message_parts = self._split_message(message_body, max_length=settings.twilio_max_message_length, max_parts=10)
+                # Split the message into multiple parts
+                message_parts = self._split_message(message_body, max_length=settings.twilio_max_message_length - 50, max_parts=10)
                 logger.info(f"Splitting message into {len(message_parts)} parts")
 
                 # Send each part (only attach files to the first part)
