@@ -1,17 +1,13 @@
 import asyncio
-import base64
-import io
 from typing import Annotated, Any, Dict, List, Optional, Tuple, Type, Union
-from uuid import uuid4
 
-import pandas as pd
+from utils.csv_serializer import serialize_to_csv
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolCallId
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-from agents.state import State
 from database.document_store import DatasetManager
 from database.document_store.models.dataset import Dataset
 from database.document_store.models.field import SchemaField
@@ -27,6 +23,14 @@ class RecordData(BaseModel):
     model_config = {
         "extra": "allow",  # Allow extra fields not defined in the model
     }
+
+
+class ListDatasetsArgs(BaseModel):
+    serialize_results: bool = Field(
+        default=False,
+        description="If True, includes a CSV file attached to the message with ALL datasets. This should ONLY be used when returning a list of datasets directly to the user (not during intermediate steps). When True, returns a partial list of the first datasets, with the full list in the CSV file. The assistant should always mention the attachment in the message.",
+    )
+    tool_call_id: Annotated[str, InjectedToolCallId]
 
 
 class DatasetArgs(BaseModel):
@@ -158,15 +162,62 @@ class BaseInjectedToolCallIdDBOperator(BaseDBOperator):
 
 
 # List Dataset Operator
-class ListDatasetsOperator(BaseDBOperator):
-    name: str = "list_datasets"
-    description: str = "List all datasets"
+class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
+    MAX_TRUNCATED_DATASETS: int = 25  # Maximum number of datasets to show in truncated result
 
-    async def _arun(self, config: RunnableConfig) -> List[Dict[str, Any]]:
+    name: str = "list_datasets"
+    description: str = (
+        "List all datasets. "
+        "Set serialize_results=True ONLY when responding directly to user queries - this will include a CSV file with ALL datasets and return a PARTIAL list. "
+        "When serialize_results=True, you MUST explicitly state in your response that: "
+        "1. The results shown are only a PARTIAL list of datasets, and "
+        "2. The COMPLETE list of ALL datasets is available in the attached CSV file. "
+        "For intermediate processing steps, use serialize_results=False (default) to get complete results. "
+        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if a CSV file was attached to the state."
+    )
+    args_schema: Type[BaseModel] = ListDatasetsArgs
+
+    async def _arun(self, config: RunnableConfig, tool_call_id: Annotated[str, InjectedToolCallId], **kwargs) -> Tuple[List[Dict[str, Any]], bool]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
+            args = ListDatasetsArgs(**kwargs, tool_call_id=tool_call_id)
             datasets = await self.db.list_datasets(user_id)
-            return [{"id": str(dataset.id), "name": dataset.name, "description": dataset.description} for dataset in datasets]
+
+            if not datasets:
+                return [], False
+
+            processed_result = [{"id": str(dataset.id), "name": dataset.name, "description": dataset.description} for dataset in datasets]
+
+            # Only create an attachment if serialize_results is True
+            # and we have more datasets than the truncation limit
+            if args.serialize_results and len(processed_result) > self.MAX_TRUNCATED_DATASETS:
+                # Create CSV file
+                try:
+                    # Prepare data for CSV
+                    data_for_csv = [{"name": item["name"], "description": item["description"]} for item in processed_result]
+
+                    # Serialize to CSV
+                    csv_result = serialize_to_csv(data_for_csv, "Datasets")
+
+                    # Truncate result to MAX_TRUNCATED_DATASETS items
+                    truncated_result = processed_result[: self.MAX_TRUNCATED_DATASETS]
+
+                    # Return truncated result and flag indicating CSV file was added
+                    return Command(
+                        update={
+                            "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
+                            "export_file_attachment": csv_result,
+                        }
+                    )
+
+                except Exception as e:
+                    logger.error(f"Error creating CSV file: {str(e)}", exc_info=True)
+                    # If CSV creation fails, return the full result
+                    return processed_result, False
+
+            # Return the full result if serialize_results is False or result length is MAX_TRUNCATED_DATASETS or less
+            return processed_result, False
+
         except Exception as e:
             logger.error(f"Error in ListDatasetsOperator: {str(e)}", exc_info=True)
             raise
@@ -365,39 +416,15 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             if args.serialize_results and len(processed_result) > self.MAX_TRUNCATED_RECORDS:
                 # Create CSV file
                 try:
-                    # Convert result to DataFrame
-                    df = pd.DataFrame([record["data"] for record in processed_result])
-
-                    # Create BytesIO object to store CSV file
-                    csv_buffer = io.BytesIO()
-
-                    # Write DataFrame to CSV file
-                    df.to_csv(csv_buffer, index=False)
-
-                    # Get file size
-                    file_size = csv_buffer.tell()
-
-                    # Check if file size exceeds 16MB
-                    if file_size > 16 * 1024 * 1024:  # 16MB in bytes
-                        logger.error(f"CSV file size ({file_size} bytes) exceeds 16MB limit")
-                        raise ValueError("CSV file size exceeds 16MB limit. Please refine your query to return fewer records.")
-
-                    # Reset buffer position
-                    csv_buffer.seek(0)
+                    # Extract data for CSV
+                    data_for_csv = [record["data"] for record in processed_result]
 
                     # Get dataset name
                     dataset = await self.db.get_dataset(user_id, args.dataset_id)
                     dataset_name = dataset.name
 
-                    # Replace spaces and special characters with underscores
-                    processed_dataset_name = "".join(c if c.isalnum() or c in "_-" else "_" for c in dataset_name)
-
-                    # Truncate to 20 characters or less
-                    processed_dataset_name = processed_dataset_name[:20]
-
-                    # Add file to state with dataset name
-                    short_uuid = str(uuid4())[:8]  # Use shorter UUID
-                    filename = f"{processed_dataset_name}_{short_uuid}.csv"
+                    # Serialize to CSV
+                    csv_result = serialize_to_csv(data_for_csv, dataset_name)
 
                     # Truncate result to MAX_TRUNCATED_RECORDS items
                     truncated_result = processed_result[: self.MAX_TRUNCATED_RECORDS]
@@ -406,12 +433,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
                     return Command(
                         update={
                             "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
-                            "export_file_attachment": {
-                                "filename": filename,
-                                "content_type": "text/csv",
-                                "content": base64.b64encode(csv_buffer.getvalue()).decode("utf-8"),
-                                "size": file_size,
-                            },
+                            "export_file_attachment": csv_result,
                         }
                     )
 
@@ -566,7 +588,9 @@ class GetAllRecordsOperator(BaseDBOperator):
 
 class FindDatasetOperator(BaseDBOperator):
     name: str = "find_dataset"
-    description: str = "Find a dataset in the database. Creates the hypothetical dataset that you are looking for, and find candidates for this dataset using vector search."
+    description: str = (
+        "Find a dataset in the database. Creates the hypothetical dataset that you are looking for, and find candidates for this dataset using vector search."
+    )
     args_schema: Type[BaseModel] = FindDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
