@@ -7,7 +7,6 @@ from langchain_core.messages import (
     ToolMessage,
     trim_messages,
 )
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import create_react_agent
@@ -191,7 +190,7 @@ GENERAL KNOWLEDGE QUERIES:
 
 
 class Assistant:
-    MODEL_NAME = "gpt-4o"
+    MODEL_NAME = "gpt-4o-mini"
     TOKEN_LIMIT = 128000
     MAX_RETRIES = 3  # Define as class constant
     TEMPERATURE = 0

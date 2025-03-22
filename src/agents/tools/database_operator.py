@@ -34,72 +34,72 @@ class ListDatasetsArgs(BaseModel):
 
 
 class DatasetArgs(BaseModel):
-    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
+    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", examples=["507f1f77bcf86cd799439011"])
 
 
 class RecordArgs(DatasetArgs):
     record_id: PydanticUUID = Field(
-        description="Unique identifier for the record within the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439012"]}
+        description="Unique identifier for the record within the dataset", examples=["507f1f77bcf86cd799439012"]
     )
 
 
 class CreateDatasetArgs(BaseModel):
-    name: str = Field(description="Name of the dataset to be created", min_length=1, max_length=100, json_schema_extra={"examples": ["Customer Feedback"]})
+    name: str = Field(description="Name of the dataset to be created", min_length=1, max_length=100, examples=["Customer Feedback"])
     description: str = Field(
         description="Detailed description of the dataset's purpose and contents",
         min_length=1,
         max_length=500,
-        example="Collection of customer feedback responses from Q1 2024",
+        examples="Collection of customer feedback responses from Q1 2024",
     )
     dataset_schema: DatasetSchema = Field(
         description="List of field definitions that describe the schema of the dataset",
-        example=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
+        examples=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
     )
 
 
 class UpdateDatasetArgs(DatasetArgs):
-    name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, json_schema_extra={"examples": ["Customer Feedback 2024"]})
+    name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, examples=["Customer Feedback 2024"])
     description: str = Field(
         description="Updated description for the dataset",
         min_length=1,
         max_length=500,
-        example="Updated collection of customer feedback responses from Q1 2024",
+        examples="Updated collection of customer feedback responses from Q1 2024",
     )
 
 
 class CreateRecordArgs(DatasetArgs):
     data: RecordData = Field(
         description="Record data that matches the dataset's defined schema",
-        example={"feedback_text": "Great product, but needs better documentation", "rating": 4},
+        examples={"feedback_text": "Great product, but needs better documentation", "rating": 4},
     )
 
 
 class UpdateRecordArgs(RecordArgs):
     data: RecordData = Field(
         description="Updated record data that matches the dataset's defined schema",
-        example={"feedback_text": "Great product, documentation has improved", "rating": 5},
+        examples={"feedback_text": "Great product, documentation has improved", "rating": 5},
     )
 
 
 class BatchCreateRecordsArgs(DatasetArgs):
     records: List[RecordData] = Field(
         description="List of record data objects that match the dataset's defined schema",
-        example=[{"feedback_text": "Great product, but needs better documentation", "rating": 4}, {"feedback_text": "Works well, very intuitive", "rating": 5}],
+        examples=[{"feedback_text": "Great product, but needs better documentation", "rating": 4}, {"feedback_text": "Works well, very intuitive", "rating": 5}],
         min_items=1,
     )
 
 
 class RecordUpdate(BaseModel):
-    record_id: PydanticUUID = Field(description="Unique identifier for the record to update", json_schema_extra={"examples": ["507f1f77bcf86cd799439012"]})
+    record_id: PydanticUUID = Field(description="Unique identifier for the record to update", examples=["507f1f77bcf86cd799439012"])
     data: RecordData = Field(
-        description="Updated record data that matches the dataset's defined schema", example={"feedback_text": "Updated feedback", "rating": 5}
+        description="Updated record data that matches the dataset's defined schema", examples={"feedback_text": "Updated feedback", "rating": 5}
     )
 
 
 class BatchUpdateRecordsArgs(DatasetArgs):
     records: List[RecordUpdate] = Field(
         description="List of record updates, each containing record_id and data",
-        example=[
+        examples=[
             {"record_id": "507f1f77bcf86cd799439012", "data": {"feedback_text": "Updated feedback", "rating": 5}},
             {"record_id": "507f1f77bcf86cd799439013", "data": {"feedback_text": "Another update", "rating": 4}},
         ],
@@ -109,7 +109,7 @@ class BatchUpdateRecordsArgs(DatasetArgs):
 
 class BatchDeleteRecordsArgs(DatasetArgs):
     record_ids: List[PydanticUUID] = Field(
-        description="List of record IDs to delete from the dataset", example=["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"], min_items=1
+        description="List of record IDs to delete from the dataset", examples=["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"], min_items=1
     )
 
 
@@ -117,7 +117,7 @@ class QueryRecordsArgs(DatasetArgs):
     query: Optional[RecordQuery] = Field(
         default=None,
         description="Optional query parameters to filter, sort, or aggregate records",
-        example={"filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}}, "sort": {"created_at": False}},
+        examples={"filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}}, "sort": {"created_at": False}},
     )
     ids_only: bool = Field(
         default=False,
@@ -561,12 +561,12 @@ class FindDatasetArgs(BaseModel):
 
 
 class FindRecordsArgs(BaseModel):
-    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", json_schema_extra={"examples": ["507f1f77bcf86cd799439011"]})
+    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", examples=["507f1f77bcf86cd799439011"])
     record_data: RecordData = Field(description="Hypothetical record data to search in the dataset.")
     query: Optional[SimilarityQuery] = Field(
         default=None,
         description="Optional query parameters to pre-filter records on non-string fields before semantic search",
-        example={"filter": {"field": "status", "operator": "eq", "value": "active"}},
+        examples={"filter": {"field": "status", "operator": "eq", "value": "active"}},
     )
 
 

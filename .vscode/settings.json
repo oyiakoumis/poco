@@ -27,6 +27,7 @@
     "servicebus",
     "spreadsheetml",
     "sseclient",
-    "twiml"
+    "twiml",
+    "xslx"
   ]
 }
