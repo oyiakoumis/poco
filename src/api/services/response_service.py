@@ -1,5 +1,6 @@
 """Response formatting utilities for WhatsApp messages."""
 
+import asyncio
 import base64
 from typing import Any, Dict, Optional
 
@@ -178,11 +179,25 @@ class ResponseService:
                 for i, part in enumerate(message_parts):
                     # Only include media_url with the first part
                     part_media_url = media_url if i == 0 else None
-                    await self.twilio_client.messages.create_async(body=part, from_=settings.twilio_phone_number, to=to_number, media_url=[part_media_url])
-                    logger.info(f"Sent part {i+1}/{len(message_parts)} to {to_number}")
+                    message = await self.twilio_client.messages.create_async(
+                        body=part, 
+                        from_=settings.twilio_phone_number, 
+                        to=to_number, 
+                        media_url=[part_media_url] if part_media_url else None
+                    )
+                    logger.info(f"Sent part {i+1}/{len(message_parts)} to {to_number} (SID: {message.sid})")
+                    
+                    # Add a small delay between messages to help maintain order
+                    if i < len(message_parts) - 1:
+                        await asyncio.sleep(0.5)  # 500ms delay between messages
             else:
                 # Send as a single message
-                await self.twilio_client.messages.create_async(body=message_body, from_=settings.twilio_phone_number, to=to_number, media_url=[media_url])
+                await self.twilio_client.messages.create_async(
+                    body=message_body, 
+                    from_=settings.twilio_phone_number, 
+                    to=to_number, 
+                    media_url=[media_url] if media_url else None
+                )
         except TwilioRestException as e:
             logger.error(f"Error sending message to {to_number}: {e.msg}")
             raise
