@@ -149,6 +149,39 @@ class ResponseService:
 
         return parts
 
+    async def _wait_for_message_delivery(self, message_sid: str, timeout: int = 10, poll_interval: float = 0.5):
+        """Wait for a message to be processed enough to send the next message."""
+        start_time = asyncio.get_event_loop().time()
+
+        while asyncio.get_event_loop().time() - start_time < timeout:
+            try:
+                # Fetch the message status
+                message = await self.twilio_client.messages(message_sid).fetch_async()
+                status = message.status
+
+                logger.debug(f"Message {message_sid} status: {status}")
+
+                # Consider "sent" or "delivered" as processed enough to continue
+                if status in ["sent", "delivered"]:
+                    logger.info(f"Message {message_sid} processed with status: {status}")
+                    return
+
+                # Log but continue for failed states
+                if status in ["failed", "undelivered"]:
+                    logger.error(f"Message {message_sid} has failed status")
+                    raise Exception(f"Message {message_sid} failed to deliver")
+
+                # Wait before checking again
+                await asyncio.sleep(poll_interval)
+
+            except TwilioRestException as e:
+                logger.error(f"Error checking message status for {message_sid}: {e.msg}")
+                # Continue with next message even on error
+                return
+
+        logger.warning(f"Timed out waiting for message {message_sid} status, continuing with next message")
+        return
+
     async def _send_message(self, to_number: str, message_body: str, file_attachments: Optional[List[Dict[str, Any]]] = None) -> None:
         """Send a message using the Twilio client, optionally with file attachments.
 
@@ -186,14 +219,18 @@ class ResponseService:
                     )
                     logger.info(f"Sent part {i+1}/{len(message_parts)} to {to_number} (SID: {message.sid})")
 
-                    # Add a small delay for message containing media to preserve order
+                    # Wait for message delivery if it contains media to preserve order
                     if part_media_urls:
-                        await asyncio.sleep(1)
+                        await self._wait_for_message_delivery(message.sid)
             else:
                 # Send as a single message
-                await self.twilio_client.messages.create_async(
+                message = await self.twilio_client.messages.create_async(
                     body=message_body, from_=settings.twilio_phone_number, to=to_number, media_url=media_urls if media_urls else None
                 )
+
+                # If message contains media, wait for delivery confirmation
+                if media_urls:
+                    await self._wait_for_message_delivery(message.sid)
         except TwilioRestException as e:
             logger.error(f"Error sending message to {to_number}: {e.msg}")
             raise

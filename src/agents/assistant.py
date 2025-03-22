@@ -61,9 +61,9 @@ SEMANTIC RECORD SEARCH (CRITICAL):
 - For finding records:
   - Use find_records (semantic search) by DEFAULT for ANY search involving string fields
   - Use query_records ONLY for non-string fields (dates, numbers, booleans, select fields) or when user explicitly requests exact matching
-  - ALWAYS call get_dataset FIRST to retrieve the dataset schema before using find_records or query_records
+  - ALWAYS call find_dataset FIRST to retrieve the dataset schema before using find_records or query_records
 - When users request to create, update, or delete records:
-  1. IMPORTANT: First call get_dataset to retrieve the dataset schema
+  1. IMPORTANT: First call find_dataset to retrieve the dataset schema
   2. For find_records, create the hypothetical record you are looking for using the dataset schema
   3. Use find_records to find candidates for the record you are looking for. (can pre-filter on non-string fields first)
   4. For create operations: avoid creating duplicates by checking the existing records first
@@ -119,7 +119,7 @@ USER-FACING RESPONSIBILITIES:
 TOOLS TO USE FOR ANY DATABASE OPERATIONS:
 Immediately execute these tools whenever any information/data changes occur:
 - Dataset operations:
-  - list_datasets, get_dataset, create_dataset, update_dataset, delete_dataset
+  - find_datasets, list_datasets, get_dataset, create_dataset, update_dataset, delete_dataset
 - Field operations:
   - add_field, update_field, delete_field
 - Record operations:
@@ -210,7 +210,7 @@ class Assistant:
             GetDatasetOperator(db),
             # GetDatasetSchemaOperator(db),
             # GetAllRecordsOperator(db),
-            # FindDatasetOperator(db),
+            FindDatasetOperator(db),
             CreateRecordOperator(db),
             UpdateRecordOperator(db),
             DeleteRecordOperator(db),
