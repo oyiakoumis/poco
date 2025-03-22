@@ -163,7 +163,7 @@ class BaseInjectedToolCallIdDBOperator(BaseDBOperator):
 
 # List Dataset Operator
 class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
-    MAX_TRUNCATED_DATASETS: int = 25  # Maximum number of datasets to show in truncated result
+    MAX_TRUNCATED_DATASETS: int = 50  # Maximum number of datasets to show in truncated result
 
     name: str = "list_datasets"
     description: str = (
@@ -206,7 +206,7 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
                     return Command(
                         update={
                             "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
-                            "export_file_attachment": excel_result,
+                            "export_file_attachments": [excel_result],
                         }
                     )
 
@@ -372,7 +372,7 @@ class GetRecordOperator(BaseDBOperator):
 
 
 class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
-    MAX_TRUNCATED_RECORDS: int = 25  # Maximum number of records to show in truncated result
+    MAX_TRUNCATED_RECORDS: int = 50  # Maximum number of records to show in truncated result
 
     name: str = "query_records"
     description: str = (
@@ -433,7 +433,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
                     return Command(
                         update={
                             "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
-                            "export_file_attachment": excel_result,
+                            "export_file_attachments": [excel_result],
                         }
                     )
 

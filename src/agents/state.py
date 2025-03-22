@@ -1,4 +1,5 @@
-from typing import Annotated, Any, Dict, Iterator, Optional, TypedDict
+from operator import add
+from typing import Annotated, Any, Dict, Iterator, List, Optional, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -8,7 +9,7 @@ from pydantic import BaseModel
 
 class State(BaseModel):
     messages: Annotated[list[BaseMessage], add_messages]
-    export_file_attachment: Optional[Dict[str, Any]] = None
+    export_file_attachments: Annotated[Optional[List[Dict[str, Any]]], add] = []
 
     # The following fields are used by the langgraph react agent
     is_last_step: IsLastStep

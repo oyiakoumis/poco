@@ -2,7 +2,7 @@
 
 import asyncio
 import base64
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from twilio.base.exceptions import TwilioRestException
 from twilio.http.async_http_client import AsyncTwilioHttpClient
@@ -69,7 +69,7 @@ class ResponseService:
         await self._send_message(to_number, formatted_message)
 
     async def send_response(
-        self, to_number: str, user_message: str, response_content: str, total_tokens: int = 0, file_attachment: Optional[Dict[str, Any]] = None
+        self, to_number: str, user_message: str, response_content: str, total_tokens: int = 0, file_attachments: Optional[List[Dict[str, Any]]] = None
     ) -> None:
         """Send a response message to the user.
 
@@ -78,7 +78,7 @@ class ResponseService:
             user_message: The original user message
             response_content: The response content to send
             total_tokens: The total tokens used in the conversation
-            file_attachment: Optional file attachment to send
+            file_attachments: Optional list of file attachments to send
         """
         # Add long chat notification if tokens exceed the limit
         if total_tokens > Assistant.TOKEN_LIMIT:
@@ -87,8 +87,8 @@ class ResponseService:
 
         formatted_response = format_message(user_message, response_content)
 
-        # Send the message with optional file attachment
-        await self._send_message(to_number, formatted_response, file_attachment)
+        # Send the message with optional file attachments
+        await self._send_message(to_number, formatted_response, file_attachments)
 
     def _split_message(self, message: str, max_length: int = 1600, max_parts: int = 10) -> list:
         """Split a message into multiple parts if it exceeds the maximum length.
@@ -149,23 +149,25 @@ class ResponseService:
 
         return parts
 
-    async def _send_message(self, to_number: str, message_body: str, file_attachment: Optional[Dict[str, Any]] = None) -> None:
-        """Send a message using the Twilio client, optionally with a file attachment.
+    async def _send_message(self, to_number: str, message_body: str, file_attachments: Optional[List[Dict[str, Any]]] = None) -> None:
+        """Send a message using the Twilio client, optionally with file attachments.
 
         Args:
             to_number: The phone number to send the message to
             message_body: The message body to send
-            file_attachment: Optional file attachment to send
+            file_attachments: Optional list of file attachments to send
         """
         try:
-            # Prepare media_url if file attachment is provided
-            media_url = None
-            if file_attachment:
-                content_type = file_attachment.get("content_type")
-                content = file_attachment.get("content")
-                filename = file_attachment.get("filename", "attachment")
-                media_url = await self.media_service.prepare_outgoing_attachment(content=content, filename=filename, content_type=content_type)
-                logger.info(f"Sending message with file attachment '{filename}' to {to_number}")
+            # Prepare media_urls if file attachments are provided
+            media_urls = []
+            if file_attachments:
+                for attachment in file_attachments:
+                    content_type = attachment.get("content_type")
+                    content = attachment.get("content")
+                    filename = attachment.get("filename", "attachment")
+                    media_url = await self.media_service.prepare_outgoing_attachment(content=content, filename=filename, content_type=content_type)
+                    media_urls.append(media_url)
+                logger.info(f"Sending message with {len(media_urls)} file attachment(s) to {to_number}")
 
             # Check message length before sending
             if len(message_body) > settings.twilio_max_message_length:
@@ -175,28 +177,22 @@ class ResponseService:
                 message_parts = self._split_message(message_body, max_length=settings.twilio_max_message_length, max_parts=10)
                 logger.info(f"Splitting message into {len(message_parts)} parts")
 
-                # Send each part (only attach file to the first part)
+                # Send each part (only attach files to the first part)
                 for i, part in enumerate(message_parts):
-                    # Only include media_url with the first part
-                    part_media_url = media_url if i == 0 else None
+                    # Only include media_urls with the first part
+                    part_media_urls = media_urls if i == 0 else None
                     message = await self.twilio_client.messages.create_async(
-                        body=part, 
-                        from_=settings.twilio_phone_number, 
-                        to=to_number, 
-                        media_url=[part_media_url] if part_media_url else None
+                        body=part, from_=settings.twilio_phone_number, to=to_number, media_url=part_media_urls
                     )
                     logger.info(f"Sent part {i+1}/{len(message_parts)} to {to_number} (SID: {message.sid})")
-                    
-                    # Add a small delay between messages to help maintain order
-                    if i < len(message_parts) - 1:
-                        await asyncio.sleep(0.5)  # 500ms delay between messages
+
+                    # Add a small delay for message containing media to preserve order
+                    if part_media_urls:
+                        await asyncio.sleep(1)
             else:
                 # Send as a single message
                 await self.twilio_client.messages.create_async(
-                    body=message_body, 
-                    from_=settings.twilio_phone_number, 
-                    to=to_number, 
-                    media_url=[media_url] if media_url else None
+                    body=message_body, from_=settings.twilio_phone_number, to=to_number, media_url=media_urls if media_urls else None
                 )
         except TwilioRestException as e:
             logger.error(f"Error sending message to {to_number}: {e.msg}")

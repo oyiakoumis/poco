@@ -82,12 +82,14 @@ class MessageProcessor:
         # Generate tool summary
         tool_summary = self._generate_tool_summary(output_messages)
 
-        # Check if there's a file attachment in the state
-        file_attachment = result.get("export_file_attachment")
-        if file_attachment:
-            logger.info(f"File attachment found in state: {file_attachment.get('filename')}")
+        # Check if there are file attachments in the state
+        file_attachments = result.get("export_file_attachments")
+        if file_attachments:
+            logger.info(f"File attachments found in state: {len(file_attachments)} attachment(s)")
+            for attachment in file_attachments:
+                logger.info(f"File attachment: {attachment.get('filename')}")
 
-        return output_messages, response, tool_summary, total_tokens, file_attachment
+        return output_messages, response, tool_summary, total_tokens, file_attachments
 
     def _generate_tool_summary(self, messages: List[Message]) -> Optional[str]:
         """Generate a summary of tool operations.

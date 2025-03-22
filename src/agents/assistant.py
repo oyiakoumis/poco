@@ -245,9 +245,9 @@ class Assistant:
 
         # Get a valid response using the retry mechanism
         result = await self.force_response(runnable, state)
-
         logger.debug("LLM response received")
-        return {"messages": result["messages"], "export_file_attachment": result.get("export_file_attachment")}
+
+        return result
 
     async def force_response(self, runnable: CompiledGraph, state: State) -> AIMessage:
         """Attempt to get a valid response with retry logic."""
