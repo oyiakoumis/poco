@@ -119,7 +119,7 @@ class QueryRecordsArgs(DatasetArgs):
         default=False,
         description="If True, returns only record IDs instead of full records (ignored for aggregation queries)",
     )
-    serialize_records: bool = Field(
+    serialize_results: bool = Field(
         default=False,
         description="If True, includes a CSV file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the CSV file. The assistant should always mention the attachment in the message.",
     )
@@ -327,12 +327,12 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
     description: str = (
         "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. "
         "Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency). "
-        "Set serialize_records=True ONLY when responding directly to user queries - this will include a CSV file with ALL records and return a PARTIAL list. "
-        "When serialize_records=True, you MUST explicitly state in your response that: "
+        "Set serialize_results=True ONLY when responding directly to user queries - this will include a CSV file with ALL records and return a PARTIAL list. "
+        "When serialize_results=True, you MUST explicitly state in your response that: "
         "1. The results shown are only a PARTIAL list of records, and "
         "2. The COMPLETE list of ALL records is available in the attached CSV file. "
-        "For intermediate processing steps, use serialize_records=False (default) to get complete results. "
-        "Aggregation results are always returned in full regardless of serialize_records setting. "
+        "For intermediate processing steps, use serialize_results=False (default) to get complete results. "
+        "Aggregation results are always returned in full regardless of serialize_results setting. "
         "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if a CSV file was attached to the state."
     )
     args_schema: Type[BaseModel] = QueryRecordsArgs
@@ -360,9 +360,9 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             else:  # Record objects
                 processed_result = [record.model_dump() for record in result]
 
-            # Only create an attachment if serialize_records is True
+            # Only create an attachment if serialize_results is True
             # and we're dealing with record objects (not aggregation results)
-            if args.serialize_records and len(processed_result) > self.MAX_TRUNCATED_RECORDS:
+            if args.serialize_results and len(processed_result) > self.MAX_TRUNCATED_RECORDS:
                 # Create CSV file
                 try:
                     # Convert result to DataFrame
@@ -420,7 +420,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
                     # If CSV creation fails, return the full result
                     return processed_result, False
 
-            # Return the full result if serialize_records is False or result length is MAX_TRUNCATED_RECORDS or less
+            # Return the full result if serialize_results is False or result length is MAX_TRUNCATED_RECORDS or less
             return processed_result, False
 
         except Exception as e:

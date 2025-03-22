@@ -131,15 +131,15 @@ Immediately execute these tools whenever any information/data changes occur:
     * Use BEFORE updating/deleting to find the correct records
     * Can take a query to pre-filter on non-string fields before semantic search
       - query_records ONLY for non-string fields or when exact matching is explicitly requested
-    * Set serialize_records=True ONLY when responding directly to user queries about records
+    * Set serialize_results=True ONLY when responding directly to user queries about records
       - This will include an CSV file attached to the message with all the records from the query when there are more than a few records
       - Should only be used when we want to return a list of records to the user (not during intermediate steps)
-      - query_records returns a tuple (results, serialize_records) - check serialize_records to know if a file was attached
+      - query_records returns a tuple (results, serialize_results) - check serialize_results to know if a file was attached
       - If =True, the assistant MUST EXPLICITLY state in the message:
         1. That it attached a file with ALL records.
         2. Clearly indicate that the results shown in the message are only a PARTIAL list, and that the COMPLETE list is in the attached CSV file.
-    * For intermediate processing steps, use serialize_records=False (default) to ensure you work with all records directly
-    * Aggregation results are always returned in full regardless of serialize_records setting
+    * For intermediate processing steps, use serialize_results=False (default) to ensure you work with all records directly
+    * Aggregation results are always returned in full regardless of serialize_results setting
 - temporal_reference_resolver for datetime conversion: Use accurate datetime conversion for natural language time expressions.
 
 HANDLING AMBIGUOUS REQUESTS:
