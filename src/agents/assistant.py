@@ -224,7 +224,7 @@ class Assistant:
     async def __call__(self, state: State):
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
-        # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
+        # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=self.TEMPERATURE)
         llm = ChatOpenAI(model=self.MODEL_NAME, temperature=self.TEMPERATURE)
 
         logger.debug("Trimming messages to token limit")
@@ -258,6 +258,7 @@ class Assistant:
             last_message: AnyMessage = result["messages"][-1]
 
             if not isinstance(last_message, ToolMessage) and last_message.content.strip():
+                logger.debug(f"Received non-empty response on attempt {attempt + 1}")
                 return result  # Valid response, return immediately
 
             # Handle invalid response

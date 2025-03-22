@@ -61,10 +61,10 @@ class DatasetManager:
 
     # Vector search configuration
     VECTOR_SEARCH_CONFIG = {
-        "MODEL": "text-embedding-3-large",
+        "MODEL": "text-embedding-3-small",
         "INDEX_NAME": "vector_search_items",
         "FIELD_NAME": "embedding",
-        "DIMENSION": 3072,  # 1536 for text-embedding-3-small and 3072 for text-embedding-3-large
+        "DIMENSION": 1536,  # 1536 for text-embedding-3-small and 3072 for text-embedding-3-large
         "NUM_CANDIDATES_MULTIPLIER": 5,
         "MIN_SCORE": 0.25,
     }
