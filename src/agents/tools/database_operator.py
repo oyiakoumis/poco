@@ -1,7 +1,7 @@
 import asyncio
 from typing import Annotated, Any, Dict, List, Optional, Tuple, Type, Union
 
-from utils.csv_serializer import serialize_to_csv
+from utils.xslx_serializer import serialize_to_xlsx
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolCallId
@@ -28,7 +28,7 @@ class RecordData(BaseModel):
 class ListDatasetsArgs(BaseModel):
     serialize_results: bool = Field(
         default=False,
-        description="If True, includes a CSV file attached to the message with ALL datasets. This should ONLY be used when returning a list of datasets directly to the user (not during intermediate steps). When True, returns a partial list of the first datasets, with the full list in the CSV file. The assistant should always mention the attachment in the message.",
+        description="If True, includes an Excel file attached to the message with ALL datasets. This should ONLY be used when returning a list of datasets directly to the user (not during intermediate steps). When True, returns a partial list of the first datasets, with the full list in the Excel file. The assistant should always mention the attachment in the message.",
     )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
@@ -125,7 +125,7 @@ class QueryRecordsArgs(DatasetArgs):
     )
     serialize_results: bool = Field(
         default=False,
-        description="If True, includes a CSV file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the CSV file. The assistant should always mention the attachment in the message.",
+        description="If True, includes an Excel file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the Excel file. The assistant should always mention the attachment in the message.",
     )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
@@ -168,12 +168,12 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
     name: str = "list_datasets"
     description: str = (
         "List all datasets. "
-        "Set serialize_results=True ONLY when responding directly to user queries - this will include a CSV file with ALL datasets and return a PARTIAL list. "
+        "Set serialize_results=True ONLY when responding directly to user queries - this will include an Excel file with ALL datasets and return a PARTIAL list. "
         "When serialize_results=True, you MUST explicitly state in your response that: "
         "1. The results shown are only a PARTIAL list of datasets, and "
-        "2. The COMPLETE list of ALL datasets is available in the attached CSV file. "
+        "2. The COMPLETE list of ALL datasets is available in the attached Excel file. "
         "For intermediate processing steps, use serialize_results=False (default) to get complete results. "
-        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if a CSV file was attached to the state."
+        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if an Excel file was attached to the state."
     )
     args_schema: Type[BaseModel] = ListDatasetsArgs
 
@@ -191,28 +191,28 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
             # Only create an attachment if serialize_results is True
             # and we have more datasets than the truncation limit
             if args.serialize_results and len(processed_result) > self.MAX_TRUNCATED_DATASETS:
-                # Create CSV file
+                # Create Excel file
                 try:
-                    # Prepare data for CSV
-                    data_for_csv = [{"name": item["name"], "description": item["description"]} for item in processed_result]
+                    # Prepare data for Excel
+                    data_for_excel = [{"name": item["name"], "description": item["description"]} for item in processed_result]
 
-                    # Serialize to CSV
-                    csv_result = serialize_to_csv(data_for_csv, "Datasets")
+                    # Serialize to Excel
+                    excel_result = serialize_to_xlsx(data_for_excel, "Datasets")
 
                     # Truncate result to MAX_TRUNCATED_DATASETS items
                     truncated_result = processed_result[: self.MAX_TRUNCATED_DATASETS]
 
-                    # Return truncated result and flag indicating CSV file was added
+                    # Return truncated result and flag indicating Excel file was added
                     return Command(
                         update={
                             "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
-                            "export_file_attachment": csv_result,
+                            "export_file_attachment": excel_result,
                         }
                     )
 
                 except Exception as e:
-                    logger.error(f"Error creating CSV file: {str(e)}", exc_info=True)
-                    # If CSV creation fails, return the full result
+                    logger.error(f"Error creating Excel file: {str(e)}", exc_info=True)
+                    # If Excel creation fails, return the full result
                     return processed_result, False
 
             # Return the full result if serialize_results is False or result length is MAX_TRUNCATED_DATASETS or less
@@ -378,13 +378,13 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
     description: str = (
         "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. "
         "Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency). "
-        "Set serialize_results=True ONLY when responding directly to user queries - this will include a CSV file with ALL records and return a PARTIAL list. "
+        "Set serialize_results=True ONLY when responding directly to user queries - this will include an Excel file with ALL records and return a PARTIAL list. "
         "When serialize_results=True, you MUST explicitly state in your response that: "
         "1. The results shown are only a PARTIAL list of records, and "
-        "2. The COMPLETE list of ALL records is available in the attached CSV file. "
+        "2. The COMPLETE list of ALL records is available in the attached Excel file. "
         "For intermediate processing steps, use serialize_results=False (default) to get complete results. "
         "Aggregation results are always returned in full regardless of serialize_results setting. "
-        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if a CSV file was attached to the state."
+        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if an Excel file was attached to the state."
     )
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
@@ -414,32 +414,32 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             # Only create an attachment if serialize_results is True
             # and we're dealing with record objects (not aggregation results)
             if args.serialize_results and len(processed_result) > self.MAX_TRUNCATED_RECORDS:
-                # Create CSV file
+                # Create Excel file
                 try:
-                    # Extract data for CSV
-                    data_for_csv = [record["data"] for record in processed_result]
+                    # Extract data for Excel
+                    data_for_excel = [record["data"] for record in processed_result]
 
                     # Get dataset name
                     dataset = await self.db.get_dataset(user_id, args.dataset_id)
                     dataset_name = dataset.name
 
-                    # Serialize to CSV
-                    csv_result = serialize_to_csv(data_for_csv, dataset_name)
+                    # Serialize to Excel
+                    excel_result = serialize_to_xlsx(data_for_excel, dataset_name)
 
                     # Truncate result to MAX_TRUNCATED_RECORDS items
                     truncated_result = processed_result[: self.MAX_TRUNCATED_RECORDS]
 
-                    # Return truncated result and flag indicating CSV file was added
+                    # Return truncated result and flag indicating Excel file was added
                     return Command(
                         update={
                             "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
-                            "export_file_attachment": csv_result,
+                            "export_file_attachment": excel_result,
                         }
                     )
 
                 except Exception as e:
-                    logger.error(f"Error creating CSV file: {str(e)}", exc_info=True)
-                    # If CSV creation fails, return the full result
+                    logger.error(f"Error creating Excel file: {str(e)}", exc_info=True)
+                    # If Excel creation fails, return the full result
                     return processed_result, False
 
             # Return the full result if serialize_results is False or result length is MAX_TRUNCATED_RECORDS or less
