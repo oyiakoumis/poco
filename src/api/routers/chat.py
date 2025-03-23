@@ -56,7 +56,7 @@ async def process_whatsapp_message(
         await response_formatter.send_error(From, "", "Message's body cannot be empty.")
         return Response(status_code=status.HTTP_400_BAD_REQUEST)
 
-    # Validate the request is coming from Twilio (currently disabled with TODO)
+    # Validate the request is coming from Twilio
     if not twilio_valid:
         logger.warning(f"Invalid Twilio signature: {x_twilio_signature}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Twilio signature")

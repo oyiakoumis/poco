@@ -42,8 +42,7 @@ async def validate_twilio_signature(
     form_data = await extract_twilio_form_data(request)
 
     # If request_url is not provided, construct it from the settings
-    url = request_url or f"https://{settings.api_url}:{settings.port}/chat/whatsapp"
+    url = request_url or f"{settings.api_url}:{settings.port}/chat/"
 
     # Validate the request
-    return True  # TODO: Enable validation later
     return validate_twilio_request(form_data, x_twilio_signature, url)
