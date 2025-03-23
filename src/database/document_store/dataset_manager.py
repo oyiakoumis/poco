@@ -6,7 +6,7 @@ from asyncio import gather, sleep
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pymongo
 from langchain_openai import OpenAIEmbeddings
@@ -35,6 +35,7 @@ from database.document_store.models.schema import DatasetSchema
 from database.document_store.models.types import FieldType, TypeRegistry
 from database.document_store.pipeline import build_aggregation_pipeline
 from utils.logging import logger
+from settings import settings
 
 if TYPE_CHECKING:
     from agents.tools.database_operator import RecordUpdate
@@ -55,7 +56,7 @@ class IndexStatus(Enum):
 class DatasetManager:
     """Manager for dataset and record operations."""
 
-    DATABASE: str = "document_store"
+    DATABASE: str = settings.database_name
     COLLECTION_DATASETS: str = "datasets"
     COLLECTION_RECORDS: str = "records"
 

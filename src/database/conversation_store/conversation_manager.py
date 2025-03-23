@@ -1,17 +1,10 @@
 """Manager for conversation and message operations."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import List, Optional
 from uuid import UUID, uuid4
 
 import pymongo
-from langchain_core.messages import (
-    AIMessage,
-    AnyMessage,
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-)
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
     AsyncIOMotorCollection,
@@ -25,14 +18,14 @@ from database.conversation_store.exceptions import (
     MessageNotFoundError,
 )
 from database.conversation_store.models.conversation import Conversation
-from database.conversation_store.models.message import Message, MessageRole
+from database.conversation_store.models.message import Message
 from utils.logging import logger
-
+from settings import settings
 
 class ConversationManager:
     """Manager for conversation and message operations."""
 
-    DATABASE: str = "document_store"  # Reuse the same database
+    DATABASE: str = settings.database_name
     COLLECTION_CONVERSATIONS: str = "conversations"
     COLLECTION_MESSAGES: str = "messages"
 

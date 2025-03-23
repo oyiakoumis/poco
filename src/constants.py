@@ -24,9 +24,11 @@ def parse_boolean(value, default=False):
 # App settings
 LOGGING_LEVEL = getattr(logging, os.environ.get("LOGGING_LEVEL", "DEBUG").upper(), logging.DEBUG)
 IS_LOCAL = parse_boolean(os.environ.get("IS_LOCAL"), default=False)
+ENVIRONMENT = os.environ["ENVIRONMENT"]
 
 # MongoDB settings
 DATABASE_CONNECTION_STRING = os.environ["DATABASE_CONNECTION_STRING"]
+DATABASE_NAME = os.environ["DATABASE_NAME"]
 
 # Twilio settings
 API_URL = os.environ["API_URL"]

@@ -6,6 +6,8 @@ from constants import (
     AZURE_STORAGE_ACCOUNT_KEY,
     AZURE_STORAGE_CONNECTION_STRING,
     DATABASE_CONNECTION_STRING,
+    DATABASE_NAME,
+    ENVIRONMENT,
     IS_LOCAL,
     LOGGING_LEVEL,
     TWILIO_ACCOUNT_SID,
@@ -22,9 +24,11 @@ class Settings:
     host: str = "0.0.0.0"
     port: int = 8000
     is_local: bool = IS_LOCAL
+    environment: str = ENVIRONMENT
 
     # Database settings
     database_connection_string: str = DATABASE_CONNECTION_STRING
+    database_name: str = DATABASE_NAME
 
     # Logging
     logging_level: int = LOGGING_LEVEL
