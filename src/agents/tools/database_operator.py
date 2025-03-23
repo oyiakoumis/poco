@@ -28,7 +28,7 @@ class RecordData(BaseModel):
 class ListDatasetsArgs(BaseModel):
     serialize_results: bool = Field(
         default=False,
-        description="If True, includes an Excel file attached to the message with ALL datasets. This should ONLY be used when returning a list of datasets directly to the user (not during intermediate steps). When True, returns a partial list of the first datasets, with the full list in the Excel file. The assistant should always mention the attachment in the message.",
+        description="If True, tries to include an Excel file attached to the message with ALL datasets. Function returns a tuple of (has_attachment, result). This attached file is not directly accessible to the assistant. Therefore serialize_results=True should only be used to return a list of datasets directly to the user (not during intermediate steps).",
     )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
@@ -38,9 +38,7 @@ class DatasetArgs(BaseModel):
 
 
 class RecordArgs(DatasetArgs):
-    record_id: PydanticUUID = Field(
-        description="Unique identifier for the record within the dataset", examples=["507f1f77bcf86cd799439012"]
-    )
+    record_id: PydanticUUID = Field(description="Unique identifier for the record within the dataset", examples=["507f1f77bcf86cd799439012"])
 
 
 class CreateDatasetArgs(BaseModel):
@@ -84,7 +82,10 @@ class UpdateRecordArgs(RecordArgs):
 class BatchCreateRecordsArgs(DatasetArgs):
     records: List[RecordData] = Field(
         description="List of record data objects that match the dataset's defined schema",
-        examples=[{"feedback_text": "Great product, but needs better documentation", "rating": 4}, {"feedback_text": "Works well, very intuitive", "rating": 5}],
+        examples=[
+            {"feedback_text": "Great product, but needs better documentation", "rating": 4},
+            {"feedback_text": "Works well, very intuitive", "rating": 5},
+        ],
         min_items=1,
     )
 
@@ -121,11 +122,11 @@ class QueryRecordsArgs(DatasetArgs):
     )
     ids_only: bool = Field(
         default=False,
-        description="If True, returns only record IDs instead of full records (ignored for aggregation queries)",
+        description="If True, returns only record IDs instead of full records (ignored for aggregation queries). Use this for identifying records before create, update or delete operations to improve efficiency.",
     )
     serialize_results: bool = Field(
         default=False,
-        description="If True, includes an Excel file attached to the message with ALL records from the query. This should ONLY be used when returning a list of records directly to the user (not during intermediate steps). When True, returns a partial list of the first records, with the full list in the Excel file. The assistant should always mention the attachment in the message.",
+        description="If True, tries to include an Excel file attached to the message with ALL records from the query. Function returns a tuple of (has_attachment, result). This attached file is not directly accessible to the assistant. Therefore serialize_results=True should only be used to return a list of records directly to the user (not during intermediate steps).",
     )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
@@ -166,15 +167,26 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
     MAX_TRUNCATED_DATASETS: int = 50  # Maximum number of datasets to show in truncated result
 
     name: str = "list_datasets"
-    description: str = (
-        "List all datasets. "
-        "Set serialize_results=True ONLY when responding directly to user queries - this will include an Excel file with ALL datasets and return a PARTIAL list. "
-        "When serialize_results=True, you MUST explicitly state in your response that: "
-        "1. The results shown are only a PARTIAL list of datasets, and "
-        "2. The COMPLETE list of ALL datasets is available in the attached Excel file. "
-        "For intermediate processing steps, use serialize_results=False (default) to get complete results. "
-        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if an Excel file was attached to the state."
-    )
+    description: str = """
+This function is used to retrieve a list of all datasets. It returns a tuple: (has_attachment, result).
+
+- When serialize_results=False (default):
+  - has_attachment is False
+  - result contains the complete list of datasets.
+
+- When serialize_results=True:
+  - If the Excel file was successfully attached:
+    - has_attachment is True
+    - result contains a partial list of datasets.
+    - The assistant should clearly inform the user that:
+      1. The displayed results are only a partial list, and
+      2. The full list is available in the attached Excel file.
+  - If the attachment fails:
+    - has_attachment is False
+    - result contains the full list of datasets.
+
+For internal or intermediate processing, it's recommended to use serialize_results=False to ensure access to the complete dataset list.
+"""
     args_schema: Type[BaseModel] = ListDatasetsArgs
 
     async def _arun(self, config: RunnableConfig, tool_call_id: Annotated[str, InjectedToolCallId], **kwargs) -> Tuple[List[Dict[str, Any]], bool]:
@@ -184,7 +196,7 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
             datasets = await self.db.list_datasets(user_id)
 
             if not datasets:
-                return [], False
+                return False, []
 
             processed_result = [{"id": str(dataset.id), "name": dataset.name, "description": dataset.description} for dataset in datasets]
 
@@ -205,7 +217,7 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
                     # Return truncated result and flag indicating Excel file was added
                     return Command(
                         update={
-                            "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
+                            "messages": [ToolMessage(content=str((True, truncated_result)), tool_call_id=tool_call_id)],
                             "export_file_attachments": [excel_result],
                         }
                     )
@@ -213,10 +225,10 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
                 except Exception as e:
                     logger.error(f"Error creating Excel file: {str(e)}", exc_info=True)
                     # If Excel creation fails, return the full result
-                    return processed_result, False
+                    return False, processed_result
 
             # Return the full result if serialize_results is False or result length is MAX_TRUNCATED_DATASETS or less
-            return processed_result, False
+            return False, processed_result
 
         except Exception as e:
             logger.error(f"Error in ListDatasetsOperator: {str(e)}", exc_info=True)
@@ -375,17 +387,29 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
     MAX_TRUNCATED_RECORDS: int = 50  # Maximum number of records to show in truncated result
 
     name: str = "query_records"
-    description: str = (
-        "Query records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations. "
-        "Use with ids_only=True when you only need record IDs (recommended for identifying records before update or delete operations to improve efficiency). "
-        "Set serialize_results=True ONLY when responding directly to user queries - this will include an Excel file with ALL records and return a PARTIAL list. "
-        "When serialize_results=True, you MUST explicitly state in your response that: "
-        "1. The results shown are only a PARTIAL list of records, and "
-        "2. The COMPLETE list of ALL records is available in the attached Excel file. "
-        "For intermediate processing steps, use serialize_results=False (default) to get complete results. "
-        "Aggregation results are always returned in full regardless of serialize_results setting. "
-        "Returns a tuple of (result, has_attachment) where has_attachment is a boolean indicating if an Excel file was attached to the state."
-    )
+    description: str = """
+This function is used to records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations.It returns a tuple: (has_attachment, result).
+
+- Use `ids_only=True` when only record IDs are needed (recommended for identifying records before create, update or delete operations for better performance).
+
+- When serialize_results=False (default):
+  - has_attachment is False
+  - result contains the complete list of records.
+
+- When serialize_results=True:
+  - If the Excel file was successfully attached:
+    - has_attachment is True
+    - result contains a partial list of records.
+    - The assistant should clearly inform the user that:
+      1. The displayed results are only a partial list, and
+      2. The full list is available in the attached Excel file.
+  - If the attachment fails:
+    - has_attachment is False
+    - result contains the full list of records.
+  - Aggregation results are always returned in full without attachment regardless of serialize_results. 
+
+For internal or intermediate processing, it's recommended to use serialize_results=False to ensure access to the complete dataset list.
+"""
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
     async def _arun(
@@ -397,17 +421,15 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
             result = await self.db.query_records(user_id, args.dataset_id, args.query, args.ids_only)
 
             if not result:
-                return [], False
+                return (False, [])
 
             # Handle record IDs - don't create a file for these
             if isinstance(result[0], str):  # Record IDs
-                return result, False
+                return (False, result)
 
-            # Process different result types
-            if isinstance(result[0], dict):  # Aggregation results
-                # Always return full aggregation results
-                processed_result = result
-                return processed_result, False
+            # Aggregation results
+            if isinstance(result[0], dict):
+                return False, result
             else:  # Record objects
                 processed_result = [record.model_dump() for record in result]
 
@@ -432,7 +454,7 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
                     # Return truncated result and flag indicating Excel file was added
                     return Command(
                         update={
-                            "messages": [ToolMessage(content=str((truncated_result, True)), tool_call_id=tool_call_id)],
+                            "messages": [ToolMessage(content=str((True, truncated_result)), tool_call_id=tool_call_id)],
                             "export_file_attachments": [excel_result],
                         }
                     )
@@ -440,10 +462,10 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
                 except Exception as e:
                     logger.error(f"Error creating Excel file: {str(e)}", exc_info=True)
                     # If Excel creation fails, return the full result
-                    return processed_result, False
+                    return False, processed_result
 
             # Return the full result if serialize_results is False or result length is MAX_TRUNCATED_RECORDS or less
-            return processed_result, False
+            return False, processed_result
 
         except Exception as e:
             logger.error(f"Error in QueryRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
@@ -560,7 +582,7 @@ class FindDatasetArgs(BaseModel):
     dataset: Dataset = Field(description="Hypothetical dataset to search for in the database")
 
 
-class FindRecordsArgs(BaseModel):
+class FindRecordArgs(BaseModel):
     dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", examples=["507f1f77bcf86cd799439011"])
     record_data: RecordData = Field(description="Hypothetical record data to search in the dataset.")
     query: Optional[SimilarityQuery] = Field(
@@ -604,19 +626,19 @@ class FindDatasetOperator(BaseDBOperator):
             raise
 
 
-class FindRecords(BaseDBOperator):
-    name: str = "find_records"
+class FindRecord(BaseDBOperator):
+    name: str = "find_record"
     description: str = (
-        "DEFAULT search method for finding records with string fields. Creates the hypothetical record that you are looking for using the dataset schema, and find candidates for this record using vector search. "
+        "DEFAULT search method for finding a record when we don't know the exact match for the string fields (Use Semantic Search). Creates the hypothetical record that you are looking for using the dataset schema, and find candidates for this record using vector search. "
         "ALWAYS use this for searches involving string fields unless user explicitly requests exact matching. "
         "You can optionally provide a query to pre-filter records on non-string fields before semantic search. \n\n"
     )
-    args_schema: Type[BaseModel] = FindRecordsArgs
+    args_schema: Type[BaseModel] = FindRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
         try:
             user_id = config.get("configurable", {}).get("user_id")
-            args = FindRecordsArgs(**kwargs)
+            args = FindRecordArgs(**kwargs)
             # Convert RecordData to dict
             record_data = args.record_data.model_dump()
             results = await self.db.search_similar_records(
@@ -627,5 +649,5 @@ class FindRecords(BaseDBOperator):
             )
             return [record.model_dump() for record in results]
         except Exception as e:
-            logger.error(f"Error in FindRecords with args {kwargs}: {str(e)}", exc_info=True)
+            logger.error(f"Error in FindRecord with args {kwargs}: {str(e)}", exc_info=True)
             raise

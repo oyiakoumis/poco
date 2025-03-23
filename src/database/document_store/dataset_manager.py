@@ -1031,7 +1031,7 @@ class DatasetManager:
         entity_type: str,
         user_id: str,
         embedding: List[float],
-        limit: int = 20,
+        limit: int = 30,
         min_score: Optional[float] = None,
         query: Optional[SimilarityQuery] = None,
         additional_filters: Optional[Dict] = None,
@@ -1164,7 +1164,7 @@ class DatasetManager:
         user_id: str,
         dataset_id: UUID,
         record_data: RecordData,
-        limit: int = 20,  # Increased default limit to 20
+        limit: int = 30,
         min_score: Optional[float] = None,
         query: Optional[SimilarityQuery] = None,
     ) -> List[Record]:

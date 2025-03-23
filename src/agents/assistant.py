@@ -24,7 +24,7 @@ from agents.tools.database_operator import (
     DeleteFieldOperator,
     DeleteRecordOperator,
     FindDatasetOperator,
-    FindRecords,
+    FindRecord,
     GetAllRecordsOperator,
     GetDatasetOperator,
     GetDatasetSchemaOperator,
@@ -58,13 +58,13 @@ MEMORY VS. DATABASE DISTINCTION (CRITICAL):
 SEMANTIC RECORD SEARCH (CRITICAL):
 - *USERS NEVER KNOW THE EXACT WORDING OF STRING FIELDS* - ALWAYS assume users don't know exact string values unless they explicitly request an exact match.
 - For finding records:
-  - Use find_records (semantic search) by DEFAULT for ANY search involving string fields
+  - Use find_record (semantic search) by DEFAULT for ANY search involving string fields
   - Use query_records ONLY for non-string fields (dates, numbers, booleans, select fields) or when user explicitly requests exact matching
-  - ALWAYS call find_dataset FIRST to retrieve the dataset schema before using find_records or query_records
+  - ALWAYS call find_dataset FIRST to retrieve the dataset schema before using find_record or query_records
 - When users request to create, update, or delete records:
   1. IMPORTANT: First call find_dataset to retrieve the dataset schema
-  2. For find_records, create the hypothetical record you are looking for using the dataset schema
-  3. Use find_records to find candidates for the record you are looking for. (can pre-filter on non-string fields first)
+  2. For find_record, create the hypothetical record you are looking for using the dataset schema
+  3. Use find_record to find candidates for the record you are looking for. (can pre-filter on non-string fields first)
   4. For create operations: avoid creating duplicates by checking the existing records first
   5. For update/delete operations: use the found records to perform the requested action
   6. Only confirm with the user if you're not fully confident in the match
@@ -115,31 +115,46 @@ USER-FACING RESPONSIBILITIES:
 - Offer helpful insights from user data.
 - Answer general knowledge questions helpfully.
 
-TOOLS TO USE FOR ANY DATABASE OPERATIONS:
-Immediately execute these tools whenever any information/data changes occur:
+TOOLS TO USE FOR DATABASE OPERATIONS:
+
 - Dataset operations:
-  - find_datasets, list_datasets, get_dataset, create_dataset, update_dataset, delete_dataset
+  - find_dataset: ALWAYS use first to find datasets by name/description using vector similarity.
+  - list_datasets: Get all datasets. Use serialize_results=True for large results to users.
+  - get_dataset: Get complete dataset details by ID.
+  - create_dataset, update_dataset, delete_dataset: Manage datasets.
+
 - Field operations:
-  - add_field, update_field, delete_field
+  - add_field, update_field, delete_field: Manage dataset schema fields.
+  - For Select/Multi Select fields, use update_field to add new options.
+
 - Record operations:
-  - create_record, update_record, delete_record
-  - batch_create_records, batch_update_records, batch_delete_records (*ALWAYS use for multiple records for better performance*)
+  - batch_create_records, batch_update_records, batch_delete_records: ALWAYS use for multiple records.
+  - create_record, update_record, delete_record: Use ONLY for single record operations.
+
 - Queries:
-  - find_records for DEFAULT searches involving string fields (users don't know exact wording)
-    * Use BEFORE creating records to avoid duplicates
-    * Use BEFORE updating/deleting to find the correct records
-    * Can take a query to pre-filter on non-string fields before semantic search
-      - query_records ONLY for non-string fields or when exact matching is explicitly requested
-    * Set serialize_results=True ONLY when responding directly to user queries about records
-      - This will include an Excel file attached to the message with all the records from the query when there are more than a few records
-      - Should only be used when we want to return a list of records to the user (not during intermediate steps)
-      - query_records returns a tuple (results, serialize_results) - check serialize_results to know if a file was attached
-      - If =True, the assistant MUST EXPLICITLY state in the message:
-        1. That it attached a file with ALL records.
-        2. Clearly indicate that the results shown in the message are only a PARTIAL list, and that the COMPLETE list is in the attached Excel file.
-    * For intermediate processing steps, use serialize_results=False (default) to ensure you work with all records directly
-    * Aggregation results are always returned in full regardless of serialize_results setting
-- temporal_reference_resolver for datetime conversion: Use accurate datetime conversion for natural language time expressions.
+  - find_record: DEFAULT search for string fields using vector similarity.
+    * ALWAYS use before creating/updating/deleting to find correct records
+    * Can pre-filter on non-string fields
+  - query_records: Use ONLY for non-string fields or exact matching.
+    * Use ids_only=True when only IDs are needed (more efficient)
+    * Use serialize_results=True for large results to users
+    * For aggregations, use group_by and aggregations parameters. Available aggregations: sum, avg, min, max, count
+    * For complex filtering, use nested filter expressions with AND/OR operators
+
+- temporal_reference_resolver: ALWAYS use for time expressions.
+
+HANDLING LARGE RESULT SETS:
+- For list_datasets and query_records with many results:
+  * Use serialize_results=True when returning results directly to users
+  * These tools return a tuple (has_attachment, results):
+    - has_attachment=True means an Excel file with complete data was attached to the message
+    - has_attachment=False means all results are in the results list (no attachment created)
+  * When has_attachment=True, ALWAYS inform the user that complete results are in the attached Excel file
+  * For internal processing, use serialize_results=False to get all results directly
+
+BATCH OPERATIONS (CRITICAL):
+- *ALWAYS USE BATCH OPERATIONS FOR MULTIPLE RECORDS* - This is significantly more efficient.
+- For operations on more than 3 records, ALWAYS use batch operations instead of individual operations.
 
 HANDLING AMBIGUOUS REQUESTS:
 - If the context provides clear identification of the record to modify, proceed with the database operation.
@@ -190,9 +205,9 @@ GENERAL KNOWLEDGE QUERIES:
 
 
 class Assistant:
-    MODEL_NAME = "gpt-4o-mini"
+    MODEL_NAME = "gpt-4o"
     TOKEN_LIMIT = 128000
-    MAX_RETRIES = 3  # Define as class constant
+    MAX_RETRIES = 3
     TEMPERATURE = 0
 
     def __init__(self, db: DatasetManager):
@@ -217,7 +232,7 @@ class Assistant:
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
-            FindRecords(db),
+            FindRecord(db),
         ]
 
     async def __call__(self, state: State):
