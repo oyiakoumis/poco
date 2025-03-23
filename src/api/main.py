@@ -7,9 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from api.routers import chat
-from database.conversation_store.conversation_manager import ConversationManager
-from database.document_store.dataset_manager import DatasetManager
+from api.services.media_service import BlobStorageService
 from settings import settings
+from utils.azure_blob_lock import AzureBlobLockManager
 
 
 @asynccontextmanager
@@ -18,20 +18,17 @@ async def lifespan(app: FastAPI):
     yield
 
     # Code to run on shutdown (if any)
+    # Close MongoDB connection
     client = AsyncIOMotorClient(settings.database_connection_string)
-    if False:
-        # Clear collections on shutdown
-        db = client.get_database(DatasetManager.DATABASE)
-
-        # Clear collections used by ConversationManager
-        await db.get_collection(ConversationManager.COLLECTION_CONVERSATIONS).delete_many({})
-        await db.get_collection(ConversationManager.COLLECTION_MESSAGES).delete_many({})
-
-        # Clear collections used by DatasetManager
-        await db.get_collection(DatasetManager.COLLECTION_DATASETS).delete_many({})
-        await db.get_collection(DatasetManager.COLLECTION_RECORDS).delete_many({})
-
     client.close()
+    
+    # Close Azure Blob Storage connection
+    blob_storage = BlobStorageService()
+    await blob_storage.close()
+    
+    # Close Azure Blob Lock Manager
+    lock_manager = AzureBlobLockManager()
+    lock_manager.close()
 
 
 def create_app() -> FastAPI:

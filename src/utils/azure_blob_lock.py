@@ -4,11 +4,11 @@ from typing import List, Optional, Union
 from uuid import UUID
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.identity import DefaultAzureCredential
 from azure.storage.blob import (
     BlobClient,
     BlobLeaseClient,
     BlobServiceClient,
-    ContentSettings,
 )
 
 from settings import settings
@@ -26,14 +26,21 @@ class AzureBlobLockManager(metaclass=Singleton):
             lock_timeout_seconds: Duration of the lease in seconds. Must be between 15 and 60 seconds,
                                  or -1 for infinite lease.
         """
-        self.connection_string = settings.azure_storage_connection_string
-        self.container_name = f"{settings.azure_blob_container_name}-locks"  # Dedicated container for locks
+        self.account_name = settings.azure_storage_account
+        self.container_name = f"{settings.azure_storage_container}-locks"  # Dedicated container for locks
+        self.account_url = f"https://{self.account_name}.blob.core.windows.net"
 
         # Azure Blob lease duration must be between 15 and 60 seconds, or -1 for infinite
         self.lock_timeout_seconds = max(15, min(60, lock_timeout_seconds))
 
+        # Create the credential
+        self.credential = DefaultAzureCredential()
+
         # Create the blob service client
-        self.blob_service_client = BlobServiceClient.from_connection_string(self.connection_string)
+        self.blob_service_client = BlobServiceClient(
+            account_url=self.account_url,
+            credential=self.credential
+        )
 
         # Ensure the container exists
         self._ensure_container_exists()

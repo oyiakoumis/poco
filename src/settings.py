@@ -2,14 +2,15 @@
 
 from constants import (
     API_URL,
-    AZURE_BLOB_CONTAINER_NAME,
-    AZURE_STORAGE_ACCOUNT_KEY,
-    AZURE_STORAGE_CONNECTION_STRING,
+    AZURE_STORAGE_ACCOUNT,
+    AZURE_STORAGE_CONTAINER,
     DATABASE_CONNECTION_STRING,
     DATABASE_NAME,
     ENVIRONMENT,
     IS_LOCAL,
     LOGGING_LEVEL,
+    OPENAI_API_KEY,
+    OPENAI_API_URL,
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
     TWILIO_PHONE_NUMBER,
@@ -30,6 +31,10 @@ class Settings:
     database_connection_string: str = DATABASE_CONNECTION_STRING
     database_name: str = DATABASE_NAME
 
+    # OpenAI settings
+    openai_api_url: str = OPENAI_API_URL
+    open_api_key: str = OPENAI_API_KEY
+
     # Logging
     logging_level: int = LOGGING_LEVEL
 
@@ -41,9 +46,8 @@ class Settings:
     twilio_max_message_length: int = 1600
 
     # Azure Blob Storage settings
-    azure_storage_connection_string: str = AZURE_STORAGE_CONNECTION_STRING
-    azure_storage_account_key: str = AZURE_STORAGE_ACCOUNT_KEY
-    azure_blob_container_name: str = AZURE_BLOB_CONTAINER_NAME
+    azure_storage_account: str = AZURE_STORAGE_ACCOUNT
+    azure_storage_container: str = AZURE_STORAGE_CONTAINER
 
 
 settings = Settings()
