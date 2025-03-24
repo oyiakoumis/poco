@@ -7,7 +7,7 @@ from langchain_core.messages import (
     ToolMessage,
     trim_messages,
 )
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureChatOpenAI
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import create_react_agent
 
@@ -240,7 +240,13 @@ class Assistant:
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
         # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=self.TEMPERATURE)
-        llm = ChatOpenAI(base_url=settings.openai_api_url, api_key=settings.open_api_key, model=self.MODEL_NAME, temperature=self.TEMPERATURE)
+        llm = AzureChatOpenAI(
+            azure_endpoint=settings.openai_api_url,
+            api_key=settings.open_api_key,
+            api_version="2024-05-01-preview",
+            model=self.MODEL_NAME,
+            temperature=self.TEMPERATURE,
+        )
 
         logger.debug("Trimming messages to token limit")
         trimmed_messages: List[AnyMessage] = trim_messages(

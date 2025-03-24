@@ -6,11 +6,12 @@ from constants import (
     AZURE_STORAGE_CONTAINER,
     DATABASE_CONNECTION_STRING,
     DATABASE_NAME,
+    EMBEDDING_MODEL_VERSION,
     ENVIRONMENT,
     IS_LOCAL,
-    LOGGING_LEVEL,
     OPENAI_API_KEY,
     OPENAI_API_URL,
+    OPENAI_MODEL_VERSION,
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
     TWILIO_PHONE_NUMBER,
@@ -34,9 +35,6 @@ class Settings:
     # OpenAI settings
     openai_api_url: str = OPENAI_API_URL
     open_api_key: str = OPENAI_API_KEY
-
-    # Logging
-    logging_level: int = LOGGING_LEVEL
 
     # Twilio settings
     api_url: str = API_URL

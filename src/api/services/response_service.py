@@ -237,7 +237,7 @@ class ResponseService:
                     body=message_body, from_=settings.twilio_phone_number, to=to_number, media_url=media_urls if media_urls else None
                 )
 
-                # If message contains media, wait for delivery confirmation
+                # If message contains media, wait for delivery confirmation to avoid race condition
                 if media_urls:
                     await self._wait_for_message_delivery(message.sid)
         except TwilioRestException as e:

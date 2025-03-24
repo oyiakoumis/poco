@@ -388,27 +388,29 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
 
     name: str = "query_records"
     description: str = """
-This function is used to records with optional filtering, sorting, and aggregation. Supports both simple queries and aggregations.It returns a tuple: (has_attachment, result).
+Function to retrieve records with optional filtering, sorting, and aggregation. 
+Returns a tuple: (has_attachment, result). Supports simple queries and aggregations.
 
-- Use `ids_only=True` when only record IDs are needed (recommended for identifying records before create, update or delete operations for better performance).
+- Use `ids_only=True` to fetch only record IDs (recommended for identifying records before create/update/delete).
 
 - When serialize_results=False (default):
-  - has_attachment is False
-  - result contains the complete list of records.
+  - has_attachment = False
+  - result = full list of records
 
 - When serialize_results=True:
-  - If the Excel file was successfully attached:
-    - has_attachment is True
-    - result contains a partial list of records.
-    - The assistant should clearly inform the user that:
-      1. The displayed results are only a partial list, and
-      2. The full list is available in the attached Excel file.
-  - If the attachment fails:
-    - has_attachment is False
-    - result contains the full list of records.
-  - Aggregation results are always returned in full without attachment regardless of serialize_results. 
+  - If Excel attachment succeeds:
+    - has_attachment = True
+    - result = partial list
+    - Assistant must inform:
+      1. Results shown are partial
+      2. Full list is in attached Excel file
+  - If attachment fails:
+    - has_attachment = False
+    - result = full list
 
-For internal or intermediate processing, it's recommended to use serialize_results=False to ensure access to the complete dataset list.
+- Aggregation results are always returned in full, regardless of serialize_results.
+
+For internal/intermediate use, prefer serialize_results=False to access the full dataset.
 """
     args_schema: Type[BaseModel] = QueryRecordsArgs
 

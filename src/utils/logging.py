@@ -1,13 +1,15 @@
 """Logging utilities for the application."""
 
 import logging
+import os
 import sys
-
-from settings import settings
 
 # Create and configure application logger
 logger = logging.getLogger("poco")
-logger.setLevel(settings.logging_level)
+
+logging_level = getattr(logging, os.environ.get("LOGGING_LEVEL", "DEBUG").upper(), logging.DEBUG)
+
+logger.setLevel(logging_level)
 
 # Create formatter
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

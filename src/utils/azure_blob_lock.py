@@ -4,7 +4,6 @@ from typing import List, Optional, Union
 from uuid import UUID
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from azure.identity import DefaultAzureCredential
 from azure.storage.blob import (
     BlobClient,
     BlobLeaseClient,
@@ -12,6 +11,7 @@ from azure.storage.blob import (
 )
 
 from settings import settings
+from utils.azure_auth import get_azure_credential
 from utils.logging import logger
 from utils.singleton import Singleton
 
@@ -34,7 +34,7 @@ class AzureBlobLockManager(metaclass=Singleton):
         self.lock_timeout_seconds = max(15, min(60, lock_timeout_seconds))
 
         # Create the credential
-        self.credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
+        self.credential = get_azure_credential()
 
         # Create the blob service client
         self.blob_service_client = BlobServiceClient(account_url=self.account_url, credential=self.credential)

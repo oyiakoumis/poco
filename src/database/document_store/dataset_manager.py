@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 from uuid import UUID
 
 import pymongo
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import AzureOpenAIEmbeddings
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
     AsyncIOMotorCollection,
@@ -77,7 +77,12 @@ class DatasetManager:
         self._db: AsyncIOMotorDatabase = self.client.get_database(self.DATABASE)
         self._datasets: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_DATASETS)
         self._records: AsyncIOMotorCollection = self._db.get_collection(self.COLLECTION_RECORDS)
-        self.embeddings_model = OpenAIEmbeddings(model=self.VECTOR_SEARCH_CONFIG["MODEL"], dimensions=self.VECTOR_SEARCH_CONFIG["DIMENSION"])
+        self.embeddings_model = AzureOpenAIEmbeddings(
+            azure_endpoint=settings.openai_api_url,
+            api_key=settings.open_api_key,
+            model=self.VECTOR_SEARCH_CONFIG["MODEL"],
+            dimensions=self.VECTOR_SEARCH_CONFIG["DIMENSION"],
+        )
 
     async def _create_vector_search_index_generic(self, collection: AsyncIOMotorCollection, index_name: str, entity_type: str, dimension: int) -> None:
         """Create vector search index if it doesn't exist and ensure it's ready."""

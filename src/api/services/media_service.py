@@ -2,19 +2,18 @@
 
 import asyncio
 import base64
-from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import httpx
-from azure.identity.aio import DefaultAzureCredential
 from azure.storage.blob import BlobSasPermissions, ContentSettings, generate_blob_sas
 from azure.storage.blob.aio import BlobServiceClient
 from fastapi import Request
 
 from api.models import MediaItem
 from settings import settings
+from utils.azure_auth import get_azure_credential
 from utils.logging import logger
 from utils.singleton import Singleton
 
@@ -34,13 +33,15 @@ class BlobStorageService(metaclass=Singleton):
         self._container_client = None
 
     async def _get_credential(self):
-        """Get or create the DefaultAzureCredential.
+        """Get or create the appropriate Azure credential based on the environment.
 
         Returns:
-            The DefaultAzureCredential instance
+            The Azure credential instance
         """
         if self._credential is None:
-            self._credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
+            # Check if running locally
+            self._credential = get_azure_credential(do_async=True)
+
         return self._credential
 
     async def _get_blob_service_client(self):
