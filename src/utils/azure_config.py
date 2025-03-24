@@ -4,8 +4,8 @@ This module provides a unified interface for accessing configuration values
 from Azure App Configuration and secrets from Azure Key Vault.
 """
 
-import os
 import logging
+import os
 from typing import Any, Dict, Optional, Set
 
 from azure.appconfiguration import AzureAppConfigurationClient
@@ -13,7 +13,7 @@ from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
-from src.utils.singleton import Singleton
+from utils.singleton import Singleton
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class AzureConfigProvider(metaclass=Singleton):
         self.key_vault_url = key_vault_url or os.environ.get("KEY_VAULT_URL")
 
         # Initialize credential based on environment
-        self.credential = DefaultAzureCredential(logging_enable=True)
+        self.credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
 
         # Initialize clients if endpoints are provided
         self.app_config_client = self._initialize_app_config_client() if self.app_config_endpoint else None

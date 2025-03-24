@@ -34,13 +34,10 @@ class AzureBlobLockManager(metaclass=Singleton):
         self.lock_timeout_seconds = max(15, min(60, lock_timeout_seconds))
 
         # Create the credential
-        self.credential = DefaultAzureCredential()
+        self.credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
 
         # Create the blob service client
-        self.blob_service_client = BlobServiceClient(
-            account_url=self.account_url,
-            credential=self.credential
-        )
+        self.blob_service_client = BlobServiceClient(account_url=self.account_url, credential=self.credential)
 
         # Ensure the container exists
         self._ensure_container_exists()

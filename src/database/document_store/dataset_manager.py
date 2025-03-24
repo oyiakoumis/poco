@@ -34,8 +34,8 @@ from database.document_store.models.record import RecordData
 from database.document_store.models.schema import DatasetSchema
 from database.document_store.models.types import FieldType, TypeRegistry
 from database.document_store.pipeline import build_aggregation_pipeline
-from utils.logging import logger
 from settings import settings
+from utils.logging import logger
 
 if TYPE_CHECKING:
     from agents.tools.database_operator import RecordUpdate

@@ -27,7 +27,7 @@ class BlobStorageService(metaclass=Singleton):
         self.account_name = settings.azure_storage_account
         self.container_name = settings.azure_storage_container
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"
-        
+
         # Initialize these as None - they'll be created on first use
         self._credential = None
         self._blob_service_client = None
@@ -35,42 +35,39 @@ class BlobStorageService(metaclass=Singleton):
 
     async def _get_credential(self):
         """Get or create the DefaultAzureCredential.
-        
+
         Returns:
             The DefaultAzureCredential instance
         """
         if self._credential is None:
-            self._credential = DefaultAzureCredential()
+            self._credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
         return self._credential
 
     async def _get_blob_service_client(self):
         """Get or create the BlobServiceClient.
-        
+
         Returns:
             The BlobServiceClient instance
         """
         if self._blob_service_client is None:
             credential = await self._get_credential()
-            self._blob_service_client = BlobServiceClient(
-                account_url=self.account_url, 
-                credential=credential
-            )
+            self._blob_service_client = BlobServiceClient(account_url=self.account_url, credential=credential)
         return self._blob_service_client
 
     async def _get_container_client(self):
         """Get or create the ContainerClient.
-        
+
         Returns:
             The ContainerClient instance
         """
         if self._container_client is None:
             blob_service_client = await self._get_blob_service_client()
             self._container_client = blob_service_client.get_container_client(self.container_name)
-            
+
             # Create container if it doesn't exist
             if not await self._container_client.exists():
                 await self._container_client.create_container()
-                
+
         return self._container_client
 
     async def upload_blob(self, content: bytes, blob_name: str, content_type: str) -> str:
@@ -101,23 +98,17 @@ class BlobStorageService(metaclass=Singleton):
             A presigned URL for the blob
         """
         blob_service_client = await self._get_blob_service_client()
-        
+
         # Get a user delegation key that will be valid for the specified duration
         start_time = datetime.now(timezone.utc)
         expiry_time = start_time + timedelta(hours=expiry_hours)
-        
+
         # Get user delegation key - this is the secure way to generate SAS tokens with DefaultAzureCredential
-        user_delegation_key = await blob_service_client.get_user_delegation_key(
-            key_start_time=start_time,
-            key_expiry_time=expiry_time
-        )
-        
+        user_delegation_key = await blob_service_client.get_user_delegation_key(key_start_time=start_time, key_expiry_time=expiry_time)
+
         # Get blob client to generate the SAS
-        blob_client = blob_service_client.get_blob_client(
-            container=self.container_name, 
-            blob=blob_name
-        )
-        
+        blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=blob_name)
+
         # Generate the SAS URL
         sas_token = generate_blob_sas(
             account_name=self.account_name,
@@ -126,9 +117,9 @@ class BlobStorageService(metaclass=Singleton):
             user_delegation_key=user_delegation_key,
             permission=BlobSasPermissions(read=True),
             expiry=expiry_time,
-            start=start_time
+            start=start_time,
         )
-        
+
         # Create the presigned URL
         presigned_url = f"{blob_client.url}?{sas_token}"
         return presigned_url
@@ -147,27 +138,21 @@ class BlobStorageService(metaclass=Singleton):
             return {}
 
         blob_service_client = await self._get_blob_service_client()
-        
+
         # Get a user delegation key once for all blobs
         start_time = datetime.now(timezone.utc)
         expiry_time = start_time + timedelta(hours=expiry_hours)
-        
+
         try:
             # Get user delegation key - this is the secure way to generate SAS tokens with DefaultAzureCredential
-            user_delegation_key = await blob_service_client.get_user_delegation_key(
-                key_start_time=start_time,
-                key_expiry_time=expiry_time
-            )
-            
+            user_delegation_key = await blob_service_client.get_user_delegation_key(key_start_time=start_time, key_expiry_time=expiry_time)
+
             # Create a helper function that doesn't create a new client each time
             async def get_url_with_error_handling(blob_name: str) -> Tuple[str, Optional[str]]:
                 try:
                     # Get blob client
-                    blob_client = blob_service_client.get_blob_client(
-                        container=self.container_name, 
-                        blob=blob_name
-                    )
-                    
+                    blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=blob_name)
+
                     # Generate SAS token
                     sas_token = generate_blob_sas(
                         account_name=self.account_name,
@@ -176,7 +161,7 @@ class BlobStorageService(metaclass=Singleton):
                         user_delegation_key=user_delegation_key,
                         permission=BlobSasPermissions(read=True),
                         expiry=expiry_time,
-                        start=start_time
+                        start=start_time,
                     )
 
                     # Create the presigned URL
@@ -194,13 +179,13 @@ class BlobStorageService(metaclass=Singleton):
         except Exception as e:
             logger.error(f"Error getting user delegation key: {str(e)}")
             return {blob_name: None for blob_name in blob_names}
-            
+
     async def close(self):
         """Close all clients and release resources."""
         if self._container_client:
             await self._container_client.close()
             self._container_client = None
-            
+
         if self._blob_service_client:
             await self._blob_service_client.close()
             self._blob_service_client = None

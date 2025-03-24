@@ -19,8 +19,9 @@ from database.conversation_store.exceptions import (
 )
 from database.conversation_store.models.conversation import Conversation
 from database.conversation_store.models.message import Message
-from utils.logging import logger
 from settings import settings
+from utils.logging import logger
+
 
 class ConversationManager:
     """Manager for conversation and message operations."""

@@ -11,7 +11,7 @@ from typing import Set
 
 from dotenv import load_dotenv
 
-from src.utils.azure_config import AzureConfigProvider
+from utils.azure_config import AzureConfigProvider
 
 # Load environment variables from .env file
 load_dotenv()

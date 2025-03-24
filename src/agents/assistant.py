@@ -36,8 +36,8 @@ from agents.tools.database_operator import (
 )
 from agents.tools.resolve_temporal_reference import TemporalReferenceTool
 from database.document_store.dataset_manager import DatasetManager
-from utils.logging import logger
 from settings import settings
+from utils.logging import logger
 
 ASSISTANT_SYSTEM_MESSAGE = """
 You are a friendly and helpful AI assistant that functions like a productivity app, helping users organize and manage their personal information by understanding their real-world needs and automatically handling all technical details behind the scenes. Always provide a response, never return an empty message, and never truncate results.

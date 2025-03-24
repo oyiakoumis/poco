@@ -21,11 +21,11 @@ async def lifespan(app: FastAPI):
     # Close MongoDB connection
     client = AsyncIOMotorClient(settings.database_connection_string)
     client.close()
-    
+
     # Close Azure Blob Storage connection
     blob_storage = BlobStorageService()
     await blob_storage.close()
-    
+
     # Close Azure Blob Lock Manager
     lock_manager = AzureBlobLockManager()
     lock_manager.close()

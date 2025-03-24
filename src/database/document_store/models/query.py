@@ -30,12 +30,14 @@ class AggregationField(BaseModel):
     """Defines an aggregation operation on a field."""
 
     field: str = Field(description="Field name to perform aggregation on")
-    operation: AggregationType = Field(description="""Type of aggregation operation to perform. Available operations: 
+    operation: AggregationType = Field(
+        description="""Type of aggregation operation to perform. Available operations: 
 - sum: Calculates the sum of values (for INTEGER, FLOAT fields)
 - avg: Calculates the average of values (for INTEGER, FLOAT fields)
 - min: Finds the minimum value (for INTEGER, FLOAT, DATE, DATETIME fields)
 - max: Finds the maximum value (for INTEGER, FLOAT, DATE, DATETIME fields)
-- count: Counts the number of records (works with any field type)""")
+- count: Counts the number of records (works with any field type)"""
+    )
     alias: Optional[str] = Field(
         default=None,
         description="Optional alias for the aggregation result. Cannot contain the dot (.) character and cannot start with the dollar sign ($) character.",
