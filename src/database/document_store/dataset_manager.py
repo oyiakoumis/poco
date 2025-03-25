@@ -82,6 +82,7 @@ class DatasetManager:
             api_key=settings.open_api_key,
             model=self.VECTOR_SEARCH_CONFIG["MODEL"],
             dimensions=self.VECTOR_SEARCH_CONFIG["DIMENSION"],
+            max_retries=2,
         )
 
     async def _create_vector_search_index_generic(self, collection: AsyncIOMotorCollection, index_name: str, entity_type: str, dimension: int) -> None:

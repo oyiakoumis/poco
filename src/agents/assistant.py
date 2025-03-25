@@ -256,6 +256,7 @@ class Assistant:
             api_version="2024-05-01-preview",
             model=self.MODEL_NAME,
             temperature=self.TEMPERATURE,
+            max_retries=2,
         )
 
         logger.debug("Trimming messages to token limit")
