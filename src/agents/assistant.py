@@ -1,13 +1,10 @@
+from functools import partial
 from typing import List
 
-from langchain_core.messages import (
-    AIMessage,
-    AnyMessage,
-    SystemMessage,
-    ToolMessage,
-    trim_messages,
-)
+from langchain_core.messages import AIMessage, AnyMessage, SystemMessage, ToolMessage, trim_messages
+from langchain_core.messages.utils import count_tokens_approximately
 from langchain_openai import AzureChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import create_react_agent
 
@@ -89,11 +86,26 @@ DATA STORAGE FEEDBACK:
 - Offer the user an option to modify or correct the stored details immediately.
 - If a record is ambiguous or there are multiple possible matches, ask the user for clarification before making changes.
 
+PROACTIVE DATA RETRIEVAL (CRITICAL):
+- *ALWAYS CHECK THE DATABASE FOR RELEVANT INFORMATION WHEN ANSWERING ANY USER QUERY* - Even when the user doesn't explicitly ask for stored data.
+- For ANY user message, FIRST check if there's relevant stored information in the database before responding.
+- *NEVER ASSUME THE USER REMEMBERS WHAT DATA IS STORED* - Always proactively search for and include relevant stored information.
+- When a user mentions any topic, entity, activity, or concept:
+  1. FIRST use find_dataset to identify potentially relevant datasets
+  2. Then use find_record or query_records to retrieve relevant information
+  3. Incorporate this personal data into your response
+  4. Only rely on general knowledge when no relevant personal data exists
+- *BLEND PERSONAL DATA WITH GENERAL KNOWLEDGE SEAMLESSLY* - Create responses that naturally integrate stored information with general knowledge.
+- *PRIORITIZE PERSONAL DATA OVER GENERAL KNOWLEDGE* - The user's stored information is more valuable and relevant than generic information.
+
 UNDERSTANDING USER INTENT:
 - Users focus on outcomes, not database operations - interpret their real-world statements.
 - Recognize implicit requests that require database changes (e.g., "I did the laundry" means delete it from the to-do list).
+- *RECOGNIZE IMPLICIT OPPORTUNITIES TO RETRIEVE RELEVANT DATA* - Even when users don't explicitly ask for it.
+- *ASSUME USERS WANT PERSONALIZED RESPONSES BASED ON THEIR STORED DATA* - Always check the database first.
 - Infer the appropriate database operations based on context and user's goals.
 - Users may not use technical terms - they'll describe what they want to accomplish in everyday language.
+- *USERS EXPECT YOU TO REMEMBER THEIR INFORMATION* - Proactively retrieve and reference relevant stored data in your responses.
 
 COMMUNICATION GUIDELINES:
 - Use clear, friendly language that feels personal and engaging.
@@ -228,9 +240,8 @@ INTERACTION FLOW:
 4. Always format responses clearly for WhatsApp.
 
 GENERAL KNOWLEDGE QUERIES:
-- For pure factual questions, respond directly from built-in knowledge without database operations.
-- For mixed queries (e.g., "What's the capital of France and when is my appointment?"), separate the response into distinct sections.
-- Always prioritize retrieving personal information from the database when mentioned.
+- *CHECK DATABASE FIRST FOR ALL QUERIES* - Always search for relevant personal data before using general knowledge.
+- *PERSONAL DATA TAKES PRIORITY* - User's stored information supersedes generic knowledge.
 """
 
 
@@ -268,29 +279,27 @@ class Assistant:
     async def __call__(self, state: State):
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
-        # llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=self.TEMPERATURE)
-        llm = AzureChatOpenAI(
-            azure_endpoint=settings.openai_api_url,
-            api_key=settings.open_api_key,
-            api_version="2024-05-01-preview",
-            model=self.MODEL_NAME,
-            temperature=self.TEMPERATURE,
-            max_retries=2,
-        )
+        llm = ChatAnthropic(model="claude-3-7-sonnet-latest", temperature=self.TEMPERATURE)
+        # llm = AzureChatOpenAI(
+        #     azure_endpoint=settings.openai_api_url,
+        #     api_key=settings.open_api_key,
+        #     api_version="2024-05-01-preview",
+        #     model=self.MODEL_NAME,
+        #     temperature=self.TEMPERATURE,
+        #     max_retries=2,
+        # )
 
-        logger.debug("Trimming messages to token limit")
-        trimmed_messages: List[AnyMessage] = trim_messages(
+        logger.debug(f"Trimming messages to token limit: {self.TOKEN_LIMIT}")
+        state.messages = trim_messages(
             state.messages,
             strategy="last",
-            token_counter=llm,
+            token_counter=partial(count_tokens_approximately, chars_per_token=3.4),
             max_tokens=self.TOKEN_LIMIT,
             start_on="human",
             end_on="human",
             include_system=True,
             allow_partial=False,
         )
-        # update the state with the trimmed messages
-        state.messages = trimmed_messages
 
         runnable = create_react_agent(llm, self.tools, state_schema=State)
 
@@ -309,7 +318,6 @@ class Assistant:
             last_message: AnyMessage = result["messages"][-1]
 
             if not isinstance(last_message, ToolMessage) and last_message.content.strip():
-                logger.debug(f"Received non-empty response on attempt {attempt + 1}")
                 return result  # Valid response, return immediately
 
             # Handle invalid response
