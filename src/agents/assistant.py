@@ -246,10 +246,9 @@ GENERAL KNOWLEDGE QUERIES:
 
 
 class Assistant:
-    MODEL_NAME = "gpt-4o"
     TOKEN_LIMIT = 128000
     MAX_RETRIES = 3
-    TEMPERATURE = 0
+    TEMPERATURE = 1
 
     def __init__(self, db: DatasetManager):
         logger.info("Initializing Assistant with tools")
@@ -279,14 +278,14 @@ class Assistant:
     async def __call__(self, state: State):
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
-        llm = ChatAnthropic(model="claude-3-7-sonnet-latest", temperature=self.TEMPERATURE)
+        llm = ChatAnthropic(model="claude-3-7-sonnet-latest", temperature=self.TEMPERATURE, max_retries=self.MAX_RETRIES)
         # llm = AzureChatOpenAI(
         #     azure_endpoint=settings.openai_api_url,
         #     api_key=settings.open_api_key,
         #     api_version="2024-05-01-preview",
-        #     model=self.MODEL_NAME,
+        #     model="gpt-4o",
         #     temperature=self.TEMPERATURE,
-        #     max_retries=2,
+        #     max_retries=self.MAX_RETRIES,
         # )
 
         logger.debug(f"Trimming messages to token limit: {self.TOKEN_LIMIT}")
