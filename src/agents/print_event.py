@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, Union
 
 from langgraph.graph.message import AnyMessage
@@ -49,9 +50,11 @@ def create_panel(content: str, title: str) -> Panel:
 def format_title(node_name: str, namespace: Optional[str] = None) -> str:
     """Format panel title with node name and optional namespace."""
     base_title = f"[magenta]{node_name}[/magenta]"
+
+    now =  datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     if namespace:
-        return f"Message from {base_title} in [blue]{namespace}[/blue]"
-    return f"Message from {base_title}"
+        return f"Message from {base_title} in [blue]{namespace}[/blue] at {now}"
+    return f"Message from {base_title} at {now}"
 
 
 def truncate_content(content: str, max_length: int) -> str:

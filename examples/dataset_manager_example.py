@@ -7,12 +7,11 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from constants import DATABASE_CONNECTION_STRING
 from database.document_store.dataset_manager import DatasetManager
 from database.document_store.models.field import SchemaField
+from database.document_store.models.filter_types import ComparisonOperator, LogicalOperator
 from database.document_store.models.query import (
     AggregationField,
-    ComparisonOperator,
     FilterCondition,
     FilterExpression,
-    LogicalOperator,
     RecordQuery,
 )
 from database.document_store.models.schema import DatasetSchema

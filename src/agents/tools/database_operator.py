@@ -581,8 +581,9 @@ class BatchDeleteRecordsOperator(BaseDBOperator):
 
 
 class FindDatasetArgs(BaseModel):
-    dataset: Dataset = Field(description="Hypothetical dataset to search for in the database")
-
+    name: str = Field(description="Hypothetical name of the dataset we are looking for in the database")
+    description: str = Field(description="Detailed description and purpose of the hypothetical dataset we are looking for in the database.")
+    dataset_schema: DatasetSchema = Field(description="Schema defining the structure and fields of the hypothetical dataset we are looking for in the database")
 
 class FindRecordArgs(BaseModel):
     dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", examples=["507f1f77bcf86cd799439011"])
@@ -621,7 +622,8 @@ class FindDatasetOperator(BaseDBOperator):
         try:
             user_id = config.get("configurable", {}).get("user_id")
             args = FindDatasetArgs(**kwargs)
-            results = await self.db.search_similar_datasets(user_id, args.dataset)
+            dataset = Dataset(name=args.name, description=args.description, dataset_schema=args.dataset_schema, user_id=user_id)
+            results = await self.db.search_similar_datasets(user_id, dataset)
             return [dataset.model_dump() for dataset in results]
         except Exception as e:
             logger.error(f"Error in FindDatasetOperator with args {kwargs}: {str(e)}", exc_info=True)
