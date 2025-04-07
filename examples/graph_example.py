@@ -16,7 +16,7 @@ async def main():
             configurable={"thread_id": "1", "user_id": "whatsapp:+971565312695", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25
         )
 
-        messages = [HumanMessage(content="If I tell you: 'I am going to my grandma house. what can I bring to her?'. What is your task?")]
+        messages = [HumanMessage(content="I am going to my grandma house. what can I bring to her?")]
 
         for message in messages:
             print_event((), {"Human": {"messages": [message]}})
