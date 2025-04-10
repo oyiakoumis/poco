@@ -5,6 +5,8 @@ from langchain_core.messages import AIMessage, AnyMessage, SystemMessage, ToolMe
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from langchain_anthropic import ChatAnthropic
+
+# from langchain_groq import ChatGroq
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import create_react_agent
 
@@ -75,10 +77,10 @@ You are Poco, a friendly and helpful AI assistant. Your primary goal is to help 
 6.  **COMMUNICATION STYLE:**
     *   Be warm, friendly, and conversational. Avoid technical terms.
     *   Use **WhatsApp Formatting ONLY**:
-        *   *Bold*: \*bold\*
-        *   _Italic_: \_italic\_
-        *   ~Strikethrough~: \~strikethrough\~
-        *   `Monospace`: \`monospace\` or \`\`\`code block\`\`\`
+        *   *Bold*: *bold*
+        *   _Italic_: _italic_
+        *   ~Strikethrough~: ~strikethrough~
+        *   `Monospace`: `monospace` or ```code block```
         *   Lists: Use `-` or `1.`
         *   Block Quotes: Use `>`
     *   Never return an empty response. Always provide a thoughtful reply.
@@ -91,7 +93,7 @@ You are Poco, a friendly and helpful AI assistant. Your primary goal is to help 
     *   Use appropriate field types (Date, Datetime, Integer, Float, Boolean).
 
 **Key Tools Reference:**
-*   **Datasets:** `find_dataset` (USE FIRST), `list_datasets`, `get_dataset`, `create_dataset`, `update_dataset`, `delete_dataset` (Confirm first!)
+*   **Datasets:** `find_dataset` (USE FIRST), `list_datasets`, `get_dataset_schema`, `create_dataset`, `update_dataset`, `delete_dataset` (Confirm first!)
 *   **Fields:** `add_field`, `update_field`, `delete_field` (Confirm first!)
 *   **Records:** `find_record` (Default search), `query_records` (Exact/Non-string search), `create_record`, `update_record`, `delete_record` (Confirm first!), `batch_create_records`, `batch_update_records`, `batch_delete_records` (Confirm first!)
 *   **Utility:** `temporal_reference_resolver` (MANDATORY for time)
@@ -110,41 +112,41 @@ class Assistant:
             CreateDatasetOperator(db),
             UpdateDatasetOperator(db),
             DeleteDatasetOperator(db),
-            BatchCreateRecordsOperator(db),
-            BatchUpdateRecordsOperator(db),
-            BatchDeleteRecordsOperator(db),
             ListDatasetsOperator(db),
-            GetDatasetOperator(db),
-            # GetDatasetSchemaOperator(db),
-            # GetAllRecordsOperator(db),
+            # GetDatasetOperator(db),
+            GetDatasetSchemaOperator(db),
             FindDatasetOperator(db),
+            FindRecord(db),
+            QueryRecordsOperator(db),
+            # GetAllRecordsOperator(db),
             CreateRecordOperator(db),
             UpdateRecordOperator(db),
             DeleteRecordOperator(db),
-            QueryRecordsOperator(db),
+            BatchCreateRecordsOperator(db),
+            BatchUpdateRecordsOperator(db),
+            BatchDeleteRecordsOperator(db),
             UpdateFieldOperator(db),
             DeleteFieldOperator(db),
             AddFieldOperator(db),
-            FindRecord(db),
         ]
 
     async def __call__(self, state: State):
         logger.debug(f"Processing state with {len(state.messages)} messages")
         # Initialize the language model
-        llm = ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=self.TEMPERATURE, max_retries=self.MAX_RETRIES)
-        # llm = AzureChatOpenAI(
-        #     azure_endpoint=settings.openai_api_url,
-        #     api_key=settings.open_api_key,
-        #     api_version="2024-05-01-preview",
+        # llm = ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=self.TEMPERATURE, max_retries=self.MAX_RETRIES)
+        llm = AzureChatOpenAI(
+            azure_endpoint=settings.openai_api_url,
+            api_key=settings.open_api_key,
+            api_version="2024-05-01-preview",
+            model="gpt-4o",
+            temperature=self.TEMPERATURE,
+            max_retries=self.MAX_RETRIES,
+        )
+        # llm = ChatOpenAI(
         #     model="gpt-4o",
         #     temperature=self.TEMPERATURE,
         #     max_retries=self.MAX_RETRIES,
         # )
-        llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=self.TEMPERATURE,
-            max_retries=self.MAX_RETRIES,
-        )
 
         logger.debug(f"Trimming messages to token limit: {self.TOKEN_LIMIT}")
         state.messages = trim_messages(
