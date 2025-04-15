@@ -90,7 +90,7 @@ You are Poco, a friendly AI assistant helping users manage personal information 
 class Assistant:
     TOKEN_LIMIT = 128000
     MAX_RETRIES = 3
-    TEMPERATURE = 1
+    TEMPERATURE = 0
 
     def __init__(self, db: DatasetManager):
         logger.info("Initializing Assistant with tools")

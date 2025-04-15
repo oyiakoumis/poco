@@ -17,6 +17,28 @@ class DatasetSchema(BaseModel):
 
     fields: List[SchemaField] = Field(default_factory=list, description="List of fields in the schema")
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                # Example schema with String, Date and Select fields
+                {
+                    "fields": [
+                        {"field_name": "title", "description": "Document title", "type": "String", "required": True},
+                        {"field_name": "created_at", "description": "Creation date", "type": "Date", "required": True},
+                        {
+                            "field_name": "status",
+                            "description": "Document status",
+                            "type": "Select",
+                            "options": ["Draft", "Published", "Archived"],
+                            "required": False,
+                            "default": "Draft",
+                        },
+                    ]
+                }
+            ]
+        }
+    }
+
     @model_validator(mode="after")
     def validate_unique_fields(self) -> "DatasetSchema":
         """Validate field names are unique."""
