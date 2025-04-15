@@ -40,7 +40,7 @@ def extract_event_content(event: Dict[str, Any]) -> EventMessage:
     message: AnyMessage = messages[-1] if isinstance(messages, list) else messages
 
     if isinstance(message.content, list):
-        message.content = next(msg["text"] for msg in message.content if msg["type"] == "text")
+        message.content = next((msg["text"] for msg in message.content if msg["type"] == "text"), message.content)
 
     return EventMessage(message=message, node_name=node_name, namespace="", is_structured=False)
 

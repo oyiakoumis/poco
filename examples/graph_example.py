@@ -16,7 +16,7 @@ async def main():
             configurable={"thread_id": "1", "user_id": "whatsapp:+971565312695", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25
         )
 
-        messages = [HumanMessage(content="I did 1 hour of Volleyball.")]
+        messages = [HumanMessage(content="I went to a great Italian restaurant in London called Osteria Romana located in Marylebone. Can you create a record for it?")]
 
         for message in messages:
             print_event((), {"Human": {"messages": [message]}})
