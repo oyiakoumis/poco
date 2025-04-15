@@ -10,10 +10,10 @@ console = Console()
 
 
 @dataclass
-class EventContent:
+class EventMessage:
     """Container for event content and metadata."""
 
-    content: Union[AnyMessage, Dict[str, Any], list[AnyMessage]]
+    message: Union[AnyMessage, Dict[str, Any], list[AnyMessage]]
     node_name: str
     namespace: str
     is_structured: bool = False
@@ -24,22 +24,25 @@ def format_namespace(namespace: Tuple[str]) -> str:
     return namespace[-1].split(":")[0] + " subgraph" if namespace else "parent graph"
 
 
-def extract_event_content(event: Dict[str, Any]) -> EventContent:
+def extract_event_content(event: Dict[str, Any]) -> EventMessage:
     """Extract and validate content from event."""
     node_name = list(event.keys())[0]
     node_data = event[node_name]
 
     if "structured_response" in node_data:
-        return EventContent(content=node_data["structured_response"], node_name=node_name, namespace="", is_structured=True)
+        return EventMessage(message=node_data["structured_response"], node_name=node_name, namespace="", is_structured=True)
 
     if "messages" not in node_data:
         raise ValueError(f"No valid content found in event from {node_name}")
 
     messages = node_data["messages"]
-    if isinstance(messages, list):
-        messages = messages[-1]
 
-    return EventContent(content=messages, node_name=node_name, namespace="", is_structured=False)
+    message: AnyMessage = messages[-1] if isinstance(messages, list) else messages
+
+    if isinstance(message.content, list):
+        message.content = next(msg["text"] for msg in message.content if msg["type"] == "text")
+
+    return EventMessage(message=message, node_name=node_name, namespace="", is_structured=False)
 
 
 def create_panel(content: str, title: str) -> Panel:
@@ -51,7 +54,7 @@ def format_title(node_name: str, namespace: Optional[str] = None) -> str:
     """Format panel title with node name and optional namespace."""
     base_title = f"[magenta]{node_name}[/magenta]"
 
-    now =  datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if namespace:
         return f"Message from {base_title} in [blue]{namespace}[/blue] at {now}"
     return f"Message from {base_title} at {now}"
@@ -74,10 +77,10 @@ def print_event(namespace: Tuple[str], event: Dict[str, Any], max_length: int = 
 
         if event_content.is_structured:
             title = f"Structured Response from {event_content.node_name}"
-            content = str(event_content.content)
+            content = str(event_content.message)
         else:
             title = format_title(event_content.node_name, event_content.namespace)
-            content = event_content.content.pretty_repr(html=True)
+            content = event_content.message.pretty_repr(html=True)
 
         content = truncate_content(content, max_length)
         panel = create_panel(content, title)

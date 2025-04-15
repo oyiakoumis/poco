@@ -34,15 +34,15 @@ class ListDatasetsArgs(BaseModel):
 
 
 class DatasetArgs(BaseModel):
-    dataset_id: PydanticUUID = Field(description="The unique ID of the target dataset.", examples=["507f1f77bcf86cd799439011"])
+    dataset_id: PydanticUUID = Field(description="The unique ID of the target dataset.")
 
 
 class RecordArgs(DatasetArgs):
-    record_id: PydanticUUID = Field(description="The unique ID of the target record within the dataset.", examples=["507f1f77bcf86cd799439012"])
+    record_id: PydanticUUID = Field(description="The unique ID of the target record within the dataset.")
 
 
 class CreateDatasetArgs(BaseModel):
-    name: str = Field(description="A descriptive name for the new dataset (1-100 chars).", min_length=1, max_length=100, examples=["Customer Feedback"])
+    name: str = Field(description="A descriptive name for the new dataset (1-100 chars).", min_length=1, max_length=100)
     description: str = Field(
         description="A detailed description of the dataset's purpose (1-500 chars).",
         min_length=1,
@@ -52,68 +52,41 @@ class CreateDatasetArgs(BaseModel):
 
 
 class UpdateDatasetArgs(DatasetArgs):
-    name: str = Field(description="The new name for the dataset (1-100 chars).", min_length=1, max_length=100, examples=["Customer Feedback 2024"])
+    name: str = Field(description="The new name for the dataset (1-100 chars).", min_length=1, max_length=100)
     description: str = Field(
         description="The new description for the dataset (1-500 chars).",
         min_length=1,
         max_length=500,
-        examples="Updated collection of customer feedback responses from Q1 2024",
     )
 
 
 class CreateRecordArgs(DatasetArgs):
-    data: RecordData = Field(
-        description="The data for the new record, matching the dataset's schema.",
-        examples={"feedback_text": "Great product, but needs better documentation", "rating": 4},
-    )
+    data: RecordData = Field(description="The data for the new record, matching the dataset's schema.")
 
 
 class UpdateRecordArgs(RecordArgs):
-    data: RecordData = Field(
-        description="The new data for the record, matching the dataset's schema.",
-        examples={"feedback_text": "Great product, documentation has improved", "rating": 5},
-    )
+    data: RecordData = Field(description="The new data for the record, matching the dataset's schema.")
 
 
 class BatchCreateRecordsArgs(DatasetArgs):
-    records: List[RecordData] = Field(
-        description="A list of data objects, each representing a new record to create.",
-        examples=[
-            {"feedback_text": "Great product, but needs better documentation", "rating": 4},
-            {"feedback_text": "Works well, very intuitive", "rating": 5},
-        ],
-        min_items=1,
-    )
+    records: List[RecordData] = Field(description="A list of data objects, each representing a new record to create.", min_items=1)
 
 
 class RecordUpdate(BaseModel):
-    record_id: PydanticUUID = Field(description="ID of the record to update.", examples=["507f1f77bcf86cd799439012"])
-    data: RecordData = Field(description="The new data for this specific record.", examples={"feedback_text": "Updated feedback", "rating": 5})
+    record_id: PydanticUUID = Field(description="ID of the record to update.")
+    data: RecordData = Field(description="The new data for this specific record.")
 
 
 class BatchUpdateRecordsArgs(DatasetArgs):
-    records: List[RecordUpdate] = Field(
-        description="A list of updates, each specifying a record ID and its new data.",
-        examples=[
-            {"record_id": "507f1f77bcf86cd799439012", "data": {"feedback_text": "Updated feedback", "rating": 5}},
-            {"record_id": "507f1f77bcf86cd799439013", "data": {"feedback_text": "Another update", "rating": 4}},
-        ],
-        min_items=1,
-    )
+    records: List[RecordUpdate] = Field(description="A list of updates, each specifying a record ID and its new data.", min_items=1)
 
 
 class BatchDeleteRecordsArgs(DatasetArgs):
-    record_ids: List[PydanticUUID] = Field(
-        description="A list of unique IDs for the records to be deleted.", examples=["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"], min_items=1
-    )
+    record_ids: List[PydanticUUID] = Field(description="A list of unique IDs for the records to be deleted.", min_items=1)
 
 
 class QueryRecordsArgs(DatasetArgs):
-    query: Optional[RecordQuery] = Field(
-        default=None,
-        description="Optional filters, sorting, or aggregation rules for the query.",
-        examples={"filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}}, "sort": {"created_at": False}},
-    )
+    query: Optional[RecordQuery] = Field(default=None, description="Optional filters, sorting, or aggregation rules for the query.")
     ids_only: bool = Field(
         default=False,
         description="If True, return only record IDs (faster for finding records before updates/deletes). Ignored for aggregations.",
@@ -145,12 +118,11 @@ class FindDatasetArgs(BaseModel):
 
 
 class FindRecordArgs(BaseModel):
-    dataset_id: PydanticUUID = Field(description="The ID of the dataset to search within.", examples=["507f1f77bcf86cd799439011"])
+    dataset_id: PydanticUUID = Field(description="The ID of the dataset to search within.")
     record_data: RecordData = Field(description="Example data representing the record you're looking for (used for semantic search).")
     query: Optional[SimilarityQuery] = Field(
         default=None,
         description="Optional filters (on non-string fields like dates, numbers, booleans, select options) to apply *before* semantic search.",
-        examples={"filter": {"field": "status", "operator": "eq", "value": "active"}},
     )
 
 
@@ -296,8 +268,8 @@ class UpdateDatasetOperator(BaseDBOperator):
 
 
 class DeleteDatasetOperator(BaseDBOperator):
-    name: str = "Deletes an entire dataset and all its records. MUST ask for user confirmation before using."
-    description: str = "Delete a dataset"
+    name: str = "delete_dataset"
+    description: str = "Deletes an entire dataset and all its records. MUST ask for user confirmation before using."
     args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:

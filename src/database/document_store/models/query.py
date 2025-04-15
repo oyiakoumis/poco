@@ -137,34 +137,7 @@ class RecordQuery(BaseModel):
             if invalid_sort_fields:
                 raise InvalidRecordDataError(f"Invalid sort fields: {invalid_sort_fields}")
 
-    model_config = {
-        "arbitrary_types_allowed": True,
-        "json_schema_extra": {
-            "examples": [
-                # Simple query example with multiple conditions
-                {
-                    "filter": {
-                        "operator": "and",
-                        "expressions": [{"field": "status", "operator": "eq", "value": "active"}, {"field": "age", "operator": "gte", "value": 18}],
-                    },
-                    "sort": {"created_at": "desc"},
-                    "limit": 10,
-                },
-                # Aggregation query example
-                {
-                    "group_by": ["category"],
-                    "aggregations": [
-                        {"field": "amount", "operation": "sum"},
-                        {"field": "amount", "operation": "avg", "alias": "average_amount"},
-                        {"field": "id", "operation": "count", "alias": "total_records"},
-                    ],
-                    "filter": {"field": "status", "operator": "eq", "value": "completed"},
-                    "sort": {"amount_sum": "desc"},
-                    "limit": 10,
-                },
-            ]
-        },
-    }
+    model_config = {"arbitrary_types_allowed": True}
 
 
 class SimilarityQuery(BaseModel):
@@ -208,19 +181,4 @@ class SimilarityQuery(BaseModel):
         """Convert the filter to a MongoDB filter dictionary."""
         return build_filter_dict(self.filter)
 
-    model_config = {
-        "arbitrary_types_allowed": True,
-        "json_schema_extra": {
-            "examples": [
-                # Similarity search with filtering
-                {"filter": {"field": "status", "operator": "eq", "value": "active"}},
-                # Complex filtering with similarity search
-                {
-                    "filter": {
-                        "operator": "and",
-                        "expressions": [{"field": "category", "operator": "eq", "value": "electronics"}, {"field": "price", "operator": "lte", "value": 1000}],
-                    }
-                },
-            ]
-        },
-    }
+    model_config = {"arbitrary_types_allowed": True}
