@@ -16,14 +16,21 @@ async def main():
             configurable={"thread_id": "1", "user_id": "whatsapp:+971565312695", "time_zone": "UTC", "first_day_of_the_week": 0}, recursion_limit=25
         )
 
-        messages = [HumanMessage(content="I went to a great Italian restaurant in London called Osteria Romana located in Marylebone. Can you create a record for it?")]
+        human_messages = [
+            HumanMessage(content="Delete all datasets."),
+            HumanMessage(content="Delete all datasets. Confirmed"),
+        ]
 
-        for message in messages:
+        is_first_message = True
+        for message in human_messages:
             print_event((), {"Human": {"messages": [message]}})
 
-            async for namespace, event in graph.astream(
-                {"messages": [SystemMessage(content=ASSISTANT_SYSTEM_MESSAGE), message]}, config, stream_mode="updates", subgraphs=True
-            ):
+            messages = [message]
+            if is_first_message:
+                messages = [SystemMessage(content=ASSISTANT_SYSTEM_MESSAGE), message]
+                is_first_message = False
+
+            async for namespace, event in graph.astream({"messages": messages}, config, stream_mode="updates", subgraphs=True):
                 print_event(namespace, event)
     finally:
         client.close()

@@ -29,14 +29,15 @@ class AggregationType(str, Enum):
 
 # Safe type conversion mappings
 SAFE_TYPE_CONVERSIONS: Dict[FieldType, Set[FieldType]] = {
-    FieldType.INTEGER: {FieldType.FLOAT, FieldType.STRING},
-    FieldType.FLOAT: {FieldType.STRING},
+    FieldType.INTEGER: {FieldType.FLOAT, FieldType.STRING, FieldType.BOOLEAN},
+    FieldType.FLOAT: {FieldType.STRING, FieldType.INTEGER},  # INTEGER conversion may lose precision
+    FieldType.STRING: {FieldType.INTEGER, FieldType.FLOAT, FieldType.BOOLEAN, FieldType.DATE, FieldType.DATETIME, FieldType.SELECT, FieldType.MULTI_SELECT},  # With validation
     FieldType.BOOLEAN: {FieldType.STRING},
     FieldType.DATE: {FieldType.STRING, FieldType.DATETIME},
-    FieldType.DATETIME: {FieldType.STRING},
-    # SELECT and MULTI_SELECT only allow same type conversions
-    FieldType.SELECT: {FieldType.SELECT},
-    FieldType.MULTI_SELECT: {FieldType.MULTI_SELECT},
+    FieldType.DATETIME: {FieldType.STRING, FieldType.DATE},
+    # SELECT and MULTI_SELECT conversions
+    FieldType.SELECT: {FieldType.SELECT, FieldType.STRING},
+    FieldType.MULTI_SELECT: {FieldType.MULTI_SELECT, FieldType.STRING},
 }
 
 

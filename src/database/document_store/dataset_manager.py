@@ -557,7 +557,7 @@ class DatasetManager:
                 updates.append(
                     pymongo.UpdateOne(
                         {
-                            "_id": record.id,
+                            "_id": str(record.id),
                             "user_id": user_id,
                             "dataset_id": str(dataset_id),
                         },
