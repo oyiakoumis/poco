@@ -26,10 +26,6 @@ class RecordData(BaseModel):
 
 
 class ListDatasetsArgs(BaseModel):
-    serialize_results: bool = Field(
-        default=False,
-        description="If True, may attach full results in Excel and return a partial list. Inform user if attachment exists. Use True ONLY for final user output. Returns tuple: (has_attachment, result_list).",
-    )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
 
@@ -150,7 +146,7 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
 
     name: str = "list_datasets"
     description: str = (
-        """Lists all datasets. Returns (has_attachment, result_list). If `serialize_results=True` and results are numerous, `has_attachment` may be True (full results in attached Excel, partial list in `result_list` - inform user). Otherwise, `has_attachment` is False and `result_list` contains all datasets. Use `serialize_results=False` for internal processing."""
+        """Lists all datasets. Returns (has_attachment, result_list). If results are numerous, `has_attachment` may be True (full results in attached Excel, partial list in `result_list` - inform user). Otherwise, `has_attachment` is False and `result_list` contains all datasets. This tool is for final user output only."""
     )
     args_schema: Type[BaseModel] = ListDatasetsArgs
 
@@ -165,9 +161,8 @@ class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
 
             processed_result = [{"id": str(dataset.id), "name": dataset.name, "description": dataset.description} for dataset in datasets]
 
-            # Only create an attachment if serialize_results is True
-            # and we have more datasets than the truncation limit
-            if args.serialize_results and len(processed_result) > self.MAX_TRUNCATED_DATASETS:
+            # Always create an attachment if we have more datasets than the truncation limit
+            if len(processed_result) > self.MAX_TRUNCATED_DATASETS:
                 # Create Excel file
                 try:
                     # Prepare data for Excel

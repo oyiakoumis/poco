@@ -12,14 +12,14 @@ class SchemaField(BaseModel):
     """Field definition for dataset schema."""
 
     field_name: str = Field(description="Name of the field in the dataset schema", min_length=1, max_length=128)
-    description: str = Field(
-        description="Detailed description of what this field represents", min_length=1, max_length=500
-    )
+    description: str = Field(description="Detailed description of what this field represents", min_length=1, max_length=500)
     type: FieldType = Field(description="Data type of the field")
     required: bool = Field(default=False, description="Whether this field must be present in all records")
     unique: bool = Field(default=False, description="Whether this field's values must be unique across all records")
     default: Optional[Any] = Field(default=None, description="Default value for the field")
-    options: Optional[List[str]] = Field(default=None, description="List of allowed values for select/multi-select fields")
+    options: Optional[List[str]] = Field(
+        default=None, description="List of allowed values for select/multi-select fields. Cannot be null if type is select or multi-select"
+    )
 
     model_config = {"arbitrary_types_allowed": True, "populate_by_name": True, "from_attributes": True}
 

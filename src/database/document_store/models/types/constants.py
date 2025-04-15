@@ -31,7 +31,15 @@ class AggregationType(str, Enum):
 SAFE_TYPE_CONVERSIONS: Dict[FieldType, Set[FieldType]] = {
     FieldType.INTEGER: {FieldType.FLOAT, FieldType.STRING, FieldType.BOOLEAN},
     FieldType.FLOAT: {FieldType.STRING, FieldType.INTEGER},  # INTEGER conversion may lose precision
-    FieldType.STRING: {FieldType.INTEGER, FieldType.FLOAT, FieldType.BOOLEAN, FieldType.DATE, FieldType.DATETIME, FieldType.SELECT, FieldType.MULTI_SELECT},  # With validation
+    FieldType.STRING: {
+        FieldType.INTEGER,
+        FieldType.FLOAT,
+        FieldType.BOOLEAN,
+        FieldType.DATE,
+        FieldType.DATETIME,
+        FieldType.SELECT,
+        FieldType.MULTI_SELECT,
+    },  # With validation
     FieldType.BOOLEAN: {FieldType.STRING},
     FieldType.DATE: {FieldType.STRING, FieldType.DATETIME},
     FieldType.DATETIME: {FieldType.STRING, FieldType.DATE},

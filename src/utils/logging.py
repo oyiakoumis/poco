@@ -16,9 +16,7 @@ logging_level = getattr(logging, os.environ.get("LOGGING_LEVEL", "DEBUG").upper(
 logger.setLevel(logging_level)
 
 # Create formatter with process and thread IDs for worker identification
-formatter = logging.Formatter(
-    "%(asctime)s - PID:%(process)d - Thread:%(thread)d - %(name)s - %(levelname)s - %(message)s"
-)
+formatter = logging.Formatter("%(asctime)s - PID:%(process)d - Thread:%(thread)d - %(name)s - %(levelname)s - %(message)s")
 
 # Create and configure stdout handler
 console_handler = logging.StreamHandler(sys.stdout)
@@ -34,12 +32,9 @@ if appinsights_connection_string:
     configure_azure_monitor(
         connection_string=appinsights_connection_string,
     )
-    
+
     # Instrument the logging system to send logs to Azure Monitor
-    LoggingInstrumentor().instrument(
-        level=logging_level,
-        excluded_loggers=["azure"]  # Avoid recursive logging
-    )
+    LoggingInstrumentor().instrument(level=logging_level, excluded_loggers=["azure"])  # Avoid recursive logging
 
 # Prevent propagation to root logger to avoid duplicate logs
 logger.propagate = False
