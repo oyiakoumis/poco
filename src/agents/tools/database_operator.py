@@ -18,7 +18,7 @@ from utils.xslx_serializer import serialize_to_xlsx
 
 
 class RecordData(BaseModel):
-    """Record data model representing field values of a record."""
+    """Key-value pairs representing the data for a single record. Must match the dataset's schema."""
 
     model_config = {
         "extra": "allow",  # Allow extra fields not defined in the model
@@ -28,37 +28,33 @@ class RecordData(BaseModel):
 class ListDatasetsArgs(BaseModel):
     serialize_results: bool = Field(
         default=False,
-        description="If True, tries to include an Excel file attached to the message with ALL datasets. Function returns a tuple of (has_attachment, result). This attached file is not directly accessible to the assistant. Therefore serialize_results=True should only be used to return a list of datasets directly to the user (not during intermediate steps).",
+        description="If True, may attach full results in Excel and return a partial list. Inform user if attachment exists. Use True ONLY for final user output. Returns tuple: (has_attachment, result_list).",
     )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
 
 class DatasetArgs(BaseModel):
-    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", examples=["507f1f77bcf86cd799439011"])
+    dataset_id: PydanticUUID = Field(description="The unique ID of the target dataset.", examples=["507f1f77bcf86cd799439011"])
 
 
 class RecordArgs(DatasetArgs):
-    record_id: PydanticUUID = Field(description="Unique identifier for the record within the dataset", examples=["507f1f77bcf86cd799439012"])
+    record_id: PydanticUUID = Field(description="The unique ID of the target record within the dataset.", examples=["507f1f77bcf86cd799439012"])
 
 
 class CreateDatasetArgs(BaseModel):
-    name: str = Field(description="Name of the dataset to be created", min_length=1, max_length=100, examples=["Customer Feedback"])
+    name: str = Field(description="A descriptive name for the new dataset (1-100 chars).", min_length=1, max_length=100, examples=["Customer Feedback"])
     description: str = Field(
-        description="Detailed description of the dataset's purpose and contents",
+        description="A detailed description of the dataset's purpose (1-500 chars).",
         min_length=1,
         max_length=500,
-        examples="Collection of customer feedback responses from Q1 2024",
     )
-    dataset_schema: DatasetSchema = Field(
-        description="List of field definitions that describe the schema of the dataset",
-        examples=[{"name": "feedback_text", "type": "string"}, {"name": "rating", "type": "integer", "min": 1, "max": 5}],
-    )
+    dataset_schema: DatasetSchema = Field(description="The schema defining the fields (columns) for this dataset.")
 
 
 class UpdateDatasetArgs(DatasetArgs):
-    name: str = Field(description="Updated name for the dataset", min_length=1, max_length=100, examples=["Customer Feedback 2024"])
+    name: str = Field(description="The new name for the dataset (1-100 chars).", min_length=1, max_length=100, examples=["Customer Feedback 2024"])
     description: str = Field(
-        description="Updated description for the dataset",
+        description="The new description for the dataset (1-500 chars).",
         min_length=1,
         max_length=500,
         examples="Updated collection of customer feedback responses from Q1 2024",
@@ -67,21 +63,21 @@ class UpdateDatasetArgs(DatasetArgs):
 
 class CreateRecordArgs(DatasetArgs):
     data: RecordData = Field(
-        description="Record data that matches the dataset's defined schema",
+        description="The data for the new record, matching the dataset's schema.",
         examples={"feedback_text": "Great product, but needs better documentation", "rating": 4},
     )
 
 
 class UpdateRecordArgs(RecordArgs):
     data: RecordData = Field(
-        description="Updated record data that matches the dataset's defined schema",
+        description="The new data for the record, matching the dataset's schema.",
         examples={"feedback_text": "Great product, documentation has improved", "rating": 5},
     )
 
 
 class BatchCreateRecordsArgs(DatasetArgs):
     records: List[RecordData] = Field(
-        description="List of record data objects that match the dataset's defined schema",
+        description="A list of data objects, each representing a new record to create.",
         examples=[
             {"feedback_text": "Great product, but needs better documentation", "rating": 4},
             {"feedback_text": "Works well, very intuitive", "rating": 5},
@@ -91,15 +87,13 @@ class BatchCreateRecordsArgs(DatasetArgs):
 
 
 class RecordUpdate(BaseModel):
-    record_id: PydanticUUID = Field(description="Unique identifier for the record to update", examples=["507f1f77bcf86cd799439012"])
-    data: RecordData = Field(
-        description="Updated record data that matches the dataset's defined schema", examples={"feedback_text": "Updated feedback", "rating": 5}
-    )
+    record_id: PydanticUUID = Field(description="ID of the record to update.", examples=["507f1f77bcf86cd799439012"])
+    data: RecordData = Field(description="The new data for this specific record.", examples={"feedback_text": "Updated feedback", "rating": 5})
 
 
 class BatchUpdateRecordsArgs(DatasetArgs):
     records: List[RecordUpdate] = Field(
-        description="List of record updates, each containing record_id and data",
+        description="A list of updates, each specifying a record ID and its new data.",
         examples=[
             {"record_id": "507f1f77bcf86cd799439012", "data": {"feedback_text": "Updated feedback", "rating": 5}},
             {"record_id": "507f1f77bcf86cd799439013", "data": {"feedback_text": "Another update", "rating": 4}},
@@ -110,38 +104,54 @@ class BatchUpdateRecordsArgs(DatasetArgs):
 
 class BatchDeleteRecordsArgs(DatasetArgs):
     record_ids: List[PydanticUUID] = Field(
-        description="List of record IDs to delete from the dataset", examples=["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"], min_items=1
+        description="A list of unique IDs for the records to be deleted.", examples=["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"], min_items=1
     )
 
 
 class QueryRecordsArgs(DatasetArgs):
     query: Optional[RecordQuery] = Field(
         default=None,
-        description="Optional query parameters to filter, sort, or aggregate records",
+        description="Optional filters, sorting, or aggregation rules for the query.",
         examples={"filter": {"field": "rating", "condition": {"operator": "gte", "value": 4}}, "sort": {"created_at": False}},
     )
     ids_only: bool = Field(
         default=False,
-        description="If True, returns only record IDs instead of full records (ignored for aggregation queries). Use this for identifying records before create, update or delete operations to improve efficiency.",
+        description="If True, return only record IDs (faster for finding records before updates/deletes). Ignored for aggregations.",
     )
     serialize_results: bool = Field(
         default=False,
-        description="If True, tries to include an Excel file attached to the message with ALL records from the query. Function returns a tuple of (has_attachment, result). This attached file is not directly accessible to the assistant. Therefore serialize_results=True should only be used to return a list of records directly to the user (not during intermediate steps).",
+        description="If True, may attach full results in Excel and return a partial list. Inform user if attachment exists. Use True ONLY for final user output. Returns tuple: (has_attachment, result_list).",
     )
     tool_call_id: Annotated[str, InjectedToolCallId]
 
 
 class UpdateFieldArgs(DatasetArgs):
-    field_name: str = Field(description="Name of the field to update", min_length=1, max_length=100)
-    field_update: SchemaField = Field(description="New field definition with updated properties")
+    field_name: str = Field(description="The current name of the field to modify.", min_length=1, max_length=100)
+    field_update: SchemaField = Field(description="The new definition for the field (including name, type, constraints, options etc.).")
 
 
 class DeleteFieldArgs(DatasetArgs):
-    field_name: str = Field(description="Name of the field to delete", min_length=1, max_length=100)
+    field_name: str = Field(description="The name of the field to remove from the schema.", min_length=1, max_length=100)
 
 
 class AddFieldArgs(DatasetArgs):
-    field: SchemaField = Field(description="New field definition to add to the dataset schema")
+    field: SchemaField = Field(description="The definition of the new field to add to the schema.")
+
+
+class FindDatasetArgs(BaseModel):
+    name: str = Field(description="An example name for the kind of dataset you're looking for.")
+    description: str = Field(description="A description of the purpose of the dataset you're looking for.")
+    dataset_schema: DatasetSchema = Field(description="An example schema representing the structure of the dataset you're looking for.")
+
+
+class FindRecordArgs(BaseModel):
+    dataset_id: PydanticUUID = Field(description="The ID of the dataset to search within.", examples=["507f1f77bcf86cd799439011"])
+    record_data: RecordData = Field(description="Example data representing the record you're looking for (used for semantic search).")
+    query: Optional[SimilarityQuery] = Field(
+        default=None,
+        description="Optional filters (on non-string fields like dates, numbers, booleans, select options) to apply *before* semantic search.",
+        examples={"filter": {"field": "status", "operator": "eq", "value": "active"}},
+    )
 
 
 # Base Table Operator
@@ -162,31 +172,14 @@ class BaseInjectedToolCallIdDBOperator(BaseDBOperator):
         return asyncio.run(self._arun(config, tool_call_id, **kwargs))
 
 
-# List Dataset Operator
+# region Tool Implementations
 class ListDatasetsOperator(BaseInjectedToolCallIdDBOperator):
     MAX_TRUNCATED_DATASETS: int = 50  # Maximum number of datasets to show in truncated result
 
     name: str = "list_datasets"
-    description: str = """
-This function is used to retrieve a list of all datasets. It returns a tuple: (has_attachment, result).
-
-- When serialize_results=False (default):
-  - has_attachment is False
-  - result contains the complete list of datasets.
-
-- When serialize_results=True:
-  - If the Excel file was successfully attached:
-    - has_attachment is True
-    - result contains a partial list of datasets.
-    - The assistant should clearly inform the user that:
-      1. The displayed results are only a partial list, and
-      2. The full list is available in the attached Excel file.
-  - If the attachment fails:
-    - has_attachment is False
-    - result contains the full list of datasets.
-
-For internal or intermediate processing, it's recommended to use serialize_results=False to ensure access to the complete dataset list.
-"""
+    description: str = (
+        """Lists all datasets. Returns (has_attachment, result_list). If `serialize_results=True` and results are numerous, `has_attachment` may be True (full results in attached Excel, partial list in `result_list` - inform user). Otherwise, `has_attachment` is False and `result_list` contains all datasets. Use `serialize_results=False` for internal processing."""
+    )
     args_schema: Type[BaseModel] = ListDatasetsArgs
 
     async def _arun(self, config: RunnableConfig, tool_call_id: Annotated[str, InjectedToolCallId], **kwargs) -> Tuple[List[Dict[str, Any]], bool]:
@@ -238,7 +231,7 @@ For internal or intermediate processing, it's recommended to use serialize_resul
 # Get Dataset Operator
 class GetDatasetOperator(BaseDBOperator):
     name: str = "get_dataset"
-    description: str = "Get a dataset by its ID to view all dataset details"
+    description: str = "Retrieves the full details (name, description, schema) of a specific dataset using its ID."
     args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
@@ -255,7 +248,7 @@ class GetDatasetOperator(BaseDBOperator):
 # Get Dataset Schema Operator
 class GetDatasetSchemaOperator(BaseDBOperator):
     name: str = "get_dataset_schema"
-    description: str = "Get only the schema of a dataset by its ID"
+    description: str = "Retrieves only the schema (field definitions) of a specific dataset using its ID."
     args_schema: Type[BaseModel] = DatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
@@ -272,7 +265,7 @@ class GetDatasetSchemaOperator(BaseDBOperator):
 # Create Dataset Operator
 class CreateDatasetOperator(BaseDBOperator):
     name: str = "create_dataset"
-    description: str = "Create a new dataset"
+    description: str = "Creates a new dataset with a specified name, description, and schema. Returns the new dataset's ID."
     args_schema: Type[BaseModel] = CreateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
@@ -289,7 +282,7 @@ class CreateDatasetOperator(BaseDBOperator):
 # Update Dataset Operator
 class UpdateDatasetOperator(BaseDBOperator):
     name: str = "update_dataset"
-    description: str = "Update a dataset"
+    description: str = "Updates the name and/or description of an existing dataset."
     args_schema: Type[BaseModel] = UpdateDatasetArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -303,7 +296,7 @@ class UpdateDatasetOperator(BaseDBOperator):
 
 
 class DeleteDatasetOperator(BaseDBOperator):
-    name: str = "delete_dataset"
+    name: str = "Deletes an entire dataset and all its records. MUST ask for user confirmation before using."
     description: str = "Delete a dataset"
     args_schema: Type[BaseModel] = DatasetArgs
 
@@ -319,7 +312,7 @@ class DeleteDatasetOperator(BaseDBOperator):
 
 class CreateRecordOperator(BaseDBOperator):
     name: str = "create_record"
-    description: str = "Create a SINGLE new record. WARNING: Do NOT use this for creating multiple records - use batch_create_records instead."
+    description: str = "Adds ONE new record to a dataset. For multiple records, use `batch_create_records`. Returns the new record's ID."
     args_schema: Type[BaseModel] = CreateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, str]:
@@ -337,7 +330,7 @@ class CreateRecordOperator(BaseDBOperator):
 
 class UpdateRecordOperator(BaseDBOperator):
     name: str = "update_record"
-    description: str = f"Update a SINGLE record. WARNING: Do NOT use this for updating multiple records - use batch_update_records instead."
+    description: str = "Updates the data of ONE specific record in a dataset. For multiple records, use `batch_update_records`."
     args_schema: Type[BaseModel] = UpdateRecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -354,7 +347,9 @@ class UpdateRecordOperator(BaseDBOperator):
 
 class DeleteRecordOperator(BaseDBOperator):
     name: str = "delete_record"
-    description: str = "Delete a SINGLE record. WARNING: Do NOT use this for deleting multiple records - use batch_delete_records instead."
+    description: str = (
+        "Deletes ONE specific record from a dataset. MUST ask for user confirmation before using. For multiple records, use `batch_delete_records`."
+    )
     args_schema: Type[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -369,7 +364,7 @@ class DeleteRecordOperator(BaseDBOperator):
 
 class GetRecordOperator(BaseDBOperator):
     name: str = "get_record"
-    description: str = "Get record"
+    description: str = "Retrieves the full data of a specific record using its dataset ID and record ID."
     args_schema: Type[BaseModel] = RecordArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> Dict[str, Any]:
@@ -387,31 +382,9 @@ class QueryRecordsOperator(BaseInjectedToolCallIdDBOperator):
     MAX_TRUNCATED_RECORDS: int = 50  # Maximum number of records to show in truncated result
 
     name: str = "query_records"
-    description: str = """
-Function to retrieve records with optional filtering, sorting, and aggregation. 
-Returns a tuple: (has_attachment, result). Supports simple queries and aggregations.
-
-- Use `ids_only=True` to fetch only record IDs (recommended for identifying records before create/update/delete).
-
-- When serialize_results=False (default):
-  - has_attachment = False
-  - result = full list of records
-
-- When serialize_results=True:
-  - If Excel attachment succeeds:
-    - has_attachment = True
-    - result = partial list
-    - Assistant must inform:
-      1. Results shown are partial
-      2. Full list is in attached Excel file
-  - If attachment fails:
-    - has_attachment = False
-    - result = full list
-
-- Aggregation results are always returned in full, regardless of serialize_results.
-
-For internal/intermediate use, prefer serialize_results=False to access the full dataset.
-"""
+    description: str = (
+        """Queries records within a dataset using filters (exact matches, ranges on dates/numbers, etc.), sorting, or aggregation. Use this for precise filtering or when the user asks for exact matches. Returns (has_attachment, result_list). If `serialize_results=True` and results are numerous (and not aggregation), `has_attachment` may be True (full results in attached Excel, partial list in `result_list` - inform user). Otherwise, `has_attachment` is False and `result_list` contains all matching records/aggregation results. Use `ids_only=True` to get only IDs. Use `serialize_results=False` for internal processing."""
+    )
     args_schema: Type[BaseModel] = QueryRecordsArgs
 
     async def _arun(
@@ -476,7 +449,7 @@ For internal/intermediate use, prefer serialize_results=False to access the full
 
 class UpdateFieldOperator(BaseDBOperator):
     name: str = "update_field"
-    description: str = "Update a field in the dataset schema and convert existing records if needed"
+    description: str = "Modifies an existing field's definition in a dataset's schema (e.g., rename, change type, add select options)."
     args_schema: Type[BaseModel] = UpdateFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -491,7 +464,7 @@ class UpdateFieldOperator(BaseDBOperator):
 
 class DeleteFieldOperator(BaseDBOperator):
     name: str = "delete_field"
-    description: str = "Delete a field from the dataset schema"
+    description: str = "Removes a field from a dataset's schema and its data from all records. MUST ask for user confirmation before using."
     args_schema: Type[BaseModel] = DeleteFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -506,7 +479,7 @@ class DeleteFieldOperator(BaseDBOperator):
 
 class AddFieldOperator(BaseDBOperator):
     name: str = "add_field"
-    description: str = "Add a new field to the dataset schema"
+    description: str = "Adds a new field definition to a dataset's schema."
     args_schema: Type[BaseModel] = AddFieldArgs
 
     async def _arun(self, config: RunnableConfig, **kwargs) -> None:
@@ -522,7 +495,7 @@ class AddFieldOperator(BaseDBOperator):
 class BatchCreateRecordsOperator(BaseDBOperator):
     name: str = "batch_create_records"
     description: str = (
-        "Create multiple records in a dataset at once. ALWAYS use this instead of create_record when you need to create multiple records in the same dataset."
+        "Adds MULTIPLE records to a dataset in a single operation. ALWAYS use this instead of `create_record` for bulk additions. Returns the new record IDs."
     )
     args_schema: Type[BaseModel] = BatchCreateRecordsArgs
 
@@ -542,7 +515,7 @@ class BatchCreateRecordsOperator(BaseDBOperator):
 class BatchUpdateRecordsOperator(BaseDBOperator):
     name: str = "batch_update_records"
     description: str = (
-        "Update multiple records in a dataset at once. ALWAYS use this instead of update_record when you need to update multiple records in the same dataset."
+        "Updates MULTIPLE specific records in a dataset in a single operation. ALWAYS use this instead of `update_record` for bulk updates. Returns the IDs of updated records."
     )
     args_schema: Type[BaseModel] = BatchUpdateRecordsArgs
 
@@ -564,7 +537,7 @@ class BatchUpdateRecordsOperator(BaseDBOperator):
 class BatchDeleteRecordsOperator(BaseDBOperator):
     name: str = "batch_delete_records"
     description: str = (
-        "Delete multiple records from a dataset at once. ALWAYS use this instead of delete_record when you need to delete multiple records from the same dataset."
+        "Deletes MULTIPLE specific records from a dataset in a single operation. MUST ask for user confirmation before using. ALWAYS use this instead of `delete_record` for bulk deletions. Returns the IDs of deleted records."
     )
     args_schema: Type[BaseModel] = BatchDeleteRecordsArgs
 
@@ -580,41 +553,10 @@ class BatchDeleteRecordsOperator(BaseDBOperator):
             raise
 
 
-class FindDatasetArgs(BaseModel):
-    name: str = Field(description="Hypothetical name of the dataset we are looking for in the database")
-    description: str = Field(description="Detailed description and purpose of the hypothetical dataset we are looking for in the database.")
-    dataset_schema: DatasetSchema = Field(description="Schema defining the structure and fields of the hypothetical dataset we are looking for in the database")
-
-class FindRecordArgs(BaseModel):
-    dataset_id: PydanticUUID = Field(description="Unique identifier for the dataset", examples=["507f1f77bcf86cd799439011"])
-    record_data: RecordData = Field(description="Hypothetical record data to search in the dataset.")
-    query: Optional[SimilarityQuery] = Field(
-        default=None,
-        description="Optional query parameters to pre-filter records on non-string fields before semantic search",
-        examples={"filter": {"field": "status", "operator": "eq", "value": "active"}},
-    )
-
-
-class GetAllRecordsOperator(BaseDBOperator):
-    name: str = "get_all_records"
-    description: str = "Get all records in a dataset"
-    args_schema: Type[BaseModel] = DatasetArgs
-
-    async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
-        try:
-            user_id = config.get("configurable", {}).get("user_id")
-            args = DatasetArgs(**kwargs)
-            records = await self.db.get_all_records(user_id, args.dataset_id)
-            return [record.model_dump() for record in records]
-        except Exception as e:
-            logger.error(f"Error in GetAllRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
-            raise
-
-
 class FindDatasetOperator(BaseDBOperator):
     name: str = "find_dataset"
     description: str = (
-        "Find a dataset in the database. Creates the hypothetical dataset that you are looking for, and find candidates for this dataset using vector search."
+        "Searches for existing datasets that are semantically similar to a provided example name, description, and schema. Use this to find potentially relevant datasets before creating a new one or searching records."
     )
     args_schema: Type[BaseModel] = FindDatasetArgs
 
@@ -633,9 +575,7 @@ class FindDatasetOperator(BaseDBOperator):
 class FindRecord(BaseDBOperator):
     name: str = "find_record"
     description: str = (
-        "DEFAULT search method for finding a record when we don't know the exact match for the string fields (Use Semantic Search). Creates the hypothetical record that you are looking for using the dataset schema, and find candidates for this record using vector search. "
-        "ALWAYS use this for searches involving string fields unless user explicitly requests exact matching. "
-        "You can optionally provide a query to pre-filter records on non-string fields before semantic search. \n\n"
+        """DEFAULT search method. Performs semantic search (vector search) to find records similar to the provided `record_data` within a dataset. Ideal for finding records based on meaning or description in string fields when exact wording is unknown. Can optionally pre-filter using `query` on non-string fields (dates, numbers, booleans, select options) before the semantic search."""
     )
     args_schema: Type[BaseModel] = FindRecordArgs
 
@@ -655,3 +595,24 @@ class FindRecord(BaseDBOperator):
         except Exception as e:
             logger.error(f"Error in FindRecord with args {kwargs}: {str(e)}", exc_info=True)
             raise
+
+
+class GetAllRecordsOperator(BaseDBOperator):
+    name: str = "get_all_records"
+    description: str = (
+        "Retrieves ALL records from a specific dataset. Use `query_records` with filters or `find_record` if possible, especially for large datasets."
+    )
+    args_schema: Type[BaseModel] = DatasetArgs
+
+    async def _arun(self, config: RunnableConfig, **kwargs) -> List[Dict[str, Any]]:
+        try:
+            user_id = config.get("configurable", {}).get("user_id")
+            args = DatasetArgs(**kwargs)
+            records = await self.db.get_all_records(user_id, args.dataset_id)
+            return [record.model_dump() for record in records]
+        except Exception as e:
+            logger.error(f"Error in GetAllRecordsOperator with args {kwargs}: {str(e)}", exc_info=True)
+            raise
+
+
+# endregion
